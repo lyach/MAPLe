@@ -4,6 +4,7 @@ __pycache__/
 # folders
 .cursor/
 local/
+data/
 
 # environment
 .env/
