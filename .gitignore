@@ -1,6 +1,10 @@
+# python
+__pycache__/
+
 # folders
 .cursor/
-docs/
+local/
 
 # environment
 .env/
+uv.lock
