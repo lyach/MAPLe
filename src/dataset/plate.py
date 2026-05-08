@@ -1,11 +1,10 @@
-"""Plate layout parsing, well map construction, and time axis generation."""
+"""Plate layout parsing and well map construction."""
 
 from __future__ import annotations
 
 import string
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from src.dataset.schemas import PlateLayout, WellInfo
@@ -58,7 +57,3 @@ def well_map_to_df(wells: list[WellInfo]) -> pd.DataFrame:
     """Convert a well map to a DataFrame for merging with raw readings."""
     return pd.DataFrame([w.model_dump() for w in wells])
 
-
-def build_time_axis(layout: PlateLayout) -> np.ndarray:
-    """Return an array of time values: ``[0, dt, 2*dt, ..., (n-1)*dt]``."""
-    return np.arange(layout.time_points) * layout.time_interval

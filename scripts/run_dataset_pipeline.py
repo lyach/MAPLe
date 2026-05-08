@@ -70,7 +70,7 @@ def main():
     print(f"df shape: {df.shape}")
     print(f"Columns: {list(df.columns)}")
     print(f"Experiments: {df['exp_id'].unique().tolist()}")
-    print(f"Timepoints per exp: {df.groupby('exp_id')['timepoint'].nunique().to_dict()}")
+    print(f"Timepoints per experiment: {df.groupby('exp_id')['timepoint'].nunique().to_dict()}")
     intervals, elapsed, units = summarize_time_axis(df)
     print(f"Time interval per experiment: {format_time_summary(intervals, units)}")
     print(f"Total time elapsed per experiment: {format_time_summary(elapsed, units)}")

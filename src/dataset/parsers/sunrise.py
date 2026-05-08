@@ -32,20 +32,10 @@ class SunriseParser(BaseParser):
         if len(lines) % block_size != 0:
             raise ValueError(
                 f"File {path.name}: line count ({len(lines)}) is not divisible "
-                f"by block size ({block_size}). Check time_points or plate dimensions."
+                f"by block size ({block_size}). Check plate dimensions in layout."
             )
 
         n_blocks = len(lines) // block_size
-        if n_blocks != layout.time_points:
-            log.warning(
-                "File %s: found %d blocks but layout specifies %d timepoints. "
-                "Parsing %d available blocks.",
-                path.name,
-                n_blocks,
-                layout.time_points,
-                n_blocks,
-            )
-
         row_letters = list(string.ascii_lowercase[:n_rows])
         records: list[dict] = []
 

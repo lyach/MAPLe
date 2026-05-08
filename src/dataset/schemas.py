@@ -36,7 +36,6 @@ class PlateLayout(BaseModel):
     equipment: str
     time_unit: str
     time_interval: float
-    time_points: int
     no_wells: int
     used_cols_index: int
     used_rows_index: int

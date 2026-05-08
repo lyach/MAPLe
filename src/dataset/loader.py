@@ -8,12 +8,7 @@ import pandas as pd
 
 from src.dataset.schemas import ExperimentMetadata, PlateLayout
 from src.dataset.parsers import get_parser
-from src.dataset.plate import (
-    build_time_axis,
-    build_well_map,
-    parse_layout_csv,
-    well_map_to_df,
-)
+from src.dataset.plate import build_well_map, parse_layout_csv, well_map_to_df
 
 
 def load_metadata(path: str | Path) -> list[ExperimentMetadata]:
@@ -69,12 +64,9 @@ def load_experiment(
         raw_df = parser.parse(raw_path, layout)
 
         wells_df = well_map_to_df(build_well_map(layout))
-        time_axis = build_time_axis(layout)
 
         merged = raw_df.merge(wells_df, on=["row", "col"], how="left")
-        merged["time_value"] = merged["timepoint"].map(
-            dict(enumerate(time_axis))
-        )
+        merged["time_value"] = merged["timepoint"] * layout.time_interval
         merged["time_unit"] = layout.time_unit
 
         meta_dict = meta.model_dump()

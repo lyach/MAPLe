@@ -226,7 +226,7 @@ def plot_mean_curves(
 ) -> list[Figure]:
     """Plot mean growth curves with a shaded confidence interval.
 
-    Aggregates all wells sharing the same (sample_name, media_name)
+    Aggregates all wells per experiment sharing the same (sample_name, media_name)
     at each timepoint.  A shaded band shows the ci-percentile interval
     around the mean.
 
@@ -267,7 +267,9 @@ def plot_mean_curves(
 
     figs: list[Figure] = []
 
+    # group by experiment
     for eid, df_exp in df_sel.groupby("exp_id", sort=True):
+        # group by media
         medias = sorted(df_exp["media_name"].dropna().unique())
         n_media = len(medias)
         n_cols = min(col_wrap, n_media)
@@ -281,7 +283,7 @@ def plot_mean_curves(
             figsize=figsize or (default_w, default_h),
             squeeze=False,
         )
-        fig.suptitle(f"Mean growth curves ({ci}% CI) — {eid}", fontsize=11, fontweight="bold")
+        fig.suptitle(f"{eid}", fontsize=11, fontweight="bold")
 
         samples = sorted(df_exp["sample_name"].dropna().unique())
         colors = {s: c for s, c in zip(samples, _color_cycle(len(samples)))}
@@ -291,6 +293,7 @@ def plot_mean_curves(
             ax = axes[idx // n_cols][idx % n_cols]
             df_media = df_exp[df_exp["media_name"] == media]
 
+            # group by sample
             for sample, df_s in df_media.groupby("sample_name", sort=True):
                 stats = (
                     df_s.groupby("time_value")[od_col]
