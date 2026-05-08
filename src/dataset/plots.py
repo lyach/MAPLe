@@ -70,6 +70,52 @@ def _time_label(df_exp: pd.DataFrame) -> str:
     return f"Time ({unit})" if unit else "Time"
 
 
+# Time units supported for axis display
+_TIME_UNIT_ALIASES: dict[str, str] = {
+    "min": "min",
+    "minute": "min",
+    "minutes": "min",
+    "hr": "hr",
+    "hour": "hr",
+    "hours": "hr",
+    "h": "hr",
+    "day": "day",
+    "days": "day",
+    "d": "day",
+}
+
+# Duration of one unit in minutes (for conversions)
+_MINUTES_PER_CANONICAL: dict[str, float] = {"min": 1.0, "hr": 60.0, "day": 1440.0}
+
+
+def _canonical_time_unit(u: str) -> str:
+    key = u.strip().lower()
+    try:
+        return _TIME_UNIT_ALIASES[key]
+    except KeyError as e:
+        allowed = ", ".join(sorted(set(_TIME_UNIT_ALIASES.values())))
+        raise ValueError(
+            f"Unknown time unit {u!r}; use one of {allowed} (common aliases accepted)."
+        ) from e
+
+
+def _time_axis_scale_and_label(
+    df_exp: pd.DataFrame,
+    time_unit: str | None,
+) -> tuple[float, str]:
+    """Return ``(scale, xlabel)`` so ``plot_x = time_value * scale``.
+    """
+    if time_unit is None:
+        return 1.0, _time_label(df_exp)
+    display = _canonical_time_unit(time_unit)
+    if df_exp.empty or "time_unit" not in df_exp.columns:
+        src = "min"
+    else:
+        src = _canonical_time_unit(str(df_exp["time_unit"].dropna().iloc[0]))
+    scale = _MINUTES_PER_CANONICAL[src] / _MINUTES_PER_CANONICAL[display]
+    return scale, f"Time ({display})"
+
+
 def _apply_style(rc_overrides: dict | None = None) -> None:
     """Apply STYLE_DEFAULTS then any caller overrides to rcParams."""
     plt.rcParams.update(STYLE_DEFAULTS)
@@ -83,17 +129,26 @@ def _color_cycle(n: int) -> list:
     return [prop_cycle[i % len(prop_cycle)] for i in range(n)]
 
 
+def _exp_date_and_id(df_exp: pd.DataFrame) -> tuple[str, str]:
+    """Return ``(date, exp_id)`` for a single experiment.
+    """
+    eid_date = str(df_exp["date"].iloc[0])
+    eid = str(df_exp["exp_id"].iloc[0])
+    return eid_date, eid
+
+
 def plot_growth_curves(
     df: pd.DataFrame,
     exp_id: ExpIdArg = None,
     *,
     od_col: str = "od600",
-    hue: str = "sample_name",
+    hue: str = "strain_name",
     col_wrap: int = 4,
     show_no_growth: bool = True,
     exclude_blanks: bool = True,
     rc: dict | None = None,
     figsize: tuple[float, float] | None = None,
+    time_unit: str | None = None,
 ) -> list[Figure]:
     """Plot individual well growth curves, by media.
 
@@ -110,7 +165,7 @@ def plot_growth_curves(
     od_col:
         OD column to use (``"od600"`` or ``"od600_raw"``).
     hue:
-        Column used to colour lines (``"sample_name"`` or ``"well_id"``).
+        Column used to colour lines (``"strain_name"`` or ``"well_id"``).
     col_wrap:
         Maximum number of subplot columns per row.
     show_no_growth:
@@ -121,6 +176,9 @@ def plot_growth_curves(
         Optional rcParams overrides.
     figsize:
         Override the default figure size.
+    time_unit:
+        Unit for the time axis: ``'min'``, ``'hr'``, or ``'day'``.
+        ``None`` → plot raw ``time_value`` with the stored unit label.
 
     Returns
     -------
@@ -134,7 +192,10 @@ def plot_growth_curves(
 
     figs: list[Figure] = []
 
-    for eid, df_exp in df_sel.groupby("exp_id", sort=True):
+    for _, df_exp in df_sel.groupby("exp_id", sort=True):
+        eid_date, eid = _exp_date_and_id(df_exp)
+        t_scale, x_time_label = _time_axis_scale_and_label(df_exp, time_unit)
+
         medias = sorted(df_exp["media_name"].dropna().unique())
         n_media = len(medias)
         n_cols = min(col_wrap, n_media)
@@ -148,7 +209,7 @@ def plot_growth_curves(
             figsize=figsize or (default_w, default_h),
             squeeze=False,
         )
-        fig.suptitle(f"Growth curves — {eid}", fontsize=11, fontweight="bold")
+        fig.suptitle(f"Growth - {eid_date} {eid}", fontsize=11, fontweight="bold")
 
         hue_vals = sorted(df_exp[hue].dropna().unique())
         colors = {v: c for v, c in zip(hue_vals, _color_cycle(len(hue_vals)))}
@@ -172,7 +233,7 @@ def plot_growth_curves(
                 color = "grey" if ng else colors[hue_val]
 
                 line, = ax.plot(
-                    df_well["time_value"],
+                    df_well["time_value"].to_numpy(dtype=float) * t_scale,
                     df_well[od_col],
                     color=color,
                     lw=lw,
@@ -186,7 +247,7 @@ def plot_growth_curves(
                     ax.set_facecolor("#fff8f0")
 
             ax.set_title(media, pad=4)
-            ax.set_xlabel(_time_label(df_exp))
+            ax.set_xlabel(x_time_label)
             ax.set_ylabel(od_col)
             ax.yaxis.set_major_locator(mticker.MaxNLocator(5))
             ax.set_ylim(bottom=0)
@@ -195,18 +256,22 @@ def plot_growth_curves(
         for idx in range(n_media, n_rows * n_cols):
             axes[idx // n_cols][idx % n_cols].set_visible(False)
 
+        # Reserve space on the right for legend
+        axes_right = 1.0
         if legend_handles:
+            axes_right = 0.72
+            fig.tight_layout(rect=(0, 0, axes_right, 0.96))
             fig.legend(
                 legend_handles.values(),
                 legend_handles.keys(),
                 title=hue,
-                loc="lower right",
-                bbox_to_anchor=(1.0, 0.01),
+                loc="center left",
+                bbox_to_anchor=(axes_right + 0.02, 0.5),
                 frameon=True,
                 borderaxespad=0.5,
             )
-
-        fig.tight_layout(rect=(0, 0, 1, 0.96))
+        else:
+            fig.tight_layout(rect=(0, 0, axes_right, 0.96))
         figs.append(fig)
 
     return figs
@@ -223,10 +288,11 @@ def plot_mean_curves(
     exclude_no_growth: bool = False,
     rc: dict | None = None,
     figsize: tuple[float, float] | None = None,
+    time_unit: str | None = None,
 ) -> list[Figure]:
     """Plot mean growth curves with a shaded confidence interval.
 
-    Aggregates all wells per experiment sharing the same (sample_name, media_name)
+    Aggregates all wells per experiment sharing the same (strain_name, media_name)
     at each timepoint.  A shaded band shows the ci-percentile interval
     around the mean.
 
@@ -250,6 +316,9 @@ def plot_mean_curves(
         Optional rcParams overrides.
     figsize:
         Override default figure size.
+    time_unit:
+        Unit for the time axis: ``'min'``, ``'hr'``, or ``'day'``.
+        ``None`` → plot raw ``time_value`` with the stored unit label.
 
     Returns
     -------
@@ -268,7 +337,9 @@ def plot_mean_curves(
     figs: list[Figure] = []
 
     # group by experiment
-    for eid, df_exp in df_sel.groupby("exp_id", sort=True):
+    for _, df_exp in df_sel.groupby("exp_id", sort=True):
+        eid_date, eid = _exp_date_and_id(df_exp)
+        t_scale, x_time_label = _time_axis_scale_and_label(df_exp, time_unit)
         # group by media
         medias = sorted(df_exp["media_name"].dropna().unique())
         n_media = len(medias)
@@ -283,18 +354,18 @@ def plot_mean_curves(
             figsize=figsize or (default_w, default_h),
             squeeze=False,
         )
-        fig.suptitle(f"{eid}", fontsize=11, fontweight="bold")
+        fig.suptitle(f"Mean growth — {eid_date} {eid}", fontsize=11, fontweight="bold")
 
-        samples = sorted(df_exp["sample_name"].dropna().unique())
-        colors = {s: c for s, c in zip(samples, _color_cycle(len(samples)))}
+        strains = sorted(df_exp["strain_name"].dropna().unique())
+        colors = {s: c for s, c in zip(strains, _color_cycle(len(strains)))}
         legend_handles: dict = {}
 
         for idx, media in enumerate(medias):
             ax = axes[idx // n_cols][idx % n_cols]
             df_media = df_exp[df_exp["media_name"] == media]
 
-            # group by sample
-            for sample, df_s in df_media.groupby("sample_name", sort=True):
+            # group by strain
+            for strain, df_s in df_media.groupby("strain_name", sort=True):
                 stats = (
                     df_s.groupby("time_value")[od_col]
                     .agg(
@@ -305,20 +376,21 @@ def plot_mean_curves(
                     .reset_index()
                     .sort_values("time_value")
                 )
-                color = colors[sample]
-                (line,) = ax.plot(stats["time_value"], stats["mean"], color=color, lw=1.6)
+                color = colors[strain]
+                tx = stats["time_value"].to_numpy(dtype=float) * t_scale
+                (line,) = ax.plot(tx, stats["mean"], color=color, lw=1.6)
                 ax.fill_between(
-                    stats["time_value"],
+                    tx,
                     stats["lo"],
                     stats["hi"],
                     color=color,
                     alpha=0.18,
                 )
-                if sample not in legend_handles:
-                    legend_handles[sample] = line
+                if strain not in legend_handles:
+                    legend_handles[strain] = line
 
             ax.set_title(media, pad=4)
-            ax.set_xlabel(_time_label(df_exp))
+            ax.set_xlabel(x_time_label)
             ax.set_ylabel(od_col)
             ax.yaxis.set_major_locator(mticker.MaxNLocator(5))
             ax.set_ylim(bottom=0)
@@ -326,18 +398,21 @@ def plot_mean_curves(
         for idx in range(n_media, n_rows * n_cols):
             axes[idx // n_cols][idx % n_cols].set_visible(False)
 
+        axes_right = 1.0
         if legend_handles:
+            axes_right = 0.72
+            fig.tight_layout(rect=(0, 0, axes_right, 0.96))
             fig.legend(
                 legend_handles.values(),
                 legend_handles.keys(),
-                title="sample",
-                loc="lower right",
-                bbox_to_anchor=(1.0, 0.01),
+                title="strain",
+                loc="center left",
+                bbox_to_anchor=(axes_right + 0.02, 0.5),
                 frameon=True,
                 borderaxespad=0.5,
             )
-
-        fig.tight_layout(rect=(0, 0, 1, 0.96))
+        else:
+            fig.tight_layout(rect=(0, 0, axes_right, 0.96))
         figs.append(fig)
 
     return figs
@@ -378,7 +453,8 @@ def plot_plate_grid(
 
     figs: list[Figure] = []
 
-    for eid, df_exp in df_sel.groupby("exp_id", sort=True):
+    for _, df_exp in df_sel.groupby("exp_id", sort=True):
+        eid_date, eid = _exp_date_and_id(df_exp)
         rows_sorted = sorted(df_exp["row"].dropna().unique())
         cols_sorted = sorted(df_exp["col"].dropna().unique())
         n_rows, n_cols = len(rows_sorted), len(cols_sorted)
@@ -389,7 +465,7 @@ def plot_plate_grid(
             figsize=(well_size * n_cols, well_size * n_rows),
             squeeze=False,
         )
-        fig.suptitle(f"Plate grid — {eid}", fontsize=11, fontweight="bold", y=1.01)
+        fig.suptitle(f"Plate grid — {eid_date} {eid}", fontsize=11, fontweight="bold", y=1.01)
 
         row_idx = {r: i for i, r in enumerate(rows_sorted)}
         col_idx = {c: i for i, c in enumerate(cols_sorted)}
@@ -449,7 +525,7 @@ def plot_qc_summary(
     """Two-panel QC summary per experiment.
 
     Left panel — ``blank_cv`` over time with a dashed threshold line.
-    Right panel — bar chart of no-growth well counts per ``(sample_name, media_name)``.
+    Right panel — bar chart of no-growth well counts per ``(strain_name, media_name)``.
 
     Parameters
     ----------
@@ -473,11 +549,12 @@ def plot_qc_summary(
 
     figs: list[Figure] = []
 
-    for eid, df_exp in df_sel.groupby("exp_id", sort=True):
+    for _, df_exp in df_sel.groupby("exp_id", sort=True):
+        eid_date, eid = _exp_date_and_id(df_exp)
         fig, (ax_cv, ax_ng) = plt.subplots(
             1, 2, figsize=figsize or (10, 4)
         )
-        fig.suptitle(f"QC summary — {eid}", fontsize=11, fontweight="bold")
+        fig.suptitle(f"QC summary — {eid_date} {eid}", fontsize=11, fontweight="bold")
 
         # ---- left: blank_cv over time ----
         if "blank_cv" in df_exp.columns:
@@ -507,7 +584,7 @@ def plot_qc_summary(
             ng_counts = (
                 df_ng[df_ng["no_growth"]]
                 .drop_duplicates(subset=["well_id"])
-                .groupby(["sample_name", "media_name"])
+                .groupby(["strain_name", "media_name"])
                 .size()
                 .reset_index(name="count")
             )
@@ -516,7 +593,7 @@ def plot_qc_summary(
                 ax_ng.text(0.5, 0.5, "No no-growth wells", ha="center", va="center",
                            transform=ax_ng.transAxes)
             else:
-                labels = [f"{r.sample_name}\n{r.media_name}" for r in ng_counts.itertuples()]
+                labels = [f"{r.strain_name}\n{r.media_name}" for r in ng_counts.itertuples()]
                 ax_ng.barh(labels, ng_counts["count"], color="#cc4444", alpha=0.75)
                 ax_ng.set_xlabel("no-growth well count")
                 ax_ng.invert_yaxis()
@@ -524,7 +601,7 @@ def plot_qc_summary(
             ax_ng.text(0.5, 0.5, "no_growth not available", ha="center", va="center",
                        transform=ax_ng.transAxes)
 
-        ax_ng.set_title("No-growth wells by sample × media")
+        ax_ng.set_title("No-growth wells by strain × media")
         ax_ng.xaxis.set_major_locator(mticker.MaxNLocator(integer=True))
 
         fig.tight_layout(rect=(0, 0, 1, 0.95))

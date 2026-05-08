@@ -93,7 +93,7 @@ def load_experiment(
         "row",
         "col",
         "well_index",
-        "sample_name",
+        "strain_name",
         "media_name",
         "is_blank",
         "timepoint",

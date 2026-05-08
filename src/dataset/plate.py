@@ -32,7 +32,7 @@ def build_well_map(layout: PlateLayout) -> list[WellInfo]:
 
     wells: list[WellInfo] = []
     for r_idx, row_letter in enumerate(letters):
-        sample_name = layout.name_rows[r_idx]
+        strain_name = layout.name_rows[r_idx]
         for c_idx, col_num in enumerate(range(1, n_cols + 1)):
             media_name = layout.name_cols[c_idx]
             is_blank = row_letter in blank_rows and col_num in blank_cols
@@ -45,7 +45,7 @@ def build_well_map(layout: PlateLayout) -> list[WellInfo]:
                     row=row_letter,
                     col=col_num,
                     well_index=well_index,
-                    sample_name=sample_name,
+                    strain_name=strain_name,
                     media_name=media_name,
                     is_blank=is_blank,
                 )

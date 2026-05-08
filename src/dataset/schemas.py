@@ -84,6 +84,6 @@ class WellInfo(BaseModel):
     row: str
     col: int
     well_index: int
-    sample_name: str
+    strain_name: str
     media_name: str
     is_blank: bool
