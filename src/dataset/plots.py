@@ -21,6 +21,8 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
+import seaborn as sns
+from matplotlib.colors import ListedColormap
 from matplotlib.figure import Figure
 
 
@@ -33,9 +35,6 @@ STYLE_DEFAULTS: dict = {
     "legend.fontsize": 8,
     "lines.linewidth": 1.4,
 }
-
-_CV_THRESHOLD = 0.15
-
 
 ExpIdArg = Union[str, list[str], None]
 
@@ -459,13 +458,26 @@ def plot_plate_grid(
         cols_sorted = sorted(df_exp["col"].dropna().unique())
         n_rows, n_cols = len(rows_sorted), len(cols_sorted)
 
-        fig, axes = plt.subplots(
-            n_rows,
-            n_cols,
-            figsize=(well_size * n_cols, well_size * n_rows),
-            squeeze=False,
+        _leg_ratio = 0.2
+        fig = plt.figure(
+            figsize=(well_size * n_cols * (1 + _leg_ratio), well_size * n_rows),
+            layout="constrained",
         )
-        fig.suptitle(f"Plate grid — {eid_date} {eid}", fontsize=11, fontweight="bold", y=1.01)
+        fig.get_layout_engine().set(rect=(0, 0, 1, 0.98))
+        gs = fig.add_gridspec(1, 2, width_ratios=[1.0, _leg_ratio], wspace=0.05)
+        gs_plate = gs[0, 0].subgridspec(n_rows, n_cols, hspace=0.25, wspace=0.25)
+        axes = [
+            [fig.add_subplot(gs_plate[i, j]) for j in range(n_cols)]
+            for i in range(n_rows)
+        ]
+        ax_leg = fig.add_subplot(gs[0, 1])
+        ax_leg.axis("off")
+
+        fig.suptitle(
+            f"Plate grid — {eid_date} {eid}",
+            fontsize=11,
+            fontweight="bold",
+        )
 
         row_idx = {r: i for i, r in enumerate(rows_sorted)}
         col_idx = {c: i for i, c in enumerate(cols_sorted)}
@@ -494,9 +506,9 @@ def plot_plate_grid(
 
             # row/col labels on outer edges only
             if col_idx[col] == 0:
-                ax.set_ylabel(row.upper(), fontsize=7, labelpad=2, rotation=0, va="center")
+                ax.set_ylabel(row.upper(), fontsize=9, labelpad=3, rotation=0, va="center")
             if row_idx[row] == 0:
-                ax.set_title(str(col), fontsize=7, pad=2)
+                ax.set_title(str(col), fontsize=9, pad=3)
 
         # hide axes not covered by well data
         used = {
@@ -508,103 +520,39 @@ def plot_plate_grid(
                 if (ri, ci) not in used:
                     axes[ri][ci].set_visible(False)
 
-        fig.tight_layout()
-        figs.append(fig)
-
-    return figs
-
-
-def plot_qc_summary(
-    df: pd.DataFrame,
-    exp_id: ExpIdArg = None,
-    *,
-    cv_threshold: float = _CV_THRESHOLD,
-    rc: dict | None = None,
-    figsize: tuple[float, float] | None = None,
-) -> list[Figure]:
-    """Two-panel QC summary per experiment.
-
-    Left panel — ``blank_cv`` over time with a dashed threshold line.
-    Right panel — bar chart of no-growth well counts per ``(strain_name, media_name)``.
-
-    Parameters
-    ----------
-    df:
-        DataFrame from ``load_data``.
-    exp_id:
-        Experiment(s) to plot.
-    cv_threshold:
-        Threshold drawn as a dashed line on the CV panel (default 0.15).
-    rc:
-        Optional rcParams overrides.
-    figsize:
-        Override default figure size ``(10, 4)``.
-
-    Returns
-    -------
-    list[Figure]
-    """
-    _apply_style(rc)
-    df_sel = _filter_exp(df, exp_id)
-
-    figs: list[Figure] = []
-
-    for _, df_exp in df_sel.groupby("exp_id", sort=True):
-        eid_date, eid = _exp_date_and_id(df_exp)
-        fig, (ax_cv, ax_ng) = plt.subplots(
-            1, 2, figsize=figsize or (10, 4)
-        )
-        fig.suptitle(f"QC summary — {eid_date} {eid}", fontsize=11, fontweight="bold")
-
-        # ---- left: blank_cv over time ----
-        if "blank_cv" in df_exp.columns:
-            cv_ts = (
-                df_exp.groupby("time_value")["blank_cv"]
-                .mean()
-                .reset_index()
-                .sort_values("time_value")
-            )
-            ax_cv.plot(cv_ts["time_value"], cv_ts["blank_cv"], marker="o", ms=3, lw=1.4)
-            ax_cv.axhline(cv_threshold, color="red", ls="--", lw=1.0, label=f"threshold ({cv_threshold})")
-            flagged = (cv_ts["blank_cv"] > cv_threshold).sum()
-            ax_cv.set_title(f"Blank CV over time  ({flagged} timepoints flagged)")
-        else:
-            ax_cv.text(0.5, 0.5, "blank_cv not available", ha="center", va="center",
-                       transform=ax_cv.transAxes)
-            ax_cv.set_title("Blank CV over time")
-
-        ax_cv.set_xlabel(_time_label(df_exp))
-        ax_cv.set_ylabel("blank_cv")
-        ax_cv.set_ylim(bottom=0)
-        ax_cv.legend(fontsize=8)
-
-        # ---- right: no-growth counts ----
-        if "no_growth" in df_exp.columns:
-            df_ng = df_exp[~df_exp.get("is_blank", pd.Series(False, index=df_exp.index))]
-            ng_counts = (
-                df_ng[df_ng["no_growth"]]
-                .drop_duplicates(subset=["well_id"])
-                .groupby(["strain_name", "media_name"])
-                .size()
-                .reset_index(name="count")
-            )
-
-            if ng_counts.empty:
-                ax_ng.text(0.5, 0.5, "No no-growth wells", ha="center", va="center",
-                           transform=ax_ng.transAxes)
+        leg_lines: list[str] = []
+        if "strain_name" in df_exp.columns:
+            leg_lines.extend(["Rows → strain_name", ""])
+            for r_ in rows_sorted:
+                df_r = df_exp.loc[df_exp["row"] == r_]
+                if df_r.empty:
+                    continue
+                sn = str(df_r["strain_name"].iloc[0])
+                leg_lines.append(f"  {str(r_).upper()}  →  {sn}")
+        if "media_name" in df_exp.columns:
+            if leg_lines:
+                leg_lines.extend(["", "Cols → media_name", ""])
             else:
-                labels = [f"{r.strain_name}\n{r.media_name}" for r in ng_counts.itertuples()]
-                ax_ng.barh(labels, ng_counts["count"], color="#cc4444", alpha=0.75)
-                ax_ng.set_xlabel("no-growth well count")
-                ax_ng.invert_yaxis()
-        else:
-            ax_ng.text(0.5, 0.5, "no_growth not available", ha="center", va="center",
-                       transform=ax_ng.transAxes)
+                leg_lines.extend(["Cols → media_name", ""])
+            for c_ in cols_sorted:
+                df_c = df_exp.loc[df_exp["col"] == c_]
+                if df_c.empty:
+                    continue
+                mn = str(df_c["media_name"].iloc[0])
+                leg_lines.append(f"  {c_}  →  {mn}")
+        if leg_lines:
+            ax_leg.text(
+                0,
+                1,
+                "\n".join(leg_lines),
+                transform=ax_leg.transAxes,
+                va="top",
+                ha="left",
+                fontsize=8,
+                linespacing=1.35,
+                family="monospace",
+            )
 
-        ax_ng.set_title("No-growth wells by strain × media")
-        ax_ng.xaxis.set_major_locator(mticker.MaxNLocator(integer=True))
-
-        fig.tight_layout(rect=(0, 0, 1, 0.95))
         figs.append(fig)
 
     return figs
