@@ -35,3 +35,4 @@ def get_parser(equipment: str) -> BaseParser:
 
 # Import concrete parsers so their @register decorators execute.
 import src.dataset.parsers.sunrise as _sunrise
+import src.dataset.parsers.biospa as _biospa

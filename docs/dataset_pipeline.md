@@ -54,7 +54,6 @@ One row per experiment. Required columns:
 | `equipment` | str | `sunrise 1` | |
 | `time_unit` | str | `min` | Unit of the time axis |
 | `time_interval` | float | `30` | Time between consecutive reads (in `time_unit`) |
-| `time_points` | int | `20` | Total number of expected timepoints |
 | `no_wells` | int | `96` | Total wells on the plate |
 | `used_cols_index` | int | `8` | Number of used columns |
 | `used_rows_index` | int | `12` | Number of used rows |
@@ -76,6 +75,11 @@ One file per experiment. The format depends on the equipment.
 - 1 header line: `<>,1,2,...,12`
 - `n_rows` data lines: `A,0.133,0.143,...`
 
+**BioSpa:** single CSV with time as rows and all wells as columns:
+- 1 header line: `Time,Temperature,A1,A2,...,H12`
+- 1 data line per timepoint: `H:MM:SS,temp,od1,od2,...`
+
+The `Time` and `Temperature` columns are ignored by the parser; timepoints are assigned as 0-based indices from row order.
 
 The file must be named exactly `<date>_<exp_id>_raw*.csv` (e.g. `20260325_aerobic_25_raw.csv`).
 
@@ -124,7 +128,7 @@ The output is a long-format parquet file at the path given by `--output`.
 | `media_name` | Name of the media in this column |
 | `is_blank` | `True` for blank/control wells |
 | `timepoint` | Timepoint index (0-based) |
-| `time_value` | Actual time value (`timepoint × time_interval`) |
+| `time_value` | Actual time value |
 | `time_unit` | Unit of `time_value` |
 | `od600` | Blank-subtracted and clipped OD600 |
 | `od600_raw` | Original OD600 before subtraction |
