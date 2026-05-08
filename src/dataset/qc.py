@@ -71,27 +71,28 @@ def clip_negatives(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def compute_plate_cv(
+def compute_well_cv(
     df: pd.DataFrame, cv_threshold: float = 0.15
 ) -> pd.DataFrame:
-    """Compute CV of blank wells per (exp_id, timepoint) and flag plates.
+    """Compute CV of each well across replicates per (exp_id, well_id, timepoint) and flag wells.
 
-    Adds ``blank_cv`` and ``plate_cv_flag`` columns.
+    CV is defined as std / mean of ``od600`` across replicates sharing the
+    same (exp_id, well_id, timepoint).  Adds ``well_cv`` and ``well_cv_flag``
+    columns.
     """
     df = df.copy()
     od_col = "od600_raw" if "od600_raw" in df.columns else "od600"
 
-    blank_stats = (
-        df.loc[df["is_blank"]]
-        .groupby(["exp_id", "timepoint"])[od_col]
+    well_stats = (
+        df.groupby(["exp_id", "well_id", "timepoint"])[od_col]
         .agg(["mean", "std"])
     )
-    blank_stats["blank_cv"] = blank_stats["std"] / blank_stats["mean"]
-    blank_stats = blank_stats[["blank_cv"]].reset_index()
+    well_stats["well_cv"] = well_stats["std"] / well_stats["mean"]
+    well_stats = well_stats[["well_cv"]].reset_index()
 
-    df = df.merge(blank_stats, on=["exp_id", "timepoint"], how="left")
-    df["blank_cv"] = df["blank_cv"].fillna(0.0)
-    df["plate_cv_flag"] = df["blank_cv"] > cv_threshold
+    df = df.merge(well_stats, on=["exp_id", "well_id", "timepoint"], how="left")
+    df["well_cv"] = df["well_cv"].fillna(0.0)
+    df["well_cv_flag"] = df["well_cv"] > cv_threshold
     return df
 
 
@@ -104,5 +105,5 @@ def run_qc(
     df = subtract_blanks(df)
     df = flag_no_growth(df, threshold_factor=threshold_factor)
     df = clip_negatives(df)
-    df = compute_plate_cv(df, cv_threshold=cv_threshold)
+    # df = compute_well_cv(df, cv_threshold=cv_threshold) # no replicates yet
     return df
