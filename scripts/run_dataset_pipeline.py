@@ -16,11 +16,18 @@ from src.dataset.loader import load_experiment
 from src.dataset.qc import run_qc
 
 DEFAULTS = dict(
-    metadata=ROOT / "data" / "metadata" / "20260325_aerobic_metadata.csv",
-    layout=ROOT / "data" / "metadata" / "20260325_aerobic_layout.csv",
+    metadata=ROOT / "data" / "metadata" / "aerobic_metadata.csv",
+    layout=ROOT / "data" / "metadata" / "aerobic_layout.csv",
     raw_dir=ROOT / "data" / "raw",
-    output=ROOT / "data" / "processed" / "20260325_aerobic_tidy.parquet",
+    output=ROOT / "data" / "processed" / "aerobic_tidy.parquet",
 )
+
+# DEFAULTS = dict(
+#     metadata=ROOT / "data" / "metadata" / "anaerobic_metadata.csv",
+#     layout=ROOT / "data" / "metadata" / "anaerobic_layout.csv",
+#     raw_dir=ROOT / "data" / "raw",
+#     output=ROOT / "data" / "processed" / "anaerobic_tidy.parquet",
+# )
 
 
 def summarize_time_axis(df):

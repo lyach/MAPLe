@@ -28,7 +28,7 @@ def subtract_blanks(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def flag_no_growth(
-    df: pd.DataFrame, threshold_factor: float = 2.0
+    df: pd.DataFrame, threshold_factor: float = 1.0
 ) -> pd.DataFrame:
     """Flag wells where ``max(od600) < threshold_factor * mean(blank_od_raw)``.
     """
