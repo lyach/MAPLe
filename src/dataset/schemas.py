@@ -54,11 +54,28 @@ class PlateLayout(BaseModel):
     @field_validator("blank_cols_index", mode="before")
     @classmethod
     def parse_int_list(cls, v: str | int | list[int]) -> list[int]:
+        """Parse integers from a scalar, list, comma-separated, or range like ``1-12``."""
         if isinstance(v, (int, float)):
             return [int(v)]
-        if isinstance(v, str):
-            return [int(x.strip()) for x in v.split(",")]
-        return [int(x) for x in v]
+        if isinstance(v, list):
+            return [int(x) for x in v]
+        v = v.strip()
+        if not v:
+            return []
+        result: list[int] = []
+        for part in v.split(","):
+            token = re.sub(r"\s+", "", part)
+            if not token:
+                continue
+            range_match = re.match(r"^(\d+)-(\d+)$", token)
+            if range_match:
+                start, end = int(range_match.group(1)), int(range_match.group(2))
+                if start > end:
+                    start, end = end, start
+                result.extend(range(start, end + 1))
+            else:
+                result.append(int(token))
+        return result
 
     @field_validator("blank_rows_index", mode="before")
     @classmethod
