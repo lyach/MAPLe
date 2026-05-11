@@ -20,7 +20,7 @@ def parse_layout_csv(path: str | Path) -> list[PlateLayout]:
 def build_well_map(layout: PlateLayout) -> list[WellInfo]:
     """Build a list of ``WellInfo`` from a plate layout.
 
-    ``name_rows`` maps positionally to plate rows (A, B, ...) and
+    ``name_rows`` maps positionally to plate rows (A, B, ...)
     ``name_cols`` maps positionally to plate columns (1, 2, ...).
     """
     n_rows = len(layout.name_rows)

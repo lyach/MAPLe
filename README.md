@@ -33,3 +33,29 @@
    # Install dependencies
    uv sync
    ```
+
+## Project Structure
+
+```
+src/
+  /dataset
+      schema.py            ←  Data schemas of plates
+      plate.py             ←  Layout parsing
+      parsers/             ←  Equipment-parser mapping
+        base.py            ←  Base parser
+        sunrise.py         ←  Sunrise (aerobic) parser
+        biospa.py          ←  Biospa (anaerobic) parser
+      loader.py            ←  Data loading for modeling
+      qc.py                ←  Blank subtraction, QC flags
+      curves.py            ←  Growth parameters
+   /modeling 
+      features.py          ← Feature engineering for ML
+      models.py            ← Model training, CV, evaluation
+notebooks/
+  01_eda.ipynb             ← Exploratory data analysis
+  02_modeling.ipynb        ← Baseline modeling
+data/
+  raw/                     ← CSVs from platereaders
+  processed/               ← Data ready for modeling
+  metadata/                ← Metadata files, filled by user
+```
