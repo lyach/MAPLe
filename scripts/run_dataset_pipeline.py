@@ -1,8 +1,8 @@
 """Run dataset construction pipeline.
 
-Usage:
-    python scripts/run_dataset_pipeline.py <metadata_csv> <layout_csv> <raw_dir> [output_parquet]
-    python scripts/run_dataset_pipeline.py  # uses defaults in this script
+Usage, select the dataset to process:
+    python scripts/run_dataset_pipeline.py aerobic
+    python scripts/run_dataset_pipeline.py anaerobic
 """
 
 import argparse
@@ -16,19 +16,26 @@ from src.dataset.loader import load_experiment
 from src.dataset.qc import run_qc
 from src.dataset.curves import extract_growth_curves
 
-# DEFAULTS = dict(
-#     metadata=ROOT / "data" / "metadata" / "aerobic_metadata.csv",
-#     layout=ROOT / "data" / "metadata" / "aerobic_layout.csv",
-#     raw_dir=ROOT / "data" / "raw",
-#     output=ROOT / "data" / "processed" / "aerobic_tidy.parquet",
-# )
+# Aerobic experiments
+DEFAULTS_AEROBIC = dict(
+    metadata=ROOT / "data" / "metadata" / "aerobic_metadata.csv",
+    layout=ROOT / "data" / "metadata" / "aerobic_layout.csv",
+    raw_dir=ROOT / "data" / "raw",
+    output=ROOT / "data" / "processed" / "aerobic_tidy.parquet",
+)
 
-DEFAULTS = dict(
+# Anaerobic experiments
+DEFAULTS_ANAEROBIC = dict(
     metadata=ROOT / "data" / "metadata" / "anaerobic_metadata.csv",
     layout=ROOT / "data" / "metadata" / "anaerobic_layout.csv",
     raw_dir=ROOT / "data" / "raw",
     output=ROOT / "data" / "processed" / "anaerobic_tidy.parquet",
 )
+
+DEFAULT_PRESETS = {
+    "aerobic": DEFAULTS_AEROBIC,
+    "anaerobic": DEFAULTS_ANAEROBIC,
+}
 
 
 def summarize_time_axis(df):
@@ -67,11 +74,24 @@ def format_time_summary(values, units):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--metadata", type=Path, default=DEFAULTS["metadata"])
-    parser.add_argument("--layout", type=Path, default=DEFAULTS["layout"])
-    parser.add_argument("--raw-dir", type=Path, default=DEFAULTS["raw_dir"])
-    parser.add_argument("--output", type=Path, default=DEFAULTS["output"])
+    parser.add_argument(
+        "preset",
+        nargs="?",
+        choices=DEFAULT_PRESETS.keys(),
+        default="aerobic",
+        help="Default dataset configuration to use.",
+    )
+    parser.add_argument("--metadata", type=Path)
+    parser.add_argument("--layout", type=Path)
+    parser.add_argument("--raw-dir", type=Path)
+    parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+
+    defaults = DEFAULT_PRESETS[args.preset]
+    args.metadata = args.metadata or defaults["metadata"]
+    args.layout = args.layout or defaults["layout"]
+    args.raw_dir = args.raw_dir or defaults["raw_dir"]
+    args.output = args.output or defaults["output"]
 
     print("--- Loading experiments ---")
     df = load_experiment(args.metadata, args.layout, args.raw_dir)

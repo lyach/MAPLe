@@ -19,10 +19,10 @@ All input files live under `data/`:
 ```
 data/
   metadata/
-    <date>_<batch>_metadata.csv
-    <date>_<batch>_layout.csv
+    <exp_id>_metadata.csv
+    <exp_id>_layout.csv
   raw/
-    <date>_<exp_id>_raw.csv      (one file per experiment in the batch)
+    <date>_<exp_id>_raw.csv
 ```
 
 ### 1a. Metadata CSV — `<date>_<batch>_metadata.csv`
@@ -59,7 +59,7 @@ One row per experiment. Required columns:
 | `used_rows_index` | int | `12` | Number of used rows |
 | `name_cols` | str | `"LB, MB, NB, ..."` | Comma-separated media names, in plate-column order (col 1 → col N) |
 | `name_rows` | str | `"E. coli, B. subtilis, ..."` | Comma-separated sample names, in plate-row order (row A → row H) |
-| `blank_cols_index` | int or list | `12` | Column number(s) of blank wells |
+| `blank_cols_index` | int or list | `12` | Column number(s) of blank wells; range notation supported |
 | `blank_rows_index` | str | `A` | Row letter(s) of blank wells; range notation supported |
 
 **Notes:**
@@ -91,13 +91,12 @@ From the project root:
 
 ```bash
 python scripts/run_dataset_pipeline.py \
-  --metadata data/metadata/20260325_aerobic_metadata.csv \
-  --layout   data/metadata/20260325_aerobic_layout.csv \
-  --raw-dir  data/raw \
-  --output   data/processed/20260325_aerobic_tidy.parquet
+  --metadata data/metadata/anaerobic_metadata.csv \
+  --layout   data/metadata/anaerobic_layout.csv \
+  --raw-dir  data/raw
 ```
 
-Defaults point to the `20260325_aerobic` example files, so a bare call also works:
+Defaults point to the `aerobic` example files, so a bare call also works:
 
 ```bash
 python scripts/run_dataset_pipeline.py
