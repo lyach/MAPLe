@@ -761,6 +761,22 @@ def _prep_curves(
     return df
 
 
+def _filter_param_outliers(df: pd.DataFrame, params: list[str]) -> pd.DataFrame:
+    """Drop rows that are outliers using the Tukey IQR fence.
+    """
+    df = df.copy()
+    for col in params:
+        if col not in df.columns:
+            continue
+        q1 = df[col].quantile(0.25)
+        q3 = df[col].quantile(0.75)
+        iqr = q3 - q1
+        lo = q1 - 1.5 * iqr
+        hi = q3 + 1.5 * iqr
+        df.loc[(df[col] < lo) | (df[col] > hi), col] = np.nan
+    return df
+
+
 def plot_parameter_distributions(
     curves: pd.DataFrame,
     params: list[str] | None = None,
@@ -773,6 +789,7 @@ def plot_parameter_distributions(
     rc: dict | None = None,
     figsize: tuple[float, float] | None = None,
     data_title: str | None = None,
+    filter_outliers: bool = True,
 ) -> Figure:
     """Violin + strip plots of growth parameters grouped by a categorical variable.
 
@@ -796,6 +813,8 @@ def plot_parameter_distributions(
         Value of ``media_name`` treated as the water/blank control.
     exclude_no_growth:
         Drop wells with ``growth_class == 0`` before plotting.
+    filter_outliers:
+        If ``True`` (default), values outside the Tukey IQR fence.
     rc:
         Optional rcParams overrides.
     figsize:
@@ -815,6 +834,9 @@ def plot_parameter_distributions(
 
     if params is None:
         params = [p for p in _DEFAULT_PARAMS if p in df.columns]
+
+    if filter_outliers:
+        df = _filter_param_outliers(df, params)
 
     x_order = sorted(df[x].dropna().unique())
     n_params = len(params)
