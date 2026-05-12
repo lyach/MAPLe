@@ -48,6 +48,7 @@ After the steps above are complete, you should see on your terminal something li
 Then you can proceed to the following steps:
 
 1. Prepare and upload your data files.
+   - Place the `data/` folder on this directory.
    - Edit the csv with the experiment specs `aerobic_metadata.csv` (or `anaerobic_metadata.csv`). This is on the `data/metadata` folder *[(here)](data/metadata/)*. 
    - Edit the csv with the plate layout `aerobic_metadata.csv` (or `anaerobic_metadata.csv`). This is on the `data/metadata` folder *[(here)](data/metadata/)*. 
    - Place on the `data/metadata` folder raw platereader files. **Note:** The anaerobic (Biospa) still needs manual adjusting. *See example for [aerobic](data/raw/20260325_aerobic_25_raw.csv) and [anaerobic](data/raw/20260325_anaerobic_a_37_raw.csv)*.  
