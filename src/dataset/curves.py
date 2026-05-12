@@ -10,6 +10,7 @@ from typing import Callable
 
 import numpy as np
 import pandas as pd
+from scipy.ndimage import median_filter
 from scipy.signal import savgol_filter
 
 
@@ -23,8 +24,19 @@ def _trapz_compat(y: np.ndarray, x: np.ndarray) -> float:
 
 # Smoothing functions
 
-def smooth_moving_average(od: np.ndarray, window: int = 5) -> np.ndarray:
+def _despike(od: np.ndarray, size: int = 3) -> np.ndarray:
+    """Remove single-timepoint impulse spikes with a median filter.
+
+    Applied as a pre-processing step before curve smoothers. A size-3 median
+    replaces any point that is an outlier relative to its neighbours.
+    """
+    return median_filter(od, size=size, mode="nearest")
+
+
+def smooth_moving_average(od: np.ndarray, window: int = 5, despike: bool = True, despike_size: int = 3) -> np.ndarray:
     """Centered moving average with edge replicated padding."""
+    if despike:
+        od = _despike(od, size=despike_size)
     kernel = np.ones(window) / window
     pad = window // 2
     padded = np.pad(od, pad, mode="edge")
@@ -32,9 +44,12 @@ def smooth_moving_average(od: np.ndarray, window: int = 5) -> np.ndarray:
 
 
 def smooth_savgol(
-    od: np.ndarray, window_length: int = 7, polyorder: int = 3
+    od: np.ndarray, window_length: int = 7, polyorder: int = 3, despike: bool = True, despike_size: int = 3
 ) -> np.ndarray:
-    """Savitzky-Golay filter. Adjusts window for short series."""
+    """Savitzky-Golay filter preceded by median-filter despiking.
+    """
+    if despike:
+        od = _despike(od, size=despike_size)
     wl = min(window_length, len(od))
     if wl % 2 == 0:
         wl -= 1
@@ -53,9 +68,14 @@ SMOOTHERS: dict[str, Callable] = {
 
 _LOG_EPS = 1e-6
 _SLIDE_WINDOW = 4
+_SUSTAIN_WINDOW = 3
 
 
-def extract_params(time: np.ndarray, od: np.ndarray) -> dict:
+def extract_params(
+    time: np.ndarray,
+    od: np.ndarray,
+    sustain_window: int = _SUSTAIN_WINDOW,
+) -> dict:
     """Extract growth parameters from a single smoothed OD600 curve.
 
     Parameters
@@ -64,45 +84,58 @@ def extract_params(time: np.ndarray, od: np.ndarray) -> dict:
         Time values (hours).
     od:
         Smoothed, blank-subtracted OD600 values aligned with *time*.
+    sustain_window:
+        Number of consecutive sliding windows whose slopes are averaged
+        before selecting the maximum.  A value of 1 recovers the old
+        single-window behaviour.
 
     Returns
     -------
     dict with keys: max_od, auc, growth_rate, lag_time_h, time_to_max_od_h.
     """
-    # max od600
     max_od = float(np.max(od))
-    # auc
     auc = _trapz_compat(od, time)
-    # time to max od600
     time_to_max_od_h = float(time[np.argmax(od)])
 
-    # growth rate
-    # Use log(OD + eps) so zero/negative corrected OD values stay finite.
     log_od = np.log(np.maximum(od, 0.0) + _LOG_EPS)
-    best_slope = -np.inf
-    best_intercept = 0.0
-    best_t_start = time[0]
 
-    # Fit each 4-point log-phase window and keep the steepest slope.
-    for i in range(len(log_od) - _SLIDE_WINDOW + 1):
+    n_windows = len(log_od) - _SLIDE_WINDOW + 1
+    if n_windows <= 0:
+        return {
+            "max_od": max_od,
+            "auc": auc,
+            "growth_rate": 0.0,
+            "lag_time_h": float(time[-1]),
+            "time_to_max_od_h": time_to_max_od_h,
+        }
+
+    slopes = np.empty(n_windows)
+    intercepts = np.empty(n_windows)
+    for i in range(n_windows):
         t_win = time[i : i + _SLIDE_WINDOW]
         y_win = log_od[i : i + _SLIDE_WINDOW]
-        slope, intercept = np.polyfit(t_win, y_win, 1)
-        if slope > best_slope:
-            best_slope = slope
-            best_intercept = intercept
-            best_t_start = t_win[0]
+        slopes[i], intercepts[i] = np.polyfit(t_win, y_win, 1)
+
+    sw = min(sustain_window, n_windows)
+
+    if sw <= 1:
+        best_idx = int(np.argmax(slopes))
+    else:
+        cumsum = np.cumsum(slopes)
+        rolling_mean = (cumsum[sw - 1 :] - np.concatenate([[0.0], cumsum[: -sw]])) / sw
+        best_start = int(np.argmax(rolling_mean))
+        region_slopes = slopes[best_start : best_start + sw]
+        best_idx = best_start + int(np.argmax(region_slopes))
+
+    best_slope = float(slopes[best_idx])
+    best_intercept = float(intercepts[best_idx])
 
     growth_rate = float(max(best_slope, 0.0))
 
-    # lag time
     baseline_log = float(log_od[0])
     if growth_rate > 0:
-        # Extrapolate the best tangent back to the initial log OD baseline.
         lag_time_h = float((baseline_log - best_intercept) / best_slope)
-        # Clamp to non-negative lag time.
         lag_time_h = max(lag_time_h, 0.0)
-    # If no growth rate is detected, set lag time to the last timepoint.
     else:
         lag_time_h = float(time[-1])
 

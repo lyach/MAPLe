@@ -224,7 +224,7 @@ Called once per well on the smoothed OD600 array. Input units follow the `time_u
 |---|---|
 | `max_od` | `max(OD600)` |
 | `auc` | Trapezoidal integral: `∫ OD600 dt` |
-| `growth_rate` | Maximum slope from a sliding 4-point window on `log(OD600 + ε)`, fit by linear regression (`ε = 1e-6` prevents `log(0)`). Units: OD/time_unit. |
+| `growth_rate` | Sustained maximum slope: per-window slopes from a sliding 4-point window on `log(OD600 + ε)` are computed, then a rolling mean over 3 consecutive windows selects the region of most consistent growth. The steepest individual slope within that region is reported (`ε = 1e-6` prevents `log(0)`). Units: OD/time_unit. |
 | `lag_time_h` | X-intercept of the log-phase tangent line extrapolated to the initial baseline OD. Clamped to ≥ 0; set to the last timepoint if no positive growth rate is detected. |
 | `time_to_max_od_h` | Time at which `max_od` occurs. |
 

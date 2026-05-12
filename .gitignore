@@ -5,6 +5,7 @@ __pycache__/
 .cursor/
 local/
 data/
+reports/
 
 # environment
 .env/
