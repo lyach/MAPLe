@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.dataset.loader import load_experiment
 from src.dataset.qc import run_qc
+from src.dataset.curves import extract_growth_curves
 
 DEFAULTS = dict(
     metadata=ROOT / "data" / "metadata" / "aerobic_metadata.csv",
@@ -87,16 +88,26 @@ def main():
     qc_df = run_qc(df)
     print(f"New df shape: {qc_df.shape}")
     print(f"New columns after QC: {[c for c in qc_df.columns if c not in df.columns]}")
-    print(f"Blanks count: {qc_df['is_blank'].sum()}")
+    print(f"Blanks count per experiment: {qc_df.groupby('exp_id')['is_blank'].sum().to_dict()}")
+    print()
+    
+    print("--- Running growth curve extraction ---")
+    curves_df = extract_growth_curves(qc_df)
+    print(f"Curves df shape: {curves_df.shape}")
+    print(f"Columns: {list(curves_df.columns)}")
     print()
 
     print("--- Sample rows ---")
-    print(qc_df.head(3).to_string(index=False))
+    print(curves_df.head(3).to_string(index=False))
     print()
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     qc_df.to_parquet(args.output, index=False)
-    print(f"Saved: {args.output}  ({args.output.stat().st_size / 1024:.1f} KB)")
+    print(f"Saved long dataframe: {args.output}  ({args.output.stat().st_size / 1024:.1f} KB)")
+    
+    curves_output = args.output.with_name(args.output.stem + "_curves.csv")
+    curves_df.to_csv(curves_output, index=False)
+    print(f"Saved curves: {curves_output}  ({curves_output.stat().st_size / 1024:.1f} KB)")
 
 
 if __name__ == "__main__":

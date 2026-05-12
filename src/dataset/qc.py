@@ -36,7 +36,7 @@ def subtract_blanks(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def flag_no_growth(
-    df: pd.DataFrame, threshold_factor: float = 3.0
+    df: pd.DataFrame, threshold_factor: float = 2.0
 ) -> pd.DataFrame:
     """Flag wells (blank-subtracted) with low OD - no growth.
 

@@ -173,3 +173,123 @@ The `equipment` value in the metadata CSV must exactly match the registered name
 ## 5. Adding new metadata fields
 
 Add the column to the metadata CSV. No code changes required — `ExperimentMetadata` uses `extra="allow"` and the loader propagates all fields to the output.
+
+
+---
+
+## 6. Growth curve parameter extraction (`src/dataset/curves.py`)
+
+`extract_growth_curves` takes the QC'd long-format DataFrame and produces a **wide-format** table where **one row = one (experiment, well) datapoint** with extracted growth parameters. It runs in three stages: smoothing, parameter extraction, and optional replicate averaging.
+
+```
+qc_df (long-format) ─► smooth OD per well ─► extract parameters ─► [average replicates] ─► curves_df (wide-format CSV)
+```
+
+### 6a. Smoothing
+
+Each well's OD600 time-series is smoothed before parameter extraction. The smoother is selected by name via the `smoother` argument to `extract_growth_curves`. Two smoothers are available:
+
+| Key | Function | Default parameters | Description |
+|---|---|---|---|
+| `"savgol"` *(default)* | `smooth_savgol` | `window_length=7`, `polyorder=3` | Savitzky-Golay filter via `scipy.signal.savgol_filter`. Preserves curve shape better than a simple average; window is automatically shrunk for short series. |
+| `"moving_average"` | `smooth_moving_average` | `window=5` | Centered moving average using convolution with edge replication. Faster but more aggressive smoothing. |
+
+To switch smoother or pass custom parameters:
+
+```python
+from src.dataset.curves import extract_growth_curves
+
+# Savitzky-Golay with wider window
+curves_df = extract_growth_curves(qc_df, smoother="savgol", smoother_kwargs={"window_length": 11, "polyorder": 3})
+
+# Simple moving average
+curves_df = extract_growth_curves(qc_df, smoother="moving_average", smoother_kwargs={"window": 7})
+```
+
+**Adding a new smoother:** define a function with signature `f(od: np.ndarray, **kwargs) -> np.ndarray` and insert it into `SMOOTHERS`:
+
+```python
+# in src/dataset/curves.py
+def smooth_my_method(od, my_param=3):
+    ...
+
+SMOOTHERS["my_method"] = smooth_my_method
+```
+
+### 6b. Parameter extraction (`extract_params`)
+
+Called once per well on the smoothed OD600 array. Input units follow the `time_unit` of the experiment (typically minutes for the aerobic batch).
+
+| Parameter | Formula / method |
+|---|---|
+| `max_od` | `max(OD600)` |
+| `auc` | Trapezoidal integral: `∫ OD600 dt` |
+| `growth_rate` | Maximum slope from a sliding 4-point window on `log(OD600 + ε)`, fit by linear regression (`ε = 1e-6` prevents `log(0)`). Units: OD/time_unit. |
+| `lag_time_h` | X-intercept of the log-phase tangent line extrapolated to the initial baseline OD. Clamped to ≥ 0; set to the last timepoint if no positive growth rate is detected. |
+| `time_to_max_od_h` | Time at which `max_od` occurs. |
+
+**Growth rate / lag time geometry:**
+
+```
+log(OD)
+  │         /← log-phase slope (growth_rate)
+  │        /
+  │       /
+  │──────/  ←── lag_time_h = x-intercept of this line at baseline log(OD[0])
+  └───────────── time
+```
+
+### 6c. Growth classification (`compute_growth_threshold`)
+
+The threshold for `growth_class` is computed per experiment from the blank wells:
+
+```
+threshold = 3 × std(blank od600_raw)
+```
+
+`od600_raw` (pre-blank-subtraction) is used so the spread reflects raw instrument noise. After blank subtraction, a well is classified as **growing** (`growth_class = 1`) if `max_od > threshold`, and **not growing** (`growth_class = 0`) otherwise.
+
+### 6d. Replicate averaging (`with_replicates`)
+
+By default (`with_replicates=False`) the output has one row per well per experiment, with `exp_id` and `replicate` retained as identifier columns.
+
+When `with_replicates=True`, rows sharing `(strain_name, media_name, atmosphere, temperature)` are collapsed into a single row:
+- Continuous parameters (`max_od`, `auc`, `growth_rate`, `lag_time_h`, `time_to_max_od_h`) are **averaged** across replicates.
+- `growth_class` uses a **majority vote**: `1` if the mean across replicates ≥ 0.5.
+- `exp_id` and `replicate` are dropped from the output.
+
+```python
+# Per-well output (default)
+curves_df = extract_growth_curves(qc_df)
+
+# Averaged across replicates
+curves_df = extract_growth_curves(qc_df, with_replicates=True)
+```
+
+### 6e. Output schema
+
+**One row = one (experiment, well) datapoint** when `with_replicates=False`.  
+**One row = one (strain, media, condition) average** when `with_replicates=True`.
+
+| Column | Present when | Description |
+|---|---|---|
+| `exp_id` | `with_replicates=False` | Experiment ID |
+| `date` | `with_replicates=False` | Date of experiment |
+| `replicate` | `with_replicates=False` | Replicate number |
+| `strain_name` | always | Strain name |
+| `media_name` | always | Media name |
+| `atmosphere` | always | Atmosphere condition |
+| `temperature` | always | Temperature (°C) |
+| `max_od` | always | Maximum OD600 (blank-subtracted, smoothed) |
+| `auc` | always | Area under the growth curve |
+| `growth_rate` | always | Maximum specific growth rate (log-phase slope) |
+| `lag_time_h` | always | Lag time before exponential growth |
+| `time_to_max_od_h` | always | Time at which maximum OD is reached |
+| `growth_class` | always | `1` = growth, `0` = no growth |
+
+The curves CSV is saved alongside the parquet file:
+
+```python
+import pandas as pd
+curves_df = pd.read_csv("data/processed/aerobic_tidy_curves.csv")
+```
