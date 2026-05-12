@@ -69,15 +69,21 @@ def extract_params(time: np.ndarray, od: np.ndarray) -> dict:
     -------
     dict with keys: max_od, auc, growth_rate, lag_time_h, time_to_max_od_h.
     """
+    # max od600
     max_od = float(np.max(od))
+    # auc
     auc = _trapz_compat(od, time)
+    # time to max od600
     time_to_max_od_h = float(time[np.argmax(od)])
 
+    # growth rate
+    # Use log(OD + eps) so zero/negative corrected OD values stay finite.
     log_od = np.log(np.maximum(od, 0.0) + _LOG_EPS)
     best_slope = -np.inf
     best_intercept = 0.0
     best_t_start = time[0]
 
+    # Fit each 4-point log-phase window and keep the steepest slope.
     for i in range(len(log_od) - _SLIDE_WINDOW + 1):
         t_win = time[i : i + _SLIDE_WINDOW]
         y_win = log_od[i : i + _SLIDE_WINDOW]
@@ -89,10 +95,14 @@ def extract_params(time: np.ndarray, od: np.ndarray) -> dict:
 
     growth_rate = float(max(best_slope, 0.0))
 
+    # lag time
     baseline_log = float(log_od[0])
     if growth_rate > 0:
+        # Extrapolate the best tangent back to the initial log OD baseline.
         lag_time_h = float((baseline_log - best_intercept) / best_slope)
+        # Clamp to non-negative lag time.
         lag_time_h = max(lag_time_h, 0.0)
+    # If no growth rate is detected, set lag time to the last timepoint.
     else:
         lag_time_h = float(time[-1])
 
@@ -140,13 +150,13 @@ def extract_growth_curves(
     smoother: str = "savgol",
     smoother_kwargs: dict | None = None,
     with_replicates: bool = False,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Extract growth parameters from long-format DataFrame post QC.
 
     Parameters
     ----------
     df:
-        Long-format DataFrame produced by ``run_qc``.
+        Long-format DataFrame produced after ``run_qc``.
     smoother:
         Key in ``SMOOTHERS`` — ``"savgol"`` or ``"moving_average"``.
     smoother_kwargs:
@@ -157,8 +167,13 @@ def extract_growth_curves(
 
     Returns
     -------
-    Wide-format DataFrame with one row per datapoint and growth parameter
-    columns.
+    tuple of (wide_df, long_df):
+
+    wide_df
+        Wide-format DataFrame with one row per well and growth parameter
+        columns.
+    long_df
+        Copy of the input *df* with an additional ``od600_smooth`` column.
     """
     if smoother not in SMOOTHERS:
         raise ValueError(
@@ -171,16 +186,21 @@ def extract_growth_curves(
 
     thresholds = compute_growth_threshold(df)
 
+    long_out = df.copy()
+    long_out["od600_smooth"] = np.nan
+
     records: list[dict] = []
 
     for (exp_id, well_id), grp in samples.groupby(["exp_id", "well_id"], sort=False):
         grp = grp.sort_values("timepoint")
         time_raw = grp["time_value"].to_numpy(dtype=float)
         time_unit = grp["time_unit"].iloc[0] if "time_unit" in grp.columns else "h"
-        time = time_raw / 60.0 if time_unit == "min" else time_raw # convert minutes to hours
+        time = time_raw / 60.0 if time_unit == "min" else time_raw  # convert minutes to hours
         od = grp["od600"].to_numpy(dtype=float)
 
         od_smooth = smooth_fn(od, **smooth_kw)
+
+        long_out.loc[grp.index, "od600_smooth"] = od_smooth
 
         params = extract_params(time, od_smooth)
 
@@ -205,4 +225,4 @@ def extract_growth_curves(
             .reset_index()
         )
 
-    return result
+    return result, long_out

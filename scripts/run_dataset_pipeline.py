@@ -16,19 +16,19 @@ from src.dataset.loader import load_experiment
 from src.dataset.qc import run_qc
 from src.dataset.curves import extract_growth_curves
 
-DEFAULTS = dict(
-    metadata=ROOT / "data" / "metadata" / "aerobic_metadata.csv",
-    layout=ROOT / "data" / "metadata" / "aerobic_layout.csv",
-    raw_dir=ROOT / "data" / "raw",
-    output=ROOT / "data" / "processed" / "aerobic_tidy.parquet",
-)
-
 # DEFAULTS = dict(
-#     metadata=ROOT / "data" / "metadata" / "anaerobic_metadata.csv",
-#     layout=ROOT / "data" / "metadata" / "anaerobic_layout.csv",
+#     metadata=ROOT / "data" / "metadata" / "aerobic_metadata.csv",
+#     layout=ROOT / "data" / "metadata" / "aerobic_layout.csv",
 #     raw_dir=ROOT / "data" / "raw",
-#     output=ROOT / "data" / "processed" / "anaerobic_tidy.parquet",
+#     output=ROOT / "data" / "processed" / "aerobic_tidy.parquet",
 # )
+
+DEFAULTS = dict(
+    metadata=ROOT / "data" / "metadata" / "anaerobic_metadata.csv",
+    layout=ROOT / "data" / "metadata" / "anaerobic_layout.csv",
+    raw_dir=ROOT / "data" / "raw",
+    output=ROOT / "data" / "processed" / "anaerobic_tidy.parquet",
+)
 
 
 def summarize_time_axis(df):
@@ -92,7 +92,7 @@ def main():
     print()
     
     print("--- Running growth curve extraction ---")
-    curves_df = extract_growth_curves(qc_df)
+    curves_df, long_df = extract_growth_curves(qc_df)
     print(f"Curves df shape: {curves_df.shape}")
     print(f"Columns: {list(curves_df.columns)}")
     print()
@@ -102,7 +102,7 @@ def main():
     print()
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    qc_df.to_parquet(args.output, index=False)
+    long_df.to_parquet(args.output, index=False)
     print(f"Saved long dataframe: {args.output}  ({args.output.stat().st_size / 1024:.1f} KB)")
     
     curves_output = args.output.with_name(args.output.stem + "_curves.csv")

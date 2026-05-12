@@ -32,13 +32,13 @@ def subtract_blanks(df: pd.DataFrame) -> pd.DataFrame:
     df["blank_mean"] = df["blank_mean"].fillna(0.0)
     df["blank_cv"] = df["blank_cv"].fillna(0.0)
     df["od600"] = df["od600"] - df["blank_mean"]
-    return df.drop(columns=["blank_mean"])
+    return df
 
 
 def flag_no_growth(
     df: pd.DataFrame, threshold_factor: float = 2.0
 ) -> pd.DataFrame:
-    """Flag wells (blank-subtracted) with low OD - no growth.
+    """Flag wells (blank-subtracted) with low OD - no growth. - DISCARDED, DONE IN CURVES.PY
 
     Blank noise threshold per media group = ``threshold_factor * std(blank_raw)``.
     A well is flagged ``no_growth=True`` when its ``max(od600)``  stays below 
@@ -114,7 +114,6 @@ def run_qc(
 ) -> pd.DataFrame:
     """Run the full QC pipeline in order."""
     df = subtract_blanks(df)
-    df = flag_no_growth(df, threshold_factor=threshold_factor)
     df = clip_negatives(df)
     # df = compute_well_cv(df, cv_threshold=cv_threshold) # no replicates yet
     return df
