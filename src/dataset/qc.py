@@ -38,7 +38,8 @@ def subtract_blanks(df: pd.DataFrame) -> pd.DataFrame:
 def flag_no_growth(
     df: pd.DataFrame, threshold_factor: float = 2.0
 ) -> pd.DataFrame:
-    """Flag wells (blank-subtracted) with low OD - no growth. - DISCARDED, DONE IN CURVES.PY
+    """ DISCARDED, DONE IN CURVES.PY
+    Flag wells (blank-subtracted) with low OD - no growth. 
 
     Blank noise threshold per media group = ``threshold_factor * std(blank_raw)``.
     A well is flagged ``no_growth=True`` when its ``max(od600)``  stays below 

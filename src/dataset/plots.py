@@ -1326,3 +1326,539 @@ def plot_ranking(
     ax.set_ylim(-0.5, len(ranked) - 0.5)
     fig.tight_layout()
     return fig
+
+# ---------------------------------------------------------------------------
+# MaxOD600 plots
+# ---------------------------------------------------------------------------
+
+def load_align_report(path: Union[str, Path]) -> pd.DataFrame:
+    """Load the AlignBio report CSV produced by ``create_align_df.py``.
+
+    Parameters
+    ----------
+    path:
+        Path to the ``.csv`` report file.
+    """
+    return pd.read_csv(path)
+
+
+def _prep_align(
+    df: pd.DataFrame,
+    *,
+    growth_threshold: float,
+) -> pd.DataFrame:
+    """Return a copy with a boolean ``grows`` column."""
+    df = df.copy()
+    df["grows"] = df["MaxOD"] > growth_threshold
+    return df
+
+
+def _shorten_organism(name: str, max_len: int = 22) -> str:
+    """Abbreviate long organism names to keep axis labels readable."""
+    parts = name.split()
+    if len(parts) >= 2:
+        abbrev = f"{parts[0][0]}. {' '.join(parts[1:])}"
+        return abbrev[:max_len] if len(abbrev) > max_len else abbrev
+    return name[:max_len]
+
+
+def plot_maxod_heatmap(
+    df: pd.DataFrame,
+    *,
+    facet_col: str | None = None,
+    growth_threshold: float = 0.1,
+    annot: bool = True,
+    cmap: str = "YlOrRd",
+    rc: dict | None = None,
+    figsize: tuple[float, float] | None = None,
+) -> Figure:
+    """Organism × Media heatmap of mean MaxOD600.
+
+    Rows and columns are sorted by their overall mean MaxOD so the
+    best-performing combinations appear in the top-right corner.
+
+    Parameters
+    ----------
+    df:
+        AlignBio report DataFrame from ``load_align_report``.
+    facet_col:
+        If given (e.g. ``"Temperature"``), one subplot column is drawn per
+        unique value so conditions can be compared side by side.
+    growth_threshold:
+        Values below this threshold are masked (grey) to distinguish true
+        growth from noise.
+    annot:
+        Annotate each cell with its value.
+    cmap:
+        Matplotlib colourmap name.
+    rc:
+        Optional rcParams overrides.
+    figsize:
+        Override default figure size.
+
+    Returns
+    -------
+    Figure
+    """
+    _apply_style(rc)
+    df = _prep_align(df, growth_threshold=growth_threshold)
+
+    facet_vals = sorted(df[facet_col].unique()) if facet_col else [None]
+    n_facets = len(facet_vals)
+
+    organisms = (
+        df.groupby("Organism")["MaxOD"].mean().sort_values(ascending=False).index.tolist()
+    )
+    medias = (
+        df.groupby("Media")["MaxOD"].mean().sort_values(ascending=False).index.tolist()
+    )
+    org_labels = [_shorten_organism(o) for o in organisms]
+
+    default_w = max(10, len(medias) * 0.9 * n_facets)
+    default_h = max(6, len(organisms) * 0.45)
+    fig, axes = plt.subplots(
+        1,
+        n_facets,
+        figsize=figsize or (default_w, default_h),
+        sharey=True,
+    )
+    if n_facets == 1:
+        axes = [axes]
+
+    vmax = df["MaxOD"].quantile(0.98)
+
+    for ax, fval in zip(axes, facet_vals):
+        sub = df if fval is None else df[df[facet_col] == fval]
+        pivot = (
+            sub.groupby(["Organism", "Media"])["MaxOD"]
+            .mean()
+            .unstack("Media")
+            .reindex(index=organisms, columns=medias)
+        )
+        mask = pivot < growth_threshold
+
+        sns.heatmap(
+            pivot,
+            ax=ax,
+            mask=mask,
+            cmap=cmap,
+            vmin=growth_threshold,
+            vmax=vmax,
+            annot=annot,
+            fmt=".2f",
+            annot_kws={"size": 7},
+            linewidths=0.4,
+            linecolor="white",
+            cbar=ax is axes[-1],
+            cbar_kws={"label": "Mean MaxOD600", "shrink": 0.6},
+        )
+        # grey out sub-threshold cells
+        sns.heatmap(
+            pivot,
+            ax=ax,
+            mask=~mask,
+            cmap=ListedColormap(["#e0e0e0"]),
+            annot=annot,
+            fmt=".2f",
+            annot_kws={"size": 7, "color": "#aaaaaa"},
+            linewidths=0.4,
+            linecolor="white",
+            cbar=False,
+            vmin=0,
+            vmax=1,
+        )
+        title = f"{facet_col} = {fval}" if fval is not None else "Mean MaxOD600"
+        ax.set_title(title, fontsize=10, fontweight="bold")
+        ax.set_xlabel("Media", fontsize=9)
+        ax.set_ylabel("Organism" if ax is axes[0] else "", fontsize=9)
+        ax.set_yticklabels(org_labels, rotation=0, fontsize=8)
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=40, ha="right", fontsize=8)
+
+    fig.suptitle(
+        "MaxOD600 across organisms and media"
+        + (f"  (faceted by {facet_col})" if facet_col else ""),
+        fontsize=12,
+        fontweight="bold",
+        y=1.01,
+    )
+    fig.tight_layout()
+    return fig
+
+
+def plot_maxod_distribution(
+    df: pd.DataFrame,
+    *,
+    by: str = "Media",
+    growth_threshold: float = 0.1,
+    hue: str | None = "Organism",
+    rc: dict | None = None,
+    figsize: tuple[float, float] | None = None,
+) -> Figure:
+    """Strip + box plot of MaxOD600 grouped by media or organism.
+
+    Groups are sorted by median MaxOD (highest at top) for quick visual
+    ranking.  Individual observations are overlaid as a strip to reveal
+    organism-level variability within each medium.
+
+    Parameters
+    ----------
+    df:
+        AlignBio report DataFrame from ``load_align_report``.
+    by:
+        Column to use as the primary grouping axis — ``"Media"`` or
+        ``"Organism"``.
+    growth_threshold:
+        Horizontal reference line drawn at this value.
+    hue:
+        Column used to colour the strip markers.  Set to ``None`` to
+        use a single colour.
+    rc:
+        Optional rcParams overrides.
+    figsize:
+        Override default figure size.
+
+    Returns
+    -------
+    Figure
+    """
+    _apply_style(rc)
+
+    order = (
+        df.groupby(by)["MaxOD"].median().sort_values(ascending=True).index.tolist()
+    )
+    default_h = max(5, len(order) * 0.5)
+    fig, ax = plt.subplots(figsize=figsize or (9, default_h))
+
+    sns.boxplot(
+        data=df,
+        y=by,
+        x="MaxOD",
+        order=order,
+        color="#d6e4f0",
+        width=0.5,
+        fliersize=0,
+        linewidth=0.8,
+        ax=ax,
+    )
+
+    hue_vals = sorted(df[hue].dropna().unique()) if hue else [None]
+    palette = dict(zip(hue_vals, _color_cycle(len(hue_vals)))) if hue else None
+
+    sns.stripplot(
+        data=df,
+        y=by,
+        x="MaxOD",
+        order=order,
+        hue=hue if hue else None,
+        palette=palette,
+        size=5,
+        alpha=0.7,
+        jitter=True,
+        dodge=False,
+        ax=ax,
+    )
+
+    ax.axvline(growth_threshold, color="crimson", lw=1.0, ls="--", alpha=0.8,
+               label=f"growth threshold ({growth_threshold})")
+    ax.set_xlabel("MaxOD600", fontsize=9)
+    ax.set_ylabel(by, fontsize=9)
+    ax.set_title(
+        f"MaxOD600 distribution by {by}",
+        fontsize=11,
+        fontweight="bold",
+    )
+    if hue:
+        ax.legend(
+            title=hue,
+            bbox_to_anchor=(1.02, 1),
+            loc="upper left",
+            fontsize=7,
+            markerscale=0.9,
+        )
+    else:
+        ax.legend(fontsize=8)
+    fig.tight_layout()
+    return fig
+
+
+def plot_maxod_ranking(
+    df: pd.DataFrame,
+    *,
+    group_by: str = "Media",
+    rc: dict | None = None,
+    figsize: tuple[float, float] | None = None,
+) -> Figure:
+    """Horizontal bar chart ranking groups by mean MaxOD600 ± std.
+
+    Parameters
+    ----------
+    df:
+        AlignBio report DataFrame from ``load_align_report``.
+    group_by:
+        Column to rank — ``"Media"`` or ``"Organism"``.
+    rc:
+        Optional rcParams overrides.
+    figsize:
+        Override default figure size.
+
+    Returns
+    -------
+    Figure
+    """
+    _apply_style(rc)
+
+    agg = df.groupby(group_by)["MaxOD"].agg(["mean", "std"]).sort_values("mean")
+    colors = _color_cycle(len(agg))
+    default_h = max(4, len(agg) * 0.5)
+    fig, ax = plt.subplots(figsize=figsize or (7, default_h))
+
+    bars = ax.barh(
+        agg.index,
+        agg["mean"],
+        xerr=agg["std"],
+        color=colors,
+        edgecolor="white",
+        linewidth=0.5,
+        error_kw={"elinewidth": 0.8, "capsize": 3, "ecolor": "#555555"},
+    )
+    offset = max(agg["mean"].max() * 0.01, 0.005)
+    for bar, (_, row) in zip(bars, agg.iterrows()):
+        ax.text(
+            row["mean"] + (row["std"] or 0) + offset,
+            bar.get_y() + bar.get_height() / 2,
+            f"{row['mean']:.2f}",
+            va="center",
+            ha="left",
+            fontsize=8,
+        )
+
+    ax.set_xlabel("Mean MaxOD600 ± std", fontsize=9)
+    ax.set_ylabel(group_by, fontsize=9)
+    ax.set_title(
+        f"{group_by} ranked by mean MaxOD600",
+        fontsize=11,
+        fontweight="bold",
+    )
+    ax.set_ylim(-0.5, len(agg) - 0.5)
+    fig.tight_layout()
+    return fig
+
+
+def plot_maxod_temperature_effect(
+    df: pd.DataFrame,
+    *,
+    facet_by: str | None = "Media",
+    col_wrap: int = 4,
+    rc: dict | None = None,
+    figsize: tuple[float, float] | None = None,
+) -> Figure:
+    """Mean MaxOD600 vs Temperature, one line per Organism.
+
+    Shows how growth yield responds to temperature for each organism.
+    When ``facet_by`` is set, one subplot is drawn per unique value of
+    that column (e.g., per medium).
+
+    Parameters
+    ----------
+    df:
+        AlignBio report DataFrame from ``load_align_report``.
+    facet_by:
+        Column to facet on (``"Media"`` or ``None`` for a single panel
+        averaged across all media).
+    col_wrap:
+        Number of subplot columns before wrapping.
+    rc:
+        Optional rcParams overrides.
+    figsize:
+        Override default figure size.
+
+    Returns
+    -------
+    Figure
+    """
+    _apply_style(rc)
+
+    organisms = sorted(df["Organism"].unique())
+    org_labels = {o: _shorten_organism(o) for o in organisms}
+    colors = dict(zip(organisms, _color_cycle(len(organisms))))
+    temps = sorted(df["Temperature"].unique())
+
+    if facet_by is None:
+        agg = (
+            df.groupby(["Organism", "Temperature"])["MaxOD"]
+            .mean()
+            .reset_index()
+        )
+        fig, ax = plt.subplots(figsize=figsize or (7, 5))
+        for org, grp in agg.groupby("Organism", sort=True):
+            grp = grp.sort_values("Temperature")
+            ax.plot(
+                grp["Temperature"],
+                grp["MaxOD"],
+                marker="o",
+                color=colors[org],
+                label=org_labels[org],
+                linewidth=1.4,
+            )
+        ax.set_xlabel("Temperature (°C)", fontsize=9)
+        ax.set_ylabel("Mean MaxOD600", fontsize=9)
+        ax.set_title("Temperature effect on MaxOD600", fontsize=11, fontweight="bold")
+        ax.set_xticks(temps)
+        ax.legend(title="Organism", bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=7)
+        fig.tight_layout()
+        return fig
+
+    facet_vals = sorted(df[facet_by].unique())
+    n_cols = min(col_wrap, len(facet_vals))
+    n_rows = int(np.ceil(len(facet_vals) / n_cols))
+    default_w = n_cols * 3.5
+    default_h = n_rows * 3.2
+    fig, axes = plt.subplots(
+        n_rows, n_cols, figsize=figsize or (default_w, default_h), sharey=True
+    )
+    axes_flat = np.array(axes).flatten()
+
+    agg = (
+        df.groupby(["Organism", facet_by, "Temperature"])["MaxOD"]
+        .mean()
+        .reset_index()
+    )
+
+    for i, fval in enumerate(facet_vals):
+        ax = axes_flat[i]
+        sub = agg[agg[facet_by] == fval]
+        for org, grp in sub.groupby("Organism", sort=True):
+            grp = grp.sort_values("Temperature")
+            ax.plot(
+                grp["Temperature"],
+                grp["MaxOD"],
+                marker="o",
+                markersize=5,
+                color=colors[org],
+                linewidth=1.2,
+            )
+        ax.set_title(str(fval), fontsize=9, fontweight="bold")
+        ax.set_xticks(temps)
+        ax.set_xlabel("°C", fontsize=8)
+        ax.tick_params(axis="both", labelsize=7)
+
+    for j in range(i + 1, len(axes_flat)):
+        axes_flat[j].set_visible(False)
+
+    handles = [
+        plt.Line2D([0], [0], color=colors[o], marker="o", markersize=5, linewidth=1.2)
+        for o in organisms
+    ]
+    fig.legend(
+        handles,
+        [org_labels[o] for o in organisms],
+        title="Organism",
+        loc="lower right",
+        bbox_to_anchor=(1.0, 0.0),
+        fontsize=7,
+        ncol=1,
+    )
+    fig.supxlabel("Temperature (°C)", fontsize=9)
+    fig.supylabel("Mean MaxOD600", fontsize=9)
+    fig.suptitle(
+        f"Temperature effect on MaxOD600  (faceted by {facet_by})",
+        fontsize=11,
+        fontweight="bold",
+    )
+    fig.tight_layout()
+    return fig
+
+
+def plot_growth_breadth(
+    df: pd.DataFrame,
+    *,
+    growth_threshold: float = 0.1,
+    rc: dict | None = None,
+    figsize: tuple[float, float] | None = None,
+) -> Figure:
+    """Count of compatible media/organisms above the growth threshold.
+
+    Left panel: number of media where each organism grows (mean MaxOD >
+    ``growth_threshold``) — organism versatility.
+    Right panel: number of organisms that grow in each medium — medium
+    permissiveness.
+
+    Parameters
+    ----------
+    df:
+        AlignBio report DataFrame from ``load_align_report``.
+    growth_threshold:
+        MinOD considered as genuine growth.
+    rc:
+        Optional rcParams overrides.
+    figsize:
+        Override default figure size.
+
+    Returns
+    -------
+    Figure
+    """
+    _apply_style(rc)
+
+    mean_od = df.groupby(["Organism", "Media"])["MaxOD"].mean().reset_index()
+    mean_od["grows"] = mean_od["MaxOD"] > growth_threshold
+
+    org_breadth = (
+        mean_od.groupby("Organism")["grows"].sum().sort_values(ascending=True)
+    )
+    media_breadth = (
+        mean_od.groupby("Media")["grows"].sum().sort_values(ascending=True)
+    )
+
+    n_media = len(mean_od["Media"].unique())
+
+    default_h = max(5, max(len(org_breadth), len(media_breadth)) * 0.45)
+    fig, (ax_org, ax_med) = plt.subplots(
+        1, 2, figsize=figsize or (12, default_h)
+    )
+
+    # Organism versatility
+    colors_org = _color_cycle(len(org_breadth))
+    ax_org.barh(
+        [_shorten_organism(o) for o in org_breadth.index],
+        org_breadth.values,
+        color=colors_org,
+        edgecolor="white",
+        linewidth=0.5,
+    )
+    ax_org.axvline(n_media, color="grey", lw=0.8, ls=":", alpha=0.7,
+                   label=f"all {n_media} media")
+    ax_org.set_xlabel("# media supporting growth", fontsize=9)
+    ax_org.set_ylabel("Organism", fontsize=9)
+    ax_org.set_title("Organism versatility", fontsize=10, fontweight="bold")
+    ax_org.tick_params(axis="y", labelsize=8)
+    ax_org.set_xlim(0, n_media + 0.5)
+    ax_org.legend(fontsize=8)
+
+    # Media permissiveness
+    n_org = len(mean_od["Organism"].unique())
+    colors_med = _color_cycle(len(media_breadth))
+    ax_med.barh(
+        media_breadth.index,
+        media_breadth.values,
+        color=colors_med,
+        edgecolor="white",
+        linewidth=0.5,
+    )
+    ax_med.axvline(n_org, color="grey", lw=0.8, ls=":", alpha=0.7,
+                   label=f"all {n_org} organisms")
+    ax_med.set_xlabel("# organisms that grow", fontsize=9)
+    ax_med.set_ylabel("Media", fontsize=9)
+    ax_med.set_title("Media permissiveness", fontsize=10, fontweight="bold")
+    ax_med.tick_params(axis="y", labelsize=8)
+    ax_med.set_xlim(0, n_org + 0.5)
+    ax_med.legend(fontsize=8)
+
+    fig.suptitle(
+        f"Growth breadth  (threshold MaxOD > {growth_threshold})",
+        fontsize=12,
+        fontweight="bold",
+    )
+    fig.tight_layout()
+    return fig
+
