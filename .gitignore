@@ -4,8 +4,11 @@ __pycache__/
 # folders
 .cursor/
 local/
-data/
 reports/
+
+# data
+data/*
+!data/metadata/
 
 # environment
 .env/

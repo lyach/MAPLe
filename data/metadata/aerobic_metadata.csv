@@ -1,0 +1,7 @@
+﻿exp_id,replicate,date,atmosphere,temperature,shaking,equipment
+aerobic_a_25,1,20260325,aerobic,25,200,sunrise 1
+aerobic_a_37,1,20260325,aerobic,37,200,sunrise 2
+aerobic_b_37,1,20260417,aerobic,37,200,sunrise 2
+aerobic_c_37,1,20260417,aerobic,37,200,sunrise 1
+aerobic_b_25,1,20260408,aerobic,25,200,sunrise 2
+aerobic_c_25,1,20260408,aerobic,25,200,sunrise 1

@@ -1,0 +1,4 @@
+﻿exp_id,replicate,date,atmosphere,temperature,shaking,equipment
+anaerobic_a_37,1,20260325,anaerobic,37,0,biospa
+anaerobic_b_37,1,20260408,anaerobic,37,0,biospa
+anaerobic_c_37,1,20260408,anaerobic,37,0,biospa
