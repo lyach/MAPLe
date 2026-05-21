@@ -1475,8 +1475,7 @@ def plot_maxod_heatmap(
         ax.set_xticklabels(ax.get_xticklabels(), rotation=40, ha="right", fontsize=8)
 
     fig.suptitle(
-        "MaxOD600 across organisms and media"
-        + (f"  (faceted by {facet_col})" if facet_col else ""),
+        "MaxOD600 across organisms and media",
         fontsize=12,
         fontweight="bold",
         y=1.01,

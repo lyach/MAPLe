@@ -4,6 +4,10 @@ Dataframe to be used in the AlignBio report.
 Takes as input the tidy parquet file produced by the dataset pipeline.
 Returns a dataframe with columns:
 [RunIdx, Plate, Well, Organism, Media, MaxOD, Atmosphere, Temperature, Site]
+
+Usage: 
+    python scripts/create_align_df.py data/processed/aerobic_tidy.parquet data/processed/align_aerobic.csv
+    python scripts/create_align_df.py ... --keep-controls   # skip the water/empty filter
 """
 
 from __future__ import annotations
@@ -11,6 +15,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 
@@ -51,6 +56,79 @@ ORGANISM_MAP: dict[str, str] = {
     "acinetobacter baylyi": "Acinetobacter baylyi",
 }
 
+def get_maxod(
+    df: pd.DataFrame,
+    window: int = 5,
+    z_thresh: float = 2.5,
+) -> pd.DataFrame:
+    """Compute per-well MaxOD with early-spike artifact removal.
+
+    This function detects inflated MaxOD600 artifacts with a MAD-based 
+    outlier test on the first ``window`` timepoints and excludes them 
+    before taking the max.
+
+    Parameters
+    ----------
+    df:
+        Long-format DataFrame with at least ``exp_id``, ``well_id``,
+        ``strain_name``, ``timepoint``, and ``od600``.
+    window:
+        Number of leading timepoints to inspect for artifacts.
+    z_thresh:
+        Modified z-score threshold above which an early reading is
+        considered a spike.  The modified z-score uses
+        ``(x - median) / (1.4826 * MAD)``.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per well with columns ``[exp_id, well_id, MaxOD]``.
+    """
+    records: list[dict] = []
+    _MAD_SCALE = 1.4826  # MAD → consistent σ estimator for normal data
+
+    for (exp_id, well_id), grp in df.groupby(
+        ["exp_id", "well_id"], sort=False
+    ):
+        grp = grp.sort_values("timepoint")
+        od = grp["od600"].to_numpy(dtype=float)
+        strain = grp["strain_name"].iloc[0]
+        media = grp["media_name"].iloc[0]
+
+        max_od_raw = float(np.nanmax(od))
+
+        n_early = min(window, len(od))
+        early = od[:n_early]
+        spike_idx: set[int] = set()
+
+        if n_early >= 3:
+            med = np.median(early)
+            mad = np.median(np.abs(early - med))
+            scale = _MAD_SCALE * mad
+
+            if scale > 1e-6:
+                for i in range(n_early):
+                    z = (early[i] - med) / scale
+                    if z > z_thresh:
+                        spike_idx.add(i)
+
+        if spike_idx:
+            clean = np.delete(od, sorted(spike_idx))
+            max_od_clean = float(np.nanmax(clean)) if len(clean) > 0 else max_od_raw
+        else:
+            max_od_clean = max_od_raw
+
+        if abs(max_od_raw - max_od_clean) > 1e-6:
+            print(
+                f"  {exp_id} | {strain:<40s} | {media:<20s} "
+                f"MaxOD raw={max_od_raw:.4f} → clean={max_od_clean:.4f}  "
+                f"(removed {len(spike_idx)} early tp)"
+            )
+
+        records.append({"exp_id": exp_id, "well_id": well_id, "MaxOD": max_od_clean})
+
+    return pd.DataFrame(records)
+
 
 def create_align_df(
     parquet_path: str | Path,
@@ -83,13 +161,8 @@ def create_align_df(
         )
         df = df.loc[~mask]
 
-    # Per-well MaxOD
-    max_od = (
-        df.groupby(["exp_id", "well_id"])["od600"]
-        .max()
-        .rename("MaxOD")
-        .reset_index()
-    )
+    # Per-well MaxOD (with early-spike QC)
+    max_od = get_maxod(df)
 
     # One metadata row per well (first timepoint is sufficient)
     meta_cols = [
