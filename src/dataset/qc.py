@@ -2,36 +2,73 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import pandas as pd
 
 
-_BLANK_GROUP = ["exp_id", "timepoint", "media_name"]
-_BLANK_GROUP_COND = ["atmosphere", "temperature", "shaking", "timepoint", "media_name"] # currently used as there are no replicates
+_BLANK_GROUP_COND = ["atmosphere", "temperature", "shaking", "media_name"]
 
-def subtract_blanks(df: pd.DataFrame) -> pd.DataFrame:
-    """Subtract the media-matched blank mean from each well.
+BlankMethod = Literal["exp_median", "cond_avg"]
 
-    For every group, the mean OD600 of blank wells sharing that media 
-    is subtracted from all wells in that group.
 
-    Adds ``od600_raw`` (original values) and overwrites ``od600`` with the
-    blank-subtracted values.
+def subtract_blanks(
+    df: pd.DataFrame,
+    method: BlankMethod = "cond_avg",
+) -> pd.DataFrame:
+    """Subtract a static blank value from each well.
+
+    Two-stage approach:
+      1. Per experiment: median OD600 of blank wells across all timepoints
+         (collapses time to a single scalar per experiment+media).
+      2. Per condition group: average of per-experiment medians sharing the
+         same (atmosphere, temperature, shaking, media_name).
+
+    Parameters
+    ----------
+    method
+        Which blank estimate to subtract:
+        - ``"exp_median"``: per-experiment median (stage 1 only).
+        - ``"cond_avg"``: average of experiment medians across shared
+          conditions (stage 1 + stage 2, default).
+
+    Adds columns ``od600_raw``, ``blank_exp_median``, ``blank_cond_avg``
+    and overwrites ``od600`` with the blank-subtracted values.
     """
     df = df.copy()
     df["od600_raw"] = df["od600"]
 
-    blank_stats = (
+    # Stage 1: per-experiment median across all timepoints
+    exp_median = (
         df.loc[df["is_blank"]]
-        .groupby(_BLANK_GROUP_COND)["od600"]
-        .agg(["mean", "std"])
-        .rename(columns={"mean": "blank_mean", "std": "blank_std"})
+        .groupby(["exp_id", "media_name"])["od600"]
+        .median()
+        .rename("blank_exp_median")
+        .reset_index()
     )
-    blank_stats["blank_cv"] = blank_stats["blank_std"] / blank_stats["blank_mean"]
 
-    df = df.merge(blank_stats[["blank_mean", "blank_cv"]], on=_BLANK_GROUP_COND, how="left")
-    df["blank_mean"] = df["blank_mean"].fillna(0.0)
-    df["blank_cv"] = df["blank_cv"].fillna(0.0)
-    df["od600"] = df["od600"] - df["blank_mean"]
+    # Stage 2: average of experiment medians per condition group
+    exp_meta = (
+        df[["exp_id"] + _BLANK_GROUP_COND]
+        .drop_duplicates()
+    )
+    exp_median_with_cond = exp_median.merge(exp_meta, on=["exp_id", "media_name"], how="left")
+    cond_avg = (
+        exp_median_with_cond
+        .groupby(_BLANK_GROUP_COND)["blank_exp_median"]
+        .mean()
+        .rename("blank_cond_avg")
+        .reset_index()
+    )
+
+    # Merge both statistics onto main df
+    df = df.merge(exp_median, on=["exp_id", "media_name"], how="left")
+    df = df.merge(cond_avg, on=_BLANK_GROUP_COND, how="left")
+    df["blank_exp_median"] = df["blank_exp_median"].fillna(0.0)
+    df["blank_cond_avg"] = df["blank_cond_avg"].fillna(0.0)
+
+    subtract_col = "blank_exp_median" if method == "exp_median" else "blank_cond_avg"
+    df["od600"] = df["od600"] - df[subtract_col]
     return df
 
 
@@ -50,7 +87,7 @@ def flag_no_growth(
 
     blank_noise = (
         df.loc[df["is_blank"]]
-        .groupby(_BLANK_GROUP_COND[:3] + ["media_name"])[od_col]
+        .groupby(_BLANK_GROUP_COND)[od_col]
         .std()
         .rename("blank_std")
         .reset_index()
@@ -58,7 +95,7 @@ def flag_no_growth(
     blank_noise["blank_std"] = blank_noise["blank_std"].fillna(0.0)
     blank_noise["growth_threshold"] = threshold_factor * blank_noise["blank_std"]
 
-    merge_keys = _BLANK_GROUP_COND[:3] + ["media_name"]
+    merge_keys = _BLANK_GROUP_COND
     well_max = (
         df.groupby(merge_keys + ["well_id"])["od600"]
         .max()
@@ -110,11 +147,12 @@ def compute_well_cv(
 
 def run_qc(
     df: pd.DataFrame,
+    blank_method: BlankMethod = "cond_avg",
     threshold_factor: float = 2.0,
     cv_threshold: float = 0.15,
 ) -> pd.DataFrame:
     """Run the full QC pipeline in order."""
-    df = subtract_blanks(df)
+    df = subtract_blanks(df, method=blank_method)
     df = clip_negatives(df)
     # df = compute_well_cv(df, cv_threshold=cv_threshold) # no replicates yet
     return df
