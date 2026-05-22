@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.dataset.loader import load_experiment
-from src.dataset.qc import run_qc
+from src.dataset.qc import run_qc, report_blank_cv
 from src.dataset.curves import extract_growth_curves
 
 # Aerobic experiments
@@ -106,6 +106,7 @@ def main():
 
     print("--- Running QC ---")
     qc_df = run_qc(df)
+    report_blank_cv(qc_df)
     print(f"New df shape: {qc_df.shape}")
     print(f"New columns after QC: {[c for c in qc_df.columns if c not in df.columns]}")
     print(f"Blanks count per experiment: {qc_df.groupby('exp_id')['is_blank'].sum().to_dict()}")

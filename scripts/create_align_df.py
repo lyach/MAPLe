@@ -54,6 +54,12 @@ ORGANISM_MAP: dict[str, str] = {
     "corynebacterium glutamicum": "Corynebacterium glutamicum  534",
     "deinococcus radiodurans": "Deinococcus radiodurans",
     "acinetobacter baylyi": "Acinetobacter baylyi",
+    "pediococcus acidilactici": "Pediococcus acidilactici",
+    "clostridium sporogenes": "Clostridium sporogenes",
+    "komagataeibacter xylinus": "Komagataeibacter xylinus",
+    "lactiplantibacillus plantarum": "Lactiplantibacillus plantarum",
+    "lactobacillus acidophilus": "Lactobacillus acidophilus",
+    "micrococcus luteus": "Micrococcus luteus",
 }
 
 def get_maxod(
@@ -154,10 +160,13 @@ def create_align_df(
 
     # Keep only sample wells (exclude blanks)
     df = df.loc[~df["is_blank"]].copy()
+    
+    # Exclude 'other' organisms
+    df = df.loc[~df["strain_name"].str.contains("other")]
 
     if drop_controls:
         mask = (df["media_name"].str.lower() == "water") | (
-            df["strain_name"].str.lower() == "empty"
+            df["strain_name"].str.lower() == "empty" 
         )
         df = df.loc[~mask]
 
