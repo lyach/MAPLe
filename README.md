@@ -92,9 +92,11 @@ src/
    /modeling 
       features.py          ← Feature engineering for ML
       models.py            ← Model training, CV, evaluation
+
 notebooks/
   01_eda.ipynb             ← Exploratory data analysis
   02_modeling.ipynb        ← Baseline modeling
+
 data/
   raw/                     ← CSVs from platereaders
   processed/               ← Data ready for modeling

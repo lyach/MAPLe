@@ -87,19 +87,21 @@ The file must be named exactly `<date>_<exp_id>_raw*.csv` (e.g. `20260325_aerobi
 
 ## 2. Run the pipeline
 
-From the project root:
+The pipeline is set to automatically run for aerobic and anaerobic experiments: 
+
+```bash
+python scripts/run_dataset_pipeline.py aerobic
+# or
+python scripts/run_dataset_pipeline.py anaerobic
+```
+
+You can also run it by specifying new files as:
 
 ```bash
 python scripts/run_dataset_pipeline.py \
-  --metadata data/metadata/anaerobic_metadata.csv \
-  --layout   data/metadata/anaerobic_layout.csv \
+  --metadata data/metadata/experiment_metadata.csv \
+  --layout   data/metadata/experiment_layout.csv \
   --raw-dir  data/raw
-```
-
-Defaults point to the `aerobic` example files, so a bare call also works:
-
-```bash
-python scripts/run_dataset_pipeline.py
 ```
 
 ---
@@ -188,10 +190,10 @@ qc_df (long-format) ─► smooth OD per well ─► extract parameters ─► [
 
 Each well's OD600 time-series is smoothed before parameter extraction. The smoother is selected by name via the `smoother` argument to `extract_growth_curves`. Two smoothers are available:
 
-| Key | Function | Default parameters | Description |
-|---|---|---|---|
-| `"savgol"` *(default)* | `smooth_savgol` | `window_length=7`, `polyorder=3` | Savitzky-Golay filter via `scipy.signal.savgol_filter`. Preserves curve shape better than a simple average; window is automatically shrunk for short series. |
-| `"moving_average"` | `smooth_moving_average` | `window=5` | Centered moving average using convolution with edge replication. Faster but more aggressive smoothing. |
+| Key | Function | Default parameters | 
+|---|---|---|
+| `"savgol"` *(default)* | `smooth_savgol` | `window_length=7`, `polyorder=3` |
+| `"moving_average"` | `smooth_moving_average` | `window=5` | 
 
 To switch smoother or pass custom parameters:
 
@@ -200,20 +202,8 @@ from src.dataset.curves import extract_growth_curves
 
 # Savitzky-Golay with wider window
 curves_df = extract_growth_curves(qc_df, smoother="savgol", smoother_kwargs={"window_length": 11, "polyorder": 3})
-
-# Simple moving average
-curves_df = extract_growth_curves(qc_df, smoother="moving_average", smoother_kwargs={"window": 7})
 ```
 
-**Adding a new smoother:** define a function with signature `f(od: np.ndarray, **kwargs) -> np.ndarray` and insert it into `SMOOTHERS`:
-
-```python
-# in src/dataset/curves.py
-def smooth_my_method(od, my_param=3):
-    ...
-
-SMOOTHERS["my_method"] = smooth_my_method
-```
 
 ### 6b. Parameter extraction (`extract_params`)
 
@@ -223,8 +213,8 @@ Called once per well on the smoothed OD600 array. Input units follow the `time_u
 |---|---|
 | `max_od` | `max(OD600)` |
 | `auc` | Trapezoidal integral: `∫ OD600 dt` |
-| `growth_rate` | Sustained maximum slope: per-window slopes from a sliding 4-point window on `log(OD600 + ε)` are computed, then a rolling mean over 3 consecutive windows selects the region of most consistent growth. The steepest individual slope within that region is reported (`ε = 1e-6` prevents `log(0)`). Units: OD/time_unit. |
-| `lag_time_h` | X-intercept of the log-phase tangent line extrapolated to the initial baseline OD. Clamped to ≥ 0; set to the last timepoint if no positive growth rate is detected. |
+| `growth_rate` | Sustained maximum slope. Uses a sliding 4-point window on `log(OD600 + ε)`, then a rolling mean over 3 consecutive windows selects the region of most consistent growth. The steepest individual slope within that region is reported (`ε = 1e-6` prevents `log(0)`). Units: OD/time_unit. |
+| `lag_time_h` | X-intercept of the log-phase tangent line extrapolated to the initial baseline OD. Set to the last timepoint if no positive growth rate is detected. |
 | `time_to_max_od_h` | Time at which `max_od` occurs. |
 
 **Growth rate / lag time geometry:**

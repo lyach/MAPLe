@@ -91,7 +91,7 @@ def get_maxod(
         One row per well with columns ``[exp_id, well_id, MaxOD]``.
     """
     records: list[dict] = []
-    _MAD_SCALE = 1.4826  # MAD → consistent σ estimator for normal data
+    _MAD_SCALE = 1.4826
 
     for (exp_id, well_id), grp in df.groupby(
         ["exp_id", "well_id"], sort=False
@@ -128,7 +128,7 @@ def get_maxod(
             print(
                 f"  {exp_id} | {strain:<40s} | {media:<20s} "
                 f"MaxOD raw={max_od_raw:.4f} → clean={max_od_clean:.4f}  "
-                f"(removed {len(spike_idx)} early tp)"
+                f"(removed {len(spike_idx)} early timepoints)"
             )
 
         records.append({"exp_id": exp_id, "well_id": well_id, "MaxOD": max_od_clean})
