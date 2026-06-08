@@ -586,7 +586,7 @@ def plot_plate_grid(
     df: pd.DataFrame,
     exp_id: ExpIdArg = None,
     *,
-    od_col: str = "od600",
+    od_col: str = "od600_raw",
     well_size: float = 1.5,
     rc: dict | None = None,
 ) -> list[Figure]:
@@ -602,7 +602,7 @@ def plot_plate_grid(
     exp_id:
         Experiment(s) to plot.
     od_col:
-        OD column to plot.
+        OD column to plot (``"od600"`` or ``"od600_raw"``).
     well_size:
         Width and height (inches) of each well subplot.
     rc:
