@@ -31,9 +31,6 @@ project/
             └── ...
 ```
 
-**Include in `.gitignore` the fasta and gbk folders**
-
-
 
 ## CSV schema
 
