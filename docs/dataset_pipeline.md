@@ -143,7 +143,7 @@ Read the parquet in Python:
 
 ```python
 import pandas as pd
-df = pd.read_parquet("data/processed/20260325_aerobic_tidy.parquet")
+df = pd.read_parquet("data/processed/aerobic_tidy.parquet")
 ```
 
 ---
