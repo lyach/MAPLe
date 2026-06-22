@@ -789,7 +789,7 @@ def plot_parameter_distributions(
     rc: dict | None = None,
     figsize: tuple[float, float] | None = None,
     data_title: str | None = None,
-    filter_outliers: bool = True,
+    filter_outliers: bool = False,
 ) -> Figure:
     """Violin + strip plots of growth parameters grouped by a categorical variable.
 

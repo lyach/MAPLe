@@ -1,7 +1,18 @@
 """Growth curve parameter extraction.
 
-Extracts per-well growth parameters (max OD, AUC, growth rate, lag time, etc.)
-from OD600 time series. Optionally averages across replicates.
+Processes each time-series well od600 reads as:
+
+    ``od600`` ──► hampel_filter ──► ``od600_clean`` ──► smoother ──► ``od600_smooth``
+                                                                    │
+                                                                    └► extract_params
+                                                                        (max_od, auc,
+                                                                        growth_rate,
+                                                                        lag_time_h,
+                                                                        time_to_max_od_h)
+
+A Hampel filter  handles experimental artifacts (condensation, bubbles) 
+across the whole curve. Smoothing is then applied to the cleaned curve, 
+and every growth parameter is computed from the filtered and smoothed array.
 """
 
 from __future__ import annotations
@@ -10,8 +21,13 @@ from typing import Callable
 
 import numpy as np
 import pandas as pd
-from scipy.ndimage import median_filter
+from loguru import logger
 from scipy.signal import savgol_filter
+
+
+_MAD_SCALE = 1.4826
+_HAMPEL_WINDOW = 7
+_HAMPEL_N_SIGMAS = 3.0
 
 
 def _trapz_compat(y: np.ndarray, x: np.ndarray) -> float:
@@ -22,21 +38,69 @@ def _trapz_compat(y: np.ndarray, x: np.ndarray) -> float:
     return float(trap(y, x))
 
 
-# Smoothing functions
+# -----------------------------------------------------------------------------
+# Despiking (Hampel filter)
+# -----------------------------------------------------------------------------
 
-def _despike(od: np.ndarray, size: int = 3) -> np.ndarray:
-    """Remove single-timepoint impulse spikes with a median filter.
+def hampel_filter(
+    od: np.ndarray,
+    window: int = _HAMPEL_WINDOW,
+    n_sigmas: float = _HAMPEL_N_SIGMAS,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Spike removal using the Hampel filter.
 
-    Applied as a pre-processing step before curve smoothers. A size-3 median
-    replaces any point that is an outlier relative to its neighbours.
+    For each timepoint the local median and MAD are computed within a
+    centered window (clamped at the edges). A point is flagged when
+
+        ``|x_i - median_local| > n_sigmas * 1.4826 * MAD_local``
+
+    Flagged points are replaced by ``median_local``.
+
+    Handles early and late spikes in the reads.
+
+    Parameters
+    ----------
+    od:
+        1-D OD600 array, sorted by time.
+    window:
+        Centered window size (odd values recommended; clamped at edges).
+    n_sigmas:
+        Outlier threshold in modified-z-score units (3.0 ≈ 3·σ on
+        Gaussian noise).
+
+    Returns
+    -------
+    clean : np.ndarray
+        Despiked OD array.
+    mask : np.ndarray of bool
+        ``True`` where a value was replaced.
     """
-    return median_filter(od, size=size, mode="nearest")
+    od = np.asarray(od, dtype=float)
+    n = od.size
+    clean = od.copy()
+    mask = np.zeros(n, dtype=bool)
+    if n == 0:
+        return clean, mask
+
+    half = window // 2
+    for i in range(n):
+        lo = max(0, i - half)
+        hi = min(n, i + half + 1)
+        local = od[lo:hi]
+        med = np.median(local)
+        scale = _MAD_SCALE * np.median(np.abs(local - med))
+        if scale > 1e-12 and abs(od[i] - med) > n_sigmas * scale:
+            clean[i] = med
+            mask[i] = True
+    return clean, mask
 
 
-def smooth_moving_average(od: np.ndarray, window: int = 5, despike: bool = True, despike_size: int = 3) -> np.ndarray:
-    """Centered moving average with edge replicated padding."""
-    if despike:
-        od = _despike(od, size=despike_size)
+# -----------------------------------------------------------------------------
+# Smoothing
+# -----------------------------------------------------------------------------
+
+def smooth_moving_average(od: np.ndarray, window: int = 5) -> np.ndarray:
+    """Centered moving average with edge-replicated padding."""
     kernel = np.ones(window) / window
     pad = window // 2
     padded = np.pad(od, pad, mode="edge")
@@ -44,17 +108,16 @@ def smooth_moving_average(od: np.ndarray, window: int = 5, despike: bool = True,
 
 
 def smooth_savgol(
-    od: np.ndarray, window_length: int = 7, polyorder: int = 3, despike: bool = True, despike_size: int = 3
+    od: np.ndarray,
+    window_length: int = 7,
+    polyorder: int = 3,
 ) -> np.ndarray:
-    """Savitzky-Golay filter preceded by median-filter despiking.
-    """
-    if despike:
-        od = _despike(od, size=despike_size)
+    """Savitzky-Golay smoothing."""
     wl = min(window_length, len(od))
     if wl % 2 == 0:
         wl -= 1
     if wl < polyorder + 2:
-        return od.copy()
+        return np.asarray(od, dtype=float).copy()
     return savgol_filter(od, window_length=wl, polyorder=polyorder)
 
 
@@ -64,7 +127,9 @@ SMOOTHERS: dict[str, Callable] = {
 }
 
 
-# Single-curve parameter extraction
+# -----------------------------------------------------------------------------
+# Parameter extraction
+# -----------------------------------------------------------------------------
 
 _LOG_EPS = 1e-6
 _SLIDE_WINDOW = 4
@@ -83,17 +148,16 @@ def extract_params(
     time:
         Time values (hours).
     od:
-        Smoothed, blank-subtracted OD600 values aligned with *time*.
+        Blank-subtracted, filtered and smoothed OD600 values aligned with *time*.
     sustain_window:
         Number of consecutive sliding windows whose slopes are averaged
-        before selecting the maximum.  A value of 1 recovers the old
-        single-window behaviour.
+        before selecting the maximum. ``1`` recovers single-window behaviour.
 
     Returns
     -------
     dict with keys: max_od, auc, growth_rate, lag_time_h, time_to_max_od_h.
     """
-    max_od = float(np.max(od))
+    max_od = float(np.nanmax(od))
     auc = _trapz_compat(od, time)
     time_to_max_od_h = float(time[np.argmax(od)])
 
@@ -148,13 +212,15 @@ def extract_params(
     }
 
 
+# -----------------------------------------------------------------------------
 # Growth-class threshold
+# -----------------------------------------------------------------------------
 
 def compute_growth_threshold(df: pd.DataFrame) -> pd.Series:
-    """Compute per-experiment growth/no-growth threshold.
+    """Per-experiment growth/no-growth threshold = 2 × std(blank OD600).
 
-    Threshold = 2 * std(blank od600_raw) applied on blank-subtracted od600
-    (the mean component cancels after blank subtraction).
+    Threshold is applied on blank-subtracted OD (the mean component
+    cancels), so the spread reflects raw instrument noise.
 
     Returns a Series indexed by ``exp_id``.
     """
@@ -171,42 +237,65 @@ def compute_growth_threshold(df: pd.DataFrame) -> pd.Series:
     return threshold
 
 
+# -----------------------------------------------------------------------------
 # Main entry point
+# -----------------------------------------------------------------------------
 
-_ID_COLS = ["exp_id", "date", "strain_name", "media_name", "atmosphere", "temperature"]
+_ID_COLS = [
+    "exp_id",
+    "date",
+    "well_id",
+    "row",
+    "col",
+    "well_index",
+    "strain_name",
+    "media_name",
+    "atmosphere",
+    "temperature",
+]
 _REPLICATE_GROUP = ["strain_name", "media_name", "atmosphere", "temperature"]
-_PARAM_COLS = ["max_od", "auc", "growth_rate", "lag_time_h", "time_to_max_od_h", "growth_class"]
+_PARAM_COLS = [
+    "max_od",
+    "auc",
+    "growth_rate",
+    "lag_time_h",
+    "time_to_max_od_h",
+    "growth_class",
+]
 
 
 def extract_growth_curves(
     df: pd.DataFrame,
     smoother: str = "savgol",
     smoother_kwargs: dict | None = None,
+    hampel_kwargs: dict | None = None,
     with_replicates: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Extract growth parameters from long-format DataFrame post QC.
+    """Extract growth parameters from a long-format QC'd DataFrame.
+
+    All parameters are computed from the same ``od600_smooth`` array.
 
     Parameters
     ----------
     df:
-        Long-format DataFrame produced after ``run_qc``.
+        Long-format DataFrame produced by ``run_qc``.
     smoother:
-        Key in ``SMOOTHERS`` — ``"savgol"`` or ``"moving_average"``.
+        Key in :data:`SMOOTHERS` — ``"savgol"`` (default) or ``"moving_average"``.
     smoother_kwargs:
-        Extra keyword arguments forwarded to the smoother function.
+        Extra keyword arguments forwarded to the smoother.
+    hampel_kwargs:
+        Extra keyword arguments forwarded to :func:`hampel_filter`
+        (e.g. ``{"window": 9, "n_sigmas": 4}``).
     with_replicates:
         If ``True``, average parameters across replicates sharing
         ``(strain_name, media_name, atmosphere, temperature)``.
 
     Returns
     -------
-    tuple of (wide_df, long_df):
-
-    wide_df
-        Wide-format DataFrame with one row per well and growth parameter
-        columns.
-    long_df
-        Copy of the input *df* with an additional ``od600_smooth`` column.
+    wide_df : pd.DataFrame
+        One row per well (or per replicate group) with growth parameters.
+    long_df : pd.DataFrame
+        Copy of *df* with two new columns: ``od600_clean`` and ``od600_smooth``.
     """
     if smoother not in SMOOTHERS:
         raise ValueError(
@@ -214,38 +303,65 @@ def extract_growth_curves(
         )
     smooth_fn = SMOOTHERS[smoother]
     smooth_kw = smoother_kwargs or {}
+    hampel_kw = hampel_kwargs or {}
 
     samples = df.loc[~df["is_blank"]].copy()
-
     thresholds = compute_growth_threshold(df)
 
     long_out = df.copy()
+    long_out["od600_clean"] = long_out["od600"].astype(float)
     long_out["od600_smooth"] = np.nan
 
     records: list[dict] = []
+    spike_stats: dict[str, dict[str, int]] = {}
 
     for (exp_id, well_id), grp in samples.groupby(["exp_id", "well_id"], sort=False):
         grp = grp.sort_values("timepoint")
         time_raw = grp["time_value"].to_numpy(dtype=float)
         time_unit = grp["time_unit"].iloc[0] if "time_unit" in grp.columns else "h"
-        time = time_raw / 60.0 if time_unit == "min" else time_raw  # convert minutes to hours
+        time = time_raw / 60.0 if time_unit == "min" else time_raw
         od = grp["od600"].to_numpy(dtype=float)
 
-        od_smooth = smooth_fn(od, **smooth_kw)
+        od_clean, spike_mask = hampel_filter(od, **hampel_kw)
+        od_smooth = smooth_fn(od_clean, **smooth_kw)
 
+        long_out.loc[grp.index, "od600_clean"] = od_clean
         long_out.loc[grp.index, "od600_smooth"] = od_smooth
 
-        params = extract_params(time, od_smooth)
+        n_spikes = int(spike_mask.sum())
+        if n_spikes:
+            s = spike_stats.setdefault(exp_id, {"n_points": 0, "n_wells": 0})
+            s["n_points"] += n_spikes
+            s["n_wells"] += 1
 
+        params = extract_params(time, od_smooth)
         thresh = thresholds.get(exp_id, 0.0)
         params["growth_class"] = int(params["max_od"] > thresh)
 
         meta = grp.iloc[0]
-        row = {col: meta[col] for col in _ID_COLS if col in meta.index}
+        row = {c: meta[c] for c in _ID_COLS if c in meta.index}
         if "replicate" in meta.index:
             row["replicate"] = meta["replicate"]
         row.update(params)
         records.append(row)
+
+    if spike_stats:
+        total_points = sum(s["n_points"] for s in spike_stats.values())
+        total_wells = sum(s["n_wells"] for s in spike_stats.values())
+        logger.info(
+            "Hampel filter replaced {} timepoint(s) across {} well(s).",
+            total_points,
+            total_wells,
+        )
+        for exp_id, s in spike_stats.items():
+            logger.debug(
+                "  {:<20s} {:>4d} timepoint(s) in {:>3d} well(s)",
+                exp_id,
+                s["n_points"],
+                s["n_wells"],
+            )
+    else:
+        logger.info("Hampel filter: no spikes detected.")
 
     result = pd.DataFrame(records)
 
