@@ -180,13 +180,32 @@ Add the column to the metadata CSV. No code changes required — `ExperimentMeta
 
 ## 6. Growth curve parameter extraction (`src/dataset/curves.py`)
 
-`extract_growth_curves` takes the QC'd long-format DataFrame and produces a **wide-format** table where **one row = one (experiment, well) datapoint** with extracted growth parameters. It runs in three stages: smoothing, parameter extraction, and optional replicate averaging.
+`extract_growth_curves` takes the QC'd long-format DataFrame and produces a **wide-format** table where **one row = one (experiment, well) datapoint** with extracted growth parameters. It runs in four stages: despiking, smoothing, parameter extraction, and optional replicate averaging.
 
 ```
-qc_df (long-format) ─► smooth OD per well ─► extract parameters ─► [average replicates] ─► curves_df (wide-format CSV)
+qc_df (long-format) ─► filter spikes ─► smooth curve ─► extract parameters ─► [average replicates] ─► curves_df (wide-format CSV)
 ```
 
-### 6a. Smoothing
+### 6a. Filtering spikes (`hampel_filter`)
+
+Before smoothing, each well time-series is despiked with a **Hampel filter**. This removes outliers from experimental artifacts (e.g. condensation, bubbles).
+
+For each timepoint *i*, a centered window of neighboring reads is taken (clamped at the curve edges so early and late spikes are handled). Within that window the local median and median absolute deviation (MAD) are computed. A point is flagged when
+
+```
+|x_i − median_local| > n_sigmas × 1.4826 × MAD_local
+```
+
+The factor `1.4826` scales MAD to a Gaussian standard deviation. Flagged points are **replaced** by `median_local` (not dropped), preserving array length and time alignment. The result is stored as `od600_clean` in the returned long-format DataFrame.
+
+| Parameter | Default | Role |
+|---|---|---|
+| `window` | `7` | Centered window size (odd values recommended; edges use a shorter window) |
+| `n_sigmas` | `3.0` | Outlier threshold in modified-z-score units (`3.0` ≈ 3·σ on Gaussian noise) |
+
+`extract_growth_curves` logs how many timepoints were replaced per experiment. Smoothing and all growth parameters are computed from `od600_clean`, not the raw `od600`.
+
+### 6b. Smoothing curve
 
 Each well's OD600 time-series is smoothed before parameter extraction. The smoother is selected by name via the `smoother` argument to `extract_growth_curves`. Two smoothers are available:
 
@@ -205,9 +224,9 @@ curves_df = extract_growth_curves(qc_df, smoother="savgol", smoother_kwargs={"wi
 ```
 
 
-### 6b. Parameter extraction (`extract_params`)
+### 6c. Parameter extraction (`extract_params`)
 
-Called once per well on the smoothed OD600 array. Input units follow the `time_unit` of the experiment (typically minutes for the aerobic batch).
+Called once per well on the smoothed OD600 array. Input units follow the `time_unit` of the experiment (typically minutes).
 
 | Parameter | Formula / method |
 |---|---|
@@ -228,7 +247,7 @@ log(OD)
   └───────────── time
 ```
 
-### 6c. Growth classification (`compute_growth_threshold`)
+### 6d. Growth classification (`compute_growth_threshold`)
 
 The threshold for `growth_class` is computed per experiment from the blank wells:
 
@@ -238,7 +257,7 @@ threshold = 3 × std(blank od600_raw)
 
 `od600_raw` (pre-blank-subtraction) is used so the spread reflects raw instrument noise. After blank subtraction, a well is classified as **growing** (`growth_class = 1`) if `max_od > threshold`, and **not growing** (`growth_class = 0`) otherwise.
 
-### 6d. Replicate averaging (`with_replicates`)
+### 6e. Replicate averaging (`with_replicates`)
 
 By default (`with_replicates=False`) the output has one row per well per experiment, with `exp_id` and `replicate` retained as identifier columns.
 
@@ -255,7 +274,7 @@ curves_df = extract_growth_curves(qc_df)
 curves_df = extract_growth_curves(qc_df, with_replicates=True)
 ```
 
-### 6e. Output schema
+### 6f. Output schema
 
 **One row = one (experiment, well) datapoint** when `with_replicates=False`.  
 **One row = one (strain, media, condition) average** when `with_replicates=True`.
