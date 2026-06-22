@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 import pandas as pd
+from loguru import logger
 
 
 _BLANK_GROUP_COND = ["atmosphere", "temperature", "shaking", "media_name"]
@@ -114,12 +115,14 @@ def report_blank_cv(
     )
 
     if flagged.empty:
-        print(f"No condition groups with blank CV > {threshold}.")
+        logger.info("No condition groups with blank CV > {}.", threshold)
     else:
-        print(f"{len(flagged)} condition group(s) with blank CV > {threshold}:\n")
-        print(
+        logger.warning(
+            "{} condition group(s) with blank CV > {}:\n{}",
+            len(flagged),
+            threshold,
             flagged[_BLANK_GROUP_COND + ["blank_cond_cv", "blank_cond_avg", "n_experiments"]]
-            .to_string(index=False, float_format="{:.4f}".format)
+            .to_string(index=False, float_format="{:.4f}".format),
         )
 
     return flagged

@@ -28,6 +28,7 @@ dependencies = [
     "matplotlib",
     "seaborn",
     "tqdm",
+    "loguru",
     
     # MLOps
     "wandb",

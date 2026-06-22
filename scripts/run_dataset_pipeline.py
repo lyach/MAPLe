@@ -7,7 +7,10 @@ Usage, select the dataset to process:
 
 import argparse
 import sys
+from datetime import date
 from pathlib import Path
+
+from loguru import logger
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -36,6 +39,31 @@ DEFAULT_PRESETS = {
     "aerobic": DEFAULTS_AEROBIC,
     "anaerobic": DEFAULTS_ANAEROBIC,
 }
+
+
+def setup_logging(level: str = "INFO", log_file: Path | None = None) -> None:
+    """Configure loguru for CLI output and optional file sink."""
+    logger.remove()
+    logger.add(
+        sys.stderr,
+        level=level,
+        format="<green>{time:HH:mm:ss}</green> | <level>{level: <7}</level> | {message}",
+        colorize=sys.stderr.isatty(),
+    )
+    if log_file is not None:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        logger.add(
+            log_file,
+            level="DEBUG",
+            format="{time:YYYY-MM-DD HH:mm:ss} | {level: <7} | {message}",
+            colorize=False,
+            mode="w",
+        )
+
+
+def log_section(step: int, total: int, title: str) -> None:
+    logger.info("─" * 60)
+    logger.info("[{}/{}] {}", step, total, title)
 
 
 def summarize_time_axis(df):
@@ -72,6 +100,22 @@ def format_time_summary(values, units):
     return formatted
 
 
+def log_dataframe_summary(df, *, label: str = "dataframe") -> None:
+    """Log shape, columns, and per-experiment counts for a tidy dataframe."""
+    logger.info("{} shape: {} rows × {} cols", label, *df.shape)
+    logger.debug("{} columns: {}", label, list(df.columns))
+
+    exp_ids = df["exp_id"].unique().tolist()
+    logger.info("experiments (n={}): {}", len(exp_ids), exp_ids)
+
+    timepoints = df.groupby("exp_id")["timepoint"].nunique().to_dict()
+    logger.info("timepoints per experiment: {}", timepoints)
+
+    intervals, elapsed, units = summarize_time_axis(df)
+    logger.info("time interval per experiment: {}", format_time_summary(intervals, units))
+    logger.info("total elapsed per experiment: {}", format_time_summary(elapsed, units))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -85,6 +129,12 @@ def main():
     parser.add_argument("--layout", type=Path)
     parser.add_argument("--raw-dir", type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Logging verbosity (default: INFO).",
+    )
     args = parser.parse_args()
 
     defaults = DEFAULT_PRESETS[args.preset]
@@ -93,42 +143,59 @@ def main():
     args.raw_dir = args.raw_dir or defaults["raw_dir"]
     args.output = args.output or defaults["output"]
 
-    print("--- Loading experiments ---")
-    df = load_experiment(args.metadata, args.layout, args.raw_dir)
-    print(f"df shape: {df.shape}")
-    print(f"Columns: {list(df.columns)}")
-    print(f"Experiments: {df['exp_id'].unique().tolist()}")
-    print(f"Timepoints per experiment: {df.groupby('exp_id')['timepoint'].nunique().to_dict()}")
-    intervals, elapsed, units = summarize_time_axis(df)
-    print(f"Time interval per experiment: {format_time_summary(intervals, units)}")
-    print(f"Total time elapsed per experiment: {format_time_summary(elapsed, units)}")
-    print()
+    log_output = args.output.with_name(args.output.stem + "_log.log")
+    setup_logging(args.log_level, log_file=log_output)
 
-    print("--- Running QC ---")
+    logger.info("date: {}", date.today().isoformat())
+    logger.info("starting dataset pipeline (preset={})", args.preset)
+    logger.info("log file: {}", log_output)
+    logger.debug("metadata: {}", args.metadata)
+    logger.debug("layout:   {}", args.layout)
+    logger.debug("raw_dir:  {}", args.raw_dir)
+    logger.debug("output:   {}", args.output)
+
+    total_steps = 4
+
+    log_section(1, total_steps, "Loading experiments")
+    df = load_experiment(args.metadata, args.layout, args.raw_dir)
+    log_dataframe_summary(df, label="loaded dataframe")
+
+    log_section(2, total_steps, "Running QC")
     qc_df = run_qc(df)
     report_blank_cv(qc_df)
-    print(f"New df shape: {qc_df.shape}")
-    print(f"New columns after QC: {[c for c in qc_df.columns if c not in df.columns]}")
-    print(f"Blanks count per experiment: {qc_df.groupby('exp_id')['is_blank'].sum().to_dict()}")
-    print()
-    
-    print("--- Running growth curve extraction ---")
+    logger.info("QC output shape: {} rows × {} cols", *qc_df.shape)
+    new_cols = [c for c in qc_df.columns if c not in df.columns]
+    logger.info("new QC columns (n={}): {}", len(new_cols), new_cols)
+    blanks = qc_df.groupby("exp_id")["is_blank"].sum().to_dict()
+    logger.info("blanks per experiment: {}", blanks)
+
+    log_section(3, total_steps, "Extracting growth curves")
     curves_df, long_df = extract_growth_curves(qc_df)
-    print(f"Curves df shape: {curves_df.shape}")
-    print(f"Columns: {list(curves_df.columns)}")
-    print()
+    logger.info("curves shape: {} rows × {} cols", *curves_df.shape)
+    logger.debug("curves columns: {}", list(curves_df.columns))
+    logger.info("long dataframe shape: {} rows × {} cols", *long_df.shape)
 
-    print("--- Sample rows ---")
-    print(curves_df.head(3).to_string(index=False))
-    print()
+    logger.info("sample curve rows (first 3):\n{}", curves_df.head(3).to_string(index=False))
 
+    log_section(4, total_steps, "Writing outputs")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     long_df.to_parquet(args.output, index=False)
-    print(f"Saved long dataframe: {args.output}  ({args.output.stat().st_size / 1024:.1f} KB)")
-    
+    logger.success(
+        "saved long dataframe → {} ({:.1f} KB)",
+        args.output,
+        args.output.stat().st_size / 1024,
+    )
+
     curves_output = args.output.with_name(args.output.stem + "_curves.csv")
     curves_df.to_csv(curves_output, index=False)
-    print(f"Saved curves: {curves_output}  ({curves_output.stat().st_size / 1024:.1f} KB)")
+    logger.success(
+        "saved curves → {} ({:.1f} KB)",
+        curves_output,
+        curves_output.stat().st_size / 1024,
+    )
+
+    logger.info("Pipeline complete")
+    logger.success("saved log → {}", log_output)
 
 
 if __name__ == "__main__":
