@@ -11,8 +11,8 @@ Processes each time-series well od600 reads as:
                                                                         time_to_max_od_h)
 
 A Hampel filter  handles experimental artifacts (condensation, bubbles) 
-across the whole curve. Smoothing is then applied to the cleaned curve, 
-and every growth parameter is computed from the filtered and smoothed array.
+across the whole curve. Smoothing is then applied curve, and every 
+growth parameter is computed from the filtered and smoothed array.
 """
 
 from __future__ import annotations
