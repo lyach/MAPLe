@@ -1,0 +1,33 @@
+# Modeling dataset config — aerobic experiments
+
+# ================ FILES ================
+curves_file: "data/processed/aerobic_tidy_curves.csv"
+strain_metadata_file: null   # set when available
+output_name: "aerobic_modeling_dataset.csv"
+
+# ================ MERGE ================
+merge:
+  left: "strain_name"
+  right: "strain"
+
+# ================ GRANULARITY ================
+# per_well = keep replicates (more samples, use group-aware CV)
+# averaged = one row per strain-media-condition (replicate mean)
+grain: "per_well"
+
+# ================ FEATURIZATION ================
+# OH       = One-Hot encoding
+# ordinal  = OrdinalEncoder
+# numeric  = StandardScaler
+# path:<f> = precomputed embedding CSV (first col = key)
+features:
+  strain_name: "OH"
+  media_name: "OH"
+  atmosphere: "OH"
+  temperature: "numeric"
+
+# ================ TARGETS ================
+targets:
+  - growth_class
+  - max_od
+  - growth_rate

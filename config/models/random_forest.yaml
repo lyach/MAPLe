@@ -1,0 +1,12 @@
+# Random Forest model config
+type: random_forest
+
+params:
+  n_estimators: 200
+  max_depth: null
+  min_samples_split: 5
+  min_samples_leaf: 2
+
+task_overrides:
+  growth_class:
+    class_weight: balanced

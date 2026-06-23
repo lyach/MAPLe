@@ -1,0 +1,16 @@
+# Linear model config 
+# - LogisticRegression for classification
+# - Ridge for regression
+type: linear
+
+params:
+  max_iter: 1000
+
+task_overrides:
+  growth_class:
+    class_weight: balanced
+    solver: lbfgs
+  max_od:
+    alpha: 1.0
+  growth_rate:
+    alpha: 1.0

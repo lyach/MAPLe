@@ -1,0 +1,11 @@
+# MLP model config
+type: mlp
+
+params:
+  hidden_layer_sizes: [64, 32]
+  activation: relu
+  solver: adam
+  max_iter: 500
+  early_stopping: true
+  validation_fraction: 0.15
+  learning_rate_init: 0.001
