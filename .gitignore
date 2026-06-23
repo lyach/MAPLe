@@ -16,7 +16,7 @@ data/*
 uv.lock
 
 # logs
-logs/
+logs/ 
 
 # credentials
 .ncbi_credentials.json
