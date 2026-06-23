@@ -276,6 +276,8 @@ curves_df = extract_growth_curves(qc_df, with_replicates=True)
 
 ### 6f. Output schema
 
+The output is a wide-format csv file.
+
 **One row = one (experiment, well) datapoint** when `with_replicates=False`.  
 **One row = one (strain, media, condition) average** when `with_replicates=True`.
 

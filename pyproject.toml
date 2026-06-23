@@ -29,6 +29,10 @@ dependencies = [
     "seaborn",
     "tqdm",
     "loguru",
+    
+    # ML Models
+    "xgboost",
+    "shap",
 
     # MLOps
     "wandb",
@@ -36,6 +40,7 @@ dependencies = [
     # Config
     "pydantic",
     "pydantic-settings",
+    "pyyaml",
 
     # Development
     "ruff",
