@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any, Literal
 
 from sklearn.base import BaseEstimator
@@ -15,6 +16,33 @@ from src.modeling.config import ModelConfig
 
 TaskType = Literal["growth_class", "max_od", "growth_rate"]
 
+
+class _XGBClassifierGPUTrain(XGBClassifier):
+    """Train on GPU when configured, then use CPU for inference."""
+    def fit(self, X, y, **kwargs):
+        super().fit(X, y, **kwargs)
+        _switch_xgb_to_cpu_inference(self)
+        return self
+
+
+class _XGBRegressorGPUTrain(XGBRegressor):
+    """Train on GPU when configured, then use CPU for inference."""
+
+    def fit(self, X, y, **kwargs):
+        super().fit(X, y, **kwargs)
+        _switch_xgb_to_cpu_inference(self)
+        return self
+
+
+def _switch_xgb_to_cpu_inference(model: XGBClassifier | XGBRegressor) -> None:
+    params = model.get_params()
+    device = params.get("device", "cpu")
+    if device not in (None, "cpu"):
+        model.set_params(device="cpu")
+        return
+    if params.get("tree_method") in {"gpu_hist", "cuda_hist"}:
+        model.set_params(tree_method="hist")
+
 _REGISTRY: dict[str, dict[str, type[BaseEstimator]]] = {
     "linear": {
         "classification": LogisticRegression,
@@ -25,8 +53,8 @@ _REGISTRY: dict[str, dict[str, type[BaseEstimator]]] = {
         "regression": RandomForestRegressor,
     },
     "xgboost": {
-        "classification": XGBClassifier,
-        "regression": XGBRegressor,
+        "classification": _XGBClassifierGPUTrain,
+        "regression": _XGBRegressorGPUTrain,
     },
     "mlp": {
         "classification": MLPClassifier,
@@ -41,6 +69,43 @@ _REGISTRY: dict[str, dict[str, type[BaseEstimator]]] = {
 
 def _task_mode(task: TaskType) -> str:
     return "classification" if task == "growth_class" else "regression"
+
+
+@lru_cache(maxsize=1)
+def gpu_available() -> bool:
+    """Return True when a CUDA GPU is present and XGBoost was built with CUDA."""
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            return False
+    except ImportError:
+        return False
+    try:
+        import xgboost as xgb
+        cuda_version = xgb.build_info().get("CUDA_VERSION")
+        return bool(cuda_version)
+    except (ImportError, AttributeError, TypeError):
+        return False
+
+
+def _gpu_device_configured(params: dict[str, Any]) -> bool:
+    device = params.get("device")
+    if device is not None and device != "cpu":
+        return True
+    return params.get("tree_method") in {"gpu_hist", "cuda_hist"}
+
+
+def _apply_xgboost_gpu(params: dict[str, Any]) -> None:
+    """Set XGBoost GPU params in-place when a GPU is available."""
+    if _gpu_device_configured(params) or not gpu_available():
+        return
+    import xgboost as xgb
+    major = int(xgb.__version__.split(".")[0])
+    if major >= 2:
+        params.setdefault("device", "cuda")
+        params.setdefault("tree_method", "hist")
+    else:
+        params.setdefault("tree_method", "gpu_hist")
 
 
 def build_model(
@@ -86,7 +151,9 @@ def build_model(
             params["seed"] = seed
 
     # XGBoost classification defaults
-    if cfg.type == "xgboost" and mode == "classification":
-        params.setdefault("eval_metric", "logloss")
+    if cfg.type == "xgboost":
+        if mode == "classification":
+            params.setdefault("eval_metric", "logloss")
+        _apply_xgboost_gpu(params)
 
     return cls(**params)

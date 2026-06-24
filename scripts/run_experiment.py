@@ -1,7 +1,7 @@
 """Run a modeling experiment end-to-end: CV, evaluation, interpretability.
 
 Usage:
-    python scripts/run_experiment.py config/experiments/aerobic_anaerobic_xgboost.yaml
+    python scripts/run_experiment.py config/experiments/aero_xgboost.yaml
 """
 
 import argparse
@@ -33,7 +33,7 @@ from src.modeling.features import (
     warn_loso_onehot,
 )
 from src.modeling.interpret import run_interpretation
-from src.modeling.models import build_model
+from src.modeling.models import build_model, gpu_available
 
 
 def setup_logging(level: str = "INFO", log_file: Path | None = None) -> None:
@@ -193,6 +193,11 @@ def main() -> None:
     logger.info("experiment: {}", exp_cfg.name)
     logger.info("task: {}", exp_cfg.task)
     logger.info("model: {} ({})", mdl_cfg.type, mdl_cfg.params)
+    if mdl_cfg.type == "xgboost":
+        if gpu_available():
+            logger.info("GPU available — XGBoost will train on CUDA")
+        else:
+            logger.info("No GPU available — XGBoost will train on CPU")
     logger.info("CV strategies: {}", exp_cfg.cv.strategy)
     logger.info("output: {}", output_dir)
 
