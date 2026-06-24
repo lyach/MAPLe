@@ -12,6 +12,7 @@
     - `gc_content_pct` — a basic but informative genomic feature
     - `sequence_hash` — a SHA-256 hash of the raw FASTA sequence, so you can detect duplicates or changes if you re-pull data
     - `date_retrieved` — NCBI records change; reproducibility requires knowing when you pulled
+- **To do: phylogenetic distance, GO terms, CLEAN pipeline**
 - The strating point of the script will be will be the `data/metadata/align_strains.csv`. Normalize names to match the strain names in the `_layout.csv` (this can be manual)
 - The output will be a file called `strains_metadata.csv`. See schema below
 - The whole process should run with a one liner like the other scripts (`python scripts/get_strain_metadata.py`)

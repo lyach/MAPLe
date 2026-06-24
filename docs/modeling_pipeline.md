@@ -4,9 +4,9 @@
 
 This pipeline processes growth-curve parameters and strain metadata into machine learning datasets to execute three prediction tasks:
 
-- **Growth Classification** (binary/multiclass growth vs. no growth)
-- **Maximum $\text{OD}_{600}$ Regression** (yield prediction)
-- **Growth-Rate Regression** ($\mu_{\max}$ prediction)
+- **Growth Classification**
+- **Maximum $\text{OD}_{600}$ Regression**
+- **Growth-Rate Regression**
 
 Execution is split into two primary CLI steps, driven by three configuration files (`dataset`, `model`, and `experiment` YAMLs). For interactive workflows, all core steps can also be imported directly from `src/modeling/`.
 

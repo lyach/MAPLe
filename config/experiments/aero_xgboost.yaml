@@ -1,6 +1,6 @@
 # Experiment: XGBoost on aerobic growth classification
 name: aerobic_xgboost_growth_class
-dataset: config/dataset/modeling_dataset_aerobic.yaml
+dataset: config/dataset/modeling_dataset_aero.yaml
 model: config/models/xgboost.yaml
 task: growth_class
 
