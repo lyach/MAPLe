@@ -16,20 +16,20 @@ dependencies = [
     "torchvision",
     "torchaudio",
     "coral-pytorch",
-    
+
     # Data Science
     "numpy",
     "pandas",
     "scikit-learn",
     "pyarrow",
     "umap-learn>=0.5.11",
-    
+
     # Data & Utils
     "matplotlib",
     "seaborn",
     "tqdm",
     "loguru",
-    
+
     # MLOps
     "wandb",
 
@@ -43,6 +43,7 @@ dependencies = [
     "ipykernel",
     "pre-commit",
     "ipywidgets>=8.1.8",
+    "biopython>=1.87",
 ]
 
 # uv
