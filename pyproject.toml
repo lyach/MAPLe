@@ -29,10 +29,6 @@ dependencies = [
     "seaborn",
     "tqdm",
     "loguru",
-    
-    # ML Models
-    "xgboost",
-    "shap",
 
     # MLOps
     "wandb",
