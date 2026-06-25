@@ -41,7 +41,7 @@ class DatasetConfig(BaseModel):
     grain: Literal["per_well", "averaged"] = "per_well"
     merge: MergeConfig = MergeConfig()
 
-    features: dict[str, str] = {}
+    features: dict[str, str | list[str]] = {}
     targets: list[str] = ["growth_class", "max_od", "growth_rate"]
 
 

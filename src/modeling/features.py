@@ -1,12 +1,13 @@
 """Feature engineering pipeline.
 
-Builds an sklearn ``ColumnTransformer`` from the dataset config's feature.  
-Each column maps to an encoding:
+Builds an sklearn ``ColumnTransformer`` from the dataset config's ``features``
+dict.  Each column maps to a transformer call string, or a list of steps applied
+in order (e.g. log transform then scale):
+    genome_size_bp:
+      - log_transform
+      - "StandardScaler()"
 
-- ``"OH"``          -> OneHotEncoder
-- ``"ordinal"``     -> OrdinalEncoder
-- ``"numeric"``     -> StandardScaler
-- ``"path:<file>"`` -> precomputed embeddings merged by name
+Embedding columns use ``"path:<file>"`` (precomputed CSV, first col = key).
 """
 
 from __future__ import annotations
@@ -19,13 +20,24 @@ import pandas as pd
 from loguru import logger
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import (
-    OneHotEncoder,
-    OrdinalEncoder,
-    StandardScaler,
-)
+from sklearn.preprocessing import FunctionTransformer, MinMaxScaler, OneHotEncoder, OrdinalEncoder, RobustScaler, StandardScaler
 
 from src.modeling.config import DatasetConfig
+
+_TRANSFORMER_REGISTRY: dict[str, type] = {
+    "StandardScaler": StandardScaler,
+    "RobustScaler": RobustScaler,
+    "MinMaxScaler": MinMaxScaler,
+    "OneHotEncoder": OneHotEncoder,
+    "OrdinalEncoder": OrdinalEncoder,
+}
+
+_EVAL_NAMESPACE: dict[str, Any] = {
+    "True": True,
+    "False": False,
+    "None": None,
+    **_TRANSFORMER_REGISTRY,
+}
 
 # Maps feature columns to semantic groups
 FEATURE_GROUPS: dict[str, str] = {
@@ -33,7 +45,77 @@ FEATURE_GROUPS: dict[str, str] = {
     "media_name": "media",
     "atmosphere": "condition",
     "temperature": "condition",
+    "genome_size_bp": "strain",
+    "gc_content_pct": "strain",
+    "num_contigs": "strain",
+    "n50": "strain",
 }
+
+
+_PREPROCESS_REGISTRY: dict[str, FunctionTransformer] = {
+    "log_transform": FunctionTransformer(
+        np.log1p,
+        validate=False,
+        feature_names_out="one-to-one",
+    ),
+}
+
+
+def _parse_transformer(spec: str) -> Any:
+    """Instantiate an sklearn transformer from a config call string."""
+    spec = spec.strip()
+    try:
+        return eval(spec, {"__builtins__": {}}, _EVAL_NAMESPACE)  # noqa: S307
+    except Exception as exc:
+        raise ValueError(f"invalid transformer spec {spec!r}: {exc}") from exc
+
+
+def _parse_step(step: str) -> Any:
+    """Parse one pipeline step (preprocess keyword or sklearn call string)."""
+    step = step.strip()
+    if step in _PREPROCESS_REGISTRY:
+        return _PREPROCESS_REGISTRY[step]
+    return _parse_transformer(step)
+
+
+def _build_transformer(spec: str | list[str]) -> Any:
+    """Build a single transformer or ``Pipeline`` from a feature spec."""
+    if isinstance(spec, str):
+        return _parse_step(spec)
+
+    if not spec:
+        raise ValueError("feature spec list must be non-empty")
+
+    steps: list[tuple[str, Any]] = []
+    for i, step in enumerate(spec):
+        name = step.strip()
+        if name in _PREPROCESS_REGISTRY:
+            steps.append((name, _PREPROCESS_REGISTRY[name]))
+        else:
+            steps.append((f"step_{i}", _parse_transformer(name)))
+
+    if len(steps) == 1:
+        return steps[0][1]
+    return Pipeline(steps)
+
+
+def _spec_steps(spec: str | list[str]) -> list[str]:
+    return [spec] if isinstance(spec, str) else spec
+
+
+def _is_onehot_spec(spec: str | list[str]) -> bool:
+    return any(s.strip().startswith("OneHotEncoder") for s in _spec_steps(spec))
+
+
+def _default_feature_group(transformer: Any) -> str:
+    if isinstance(transformer, Pipeline):
+        for _, step in transformer.steps:
+            if step.__class__.__name__.endswith("Scaler"):
+                return "genome"
+        return "other"
+    if transformer.__class__.__name__.endswith("Scaler"):
+        return "genome"
+    return "other"
 
 
 def _load_embeddings(path: str | Path) -> pd.DataFrame:
@@ -84,39 +166,7 @@ def build_feature_pipeline(
             logger.warning("feature column '{}' not in DataFrame — skipping", col)
             continue
 
-        spec_lower = spec.strip().upper() if not spec.startswith("path:") else spec
-
-        if spec_lower == "OH":
-            transformers.append((
-                f"oh_{col}",
-                OneHotEncoder(sparse_output=False, handle_unknown="ignore"),
-                [col],
-            ))
-            feature_columns.append(col)
-            feature_group_map[col] = FEATURE_GROUPS.get(col, "other")
-
-        elif spec_lower == "ORDINAL":
-            transformers.append((
-                f"ord_{col}",
-                OrdinalEncoder(
-                    handle_unknown="use_encoded_value",
-                    unknown_value=-1,
-                ),
-                [col],
-            ))
-            feature_columns.append(col)
-            feature_group_map[col] = FEATURE_GROUPS.get(col, "other")
-
-        elif spec_lower == "NUMERIC":
-            transformers.append((
-                f"num_{col}",
-                StandardScaler(),
-                [col],
-            ))
-            feature_columns.append(col)
-            feature_group_map[col] = FEATURE_GROUPS.get(col, "genome")
-
-        elif spec.startswith("path:"):
+        if isinstance(spec, str) and spec.startswith("path:"):
             emb_path = root / spec[5:].strip()
             logger.info("loading embeddings from {}", emb_path)
             emb_df = _load_embeddings(emb_path)
@@ -125,21 +175,24 @@ def build_feature_pipeline(
             group_name = "strain_emb" if "strain" in col else "media_emb"
             for ec in emb_cols:
                 feature_group_map[ec] = group_name
-            # passthrough the numeric embedding columns
-            transformers.append((
-                f"emb_{col}",
-                "passthrough",
-                emb_cols,
-            ))
+            transformers.append((col, "passthrough", emb_cols))
             feature_columns.extend(emb_cols)
+            continue
 
-        else:
-            logger.warning("unknown feature spec '{}' for column '{}' — skipping", spec, col)
+        try:
+            transformer = _build_transformer(spec)
+        except ValueError as exc:
+            logger.warning("{} — skipping column '{}'", exc, col)
+            continue
+
+        transformers.append((col, transformer, [col]))
+        feature_columns.append(col)
+        feature_group_map[col] = FEATURE_GROUPS.get(col, _default_feature_group(transformer))
 
     ct = ColumnTransformer(
         transformers=transformers,
         remainder="drop",
-        verbose_feature_names_out=True,
+        verbose_feature_names_out=False,
     )
 
     return ct, feature_columns, feature_group_map
@@ -153,7 +206,7 @@ def warn_loso_onehot(cfg: DatasetConfig, cv_strategy: str) -> None:
             for col, spec in cfg.features.items()
             if FEATURE_GROUPS.get(col) == "strain"
         }
-        if strain_specs and all(s.upper() == "OH" for s in strain_specs.values()):
+        if strain_specs and all(_is_onehot_spec(s) for s in strain_specs.values()):
             logger.warning(
                 "LOSO CV with only one-hot strain_name: the held-out strain "
                 "will have an all-zero feature vector. Add genome/taxonomy "
@@ -166,7 +219,7 @@ def warn_loso_onehot(cfg: DatasetConfig, cv_strategy: str) -> None:
             for col, spec in cfg.features.items()
             if FEATURE_GROUPS.get(col) == "media"
         }
-        if media_specs and all(s.upper() == "OH" for s in media_specs.values()):
+        if media_specs and all(_is_onehot_spec(s) for s in media_specs.values()):
             logger.warning(
                 "LOMO CV with only one-hot media_name: the held-out medium "
                 "will have an all-zero feature vector. Add ECFP embeddings "

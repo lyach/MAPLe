@@ -18,15 +18,23 @@ merge:
 grain: "per_well"
 
 # ================ FEATURIZATION ================
-# OH       = One-Hot encoding
-# ordinal  = OrdinalEncoder
-# numeric  = StandardScaler
+# Each value is an sklearn transformer call string.
 # path:<f> = precomputed embedding CSV (first col = key)
 features:
-  strain_name: "OH"
-  media_name: "OH"
-  atmosphere: "OH"
-  temperature: "numeric"
+  # strain features
+  genome_size_bp:
+    - log_transform
+    - "StandardScaler()"
+  gc_content_pct: "StandardScaler()"
+  num_contigs: "RobustScaler(with_centering=True, with_scaling=True)"
+  n50:
+    - log_transform
+    - "StandardScaler()"
+
+  # other features
+  media_name: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
+  atmosphere: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
+  temperature: "StandardScaler()"
 
 # ================ TARGETS ================
 targets:
