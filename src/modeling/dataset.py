@@ -71,8 +71,16 @@ def build_modeling_dataset(
     curves_paths = _resolve_curves_paths(cfg, root)
     logger.info("loading curves: {}", curves_paths)
     df = _load_curves(curves_paths)
+    
+    # remove water controls
+    df = df.loc[df["media_name"] != "water"]
+    logger.info("removed water controls, shape: {} rows x {} cols", *df.shape)
+    
+    # remove `other`` organisms
+    df = df.loc[~df["strain_name"].str.contains("other")]
+    logger.info("removed `other` organisms, shape: {} rows x {} cols", *df.shape)
 
-    # --- merge strain metadata (optional) ---
+    # merge strain metadata
     if cfg.strain_metadata_file:
         meta_path = root / cfg.strain_metadata_file
         logger.info("loading strain metadata: {}", meta_path)
@@ -105,7 +113,7 @@ def build_modeling_dataset(
             )
         logger.info("merged shape: {} rows x {} cols", *df.shape)
 
-    # --- replicate averaging ---
+    # replicate averaging
     if cfg.grain == "averaged":
         logger.info("averaging replicates (group by {})", _GROUP_COLS)
         group_cols = [c for c in _GROUP_COLS if c in df.columns]

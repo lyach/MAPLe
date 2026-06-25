@@ -2,7 +2,7 @@
 
 # ================ FILES ================
 curves_file: "data/processed/aerobic_tidy_curves.csv"
-strain_metadata_file: null   # set when available
+strain_metadata_file: "data/external/strains_metadata.csv"
 output_name: "aerobic_modeling_dataset.csv"
 
 # ================ MERGE ================
