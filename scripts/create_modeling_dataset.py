@@ -1,7 +1,7 @@
 """Create a modeling-ready dataset from curves CSV + strain metadata.
 
 Usage:
-    python scripts/create_modeling_dataset.py config/dataset/modeling_dataset_aerobic.yaml
+    python scripts/create_modeling_dataset.py config/dataset/modeling_dataset_aero.yaml
 """
 
 import argparse
