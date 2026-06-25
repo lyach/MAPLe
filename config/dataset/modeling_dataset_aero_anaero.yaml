@@ -31,5 +31,3 @@ features:
 # ================ TARGETS ================
 targets:
   - growth_class
-  - max_od
-  - growth_rate

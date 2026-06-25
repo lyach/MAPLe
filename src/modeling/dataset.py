@@ -76,9 +76,13 @@ def build_modeling_dataset(
     df = df.loc[df["media_name"] != "water"]
     logger.info("removed water controls, shape: {} rows x {} cols", *df.shape)
     
-    # remove `other`` organisms
+    # remove `other` strains
     df = df.loc[~df["strain_name"].str.contains("other")]
-    logger.info("removed `other` organisms, shape: {} rows x {} cols", *df.shape)
+    logger.info("removed `other` strains, shape: {} rows x {} cols", *df.shape)
+    
+    # remove `empty` strains
+    df = df.loc[df["strain_name"] != "empty"]
+    logger.info("removed `empty` strains, shape: {} rows x {} cols", *df.shape)
 
     # merge strain metadata
     if cfg.strain_metadata_file:
