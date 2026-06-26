@@ -13,3 +13,9 @@ data/*
 # environment
 .env/
 uv.lock
+
+# logs
+logs/
+
+# credentials
+.ncbi_credentials.json
