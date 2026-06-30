@@ -1365,9 +1365,29 @@ def _shorten_organism(name: str, max_len: int = 22) -> str:
     """Abbreviate long organism names to keep axis labels readable."""
     parts = name.split()
     if len(parts) >= 2:
-        abbrev = f"{parts[0][0]}. {' '.join(parts[1:])}"
+        abbrev = f"{parts[0][0].upper()}. {' '.join(parts[1:])}"
         return abbrev[:max_len] if len(abbrev) > max_len else abbrev
     return name[:max_len]
+
+
+MEDIA_MAP: dict[str, str] = {
+    "lb": "LB Broth",
+    "mb": "Marine Broth",
+    "nb": "Nutrient Broth",
+    "bhi": "BHI Broth",
+    "mrs": "MRS Broth",
+    "thy": "TH+Y Broth",
+    "tsb": "Tryptic Soy Broth",
+    "gifu": "GAM Broth",
+    "mrc": "MRC Broth",
+    "cdm": "CDM",
+    "m9": "M9",
+}
+
+
+def _map_media(name: str) -> str:
+    return MEDIA_MAP.get(str(name).lower(), str(name))
+
 
 def _prep_curves_csv(df: pd.DataFrame, 
                      growth_threshold: float = 0.1) -> pd.DataFrame:
@@ -1380,6 +1400,7 @@ def _prep_curves_csv(df: pd.DataFrame,
     df = df.rename(columns={"strain_name": "Organism", 
                             "media_name": "Media",
                             "max_od": "MaxOD"})
+    df["Media"] = df["Media"].map(_map_media)
     print(f"Prepared Curves DataFrame has {len(df)} rows")
     # drop rows with MaxOD below growth threshold
     df["grows"] = df["MaxOD"] > growth_threshold
@@ -1515,18 +1536,12 @@ def plot_maxod_heatmap(
         ax.set_yticklabels(org_labels, rotation=0, fontsize=8)
         ax.set_xticklabels(ax.get_xticklabels(), rotation=40, ha="right", fontsize=8)
 
-    fig.suptitle(
-        "MaxOD600 across organisms and media",
-        fontsize=12,
-        fontweight="bold",
-        y=1.01,
-    )
     sm = cm.ScalarMappable(
         cmap=cmap,
         norm=Normalize(vmin=growth_threshold, vmax=vmax),
     )
     sm.set_array([])
-    fig.colorbar(sm, ax=axes, shrink=0.6, label="Mean MaxOD600")
+    fig.colorbar(sm, ax=axes, shrink=0.6)
     return fig
 
 
@@ -1630,17 +1645,26 @@ def plot_maxod_ranking(
     df: pd.DataFrame,
     *,
     group_by: str = "Media",
+    facet_col: str = "atmosphere",
+    growth_threshold: float = 0.1,
     rc: dict | None = None,
     figsize: tuple[float, float] | None = None,
 ) -> Figure:
     """Horizontal bar chart ranking groups by mean MaxOD600 ± std.
 
+    One subplot is drawn per unique ``facet_col`` value (default: atmosphere)
+    so aerobic and anaerobic conditions can be compared side by side.
+
     Parameters
     ----------
     df:
-        AlignBio report DataFrame from ``load_align_report``.
+        DataFrame from curves.csv.
     group_by:
         Column to rank — ``"Media"`` or ``"Organism"``.
+    facet_col:
+        Column to facet on (default ``"atmosphere"``).
+    growth_threshold:
+        Passed to ``_prep_curves_csv`` to flag sub-threshold wells.
     rc:
         Optional rcParams overrides.
     figsize:
@@ -1651,41 +1675,91 @@ def plot_maxod_ranking(
     Figure
     """
     _apply_style(rc)
+    df = _prep_curves_csv(df, growth_threshold=growth_threshold)
 
-    agg = df.groupby(group_by)["MaxOD"].agg(["mean", "std"]).sort_values("mean")
-    colors = _color_cycle(len(agg))
-    default_h = max(4, len(agg) * 0.5)
-    fig, ax = plt.subplots(figsize=figsize or (7, default_h))
+    facet_vals = sorted(df[facet_col].dropna().unique())
+    n_facets = len(facet_vals)
 
-    bars = ax.barh(
-        agg.index,
-        agg["mean"],
-        xerr=agg["std"],
-        color=colors,
-        edgecolor="white",
-        linewidth=0.5,
-        error_kw={"elinewidth": 0.8, "capsize": 3, "ecolor": "#555555"},
+    groups = (
+        df.groupby(group_by)["MaxOD"]
+        .mean()
+        .sort_values(ascending=True)
+        .index.tolist()
     )
-    offset = max(agg["mean"].max() * 0.01, 0.005)
-    for bar, (_, row) in zip(bars, agg.iterrows()):
-        ax.text(
-            row["mean"] + (row["std"] or 0) + offset,
-            bar.get_y() + bar.get_height() / 2,
-            f"{row['mean']:.2f}",
-            va="center",
-            ha="left",
-            fontsize=8,
-        )
+    y_labels = (
+        [_shorten_organism(g) for g in groups]
+        if group_by == "Organism"
+        else groups
+    )
+    colors = dict(zip(groups, _color_cycle(len(groups))))
+    y_pos = np.arange(len(groups))
 
-    ax.set_xlabel("Mean MaxOD600 ± std", fontsize=9)
-    ax.set_ylabel(group_by, fontsize=9)
-    ax.set_title(
+    default_w = max(7, 5.0 * n_facets)
+    default_h = max(4, len(groups) * 0.5)
+    fig, axes = plt.subplots(
+        1,
+        n_facets,
+        figsize=figsize or (default_w, default_h),
+        sharey=True,
+        sharex=True,
+        layout="constrained",
+    )
+    if n_facets == 1:
+        axes = [axes]
+
+    x_max = 0.0
+    for ax, fval in zip(axes, facet_vals):
+        sub = df[df[facet_col] == fval]
+        agg = (
+            sub.groupby(group_by)["MaxOD"]
+            .agg(["mean", "std"])
+            .reindex(groups)
+        )
+        bars = ax.barh(
+            y_pos,
+            agg["mean"],
+            xerr=agg["std"],
+            color=[colors[g] for g in groups],
+            edgecolor="white",
+            linewidth=0.5,
+            error_kw={"elinewidth": 0.8, "capsize": 3, "ecolor": "#555555"},
+        )
+        facet_x_max = (agg["mean"] + agg["std"].fillna(0)).max()
+        if pd.notna(facet_x_max):
+            x_max = max(x_max, facet_x_max)
+        offset = max(facet_x_max * 0.01, 0.005) if pd.notna(facet_x_max) else 0.005
+        for bar, (_, row) in zip(bars, agg.iterrows()):
+            if pd.isna(row["mean"]):
+                continue
+            ax.text(
+                row["mean"] + (row["std"] if pd.notna(row["std"]) else 0) + offset,
+                bar.get_y() + bar.get_height() / 2,
+                f"{row['mean']:.2f}",
+                va="center",
+                ha="left",
+                fontsize=8,
+            )
+
+        ax.set_title(f"{facet_col} = {fval}", fontsize=10, fontweight="bold")
+        ax.set_xlabel("Mean MaxOD600 ± std", fontsize=9)
+        ax.set_ylim(-0.5, len(groups) - 0.5)
+
+    axes[0].set_ylabel(group_by, fontsize=9)
+    axes[0].set_yticks(y_pos)
+    axes[0].set_yticklabels(y_labels, fontsize=8)
+    for ax in axes[1:]:
+        ax.tick_params(axis="y", labelleft=False)
+
+    if x_max:
+        for ax in axes:
+            ax.set_xlim(0, x_max * 1.15)
+
+    fig.suptitle(
         f"{group_by} ranked by mean MaxOD600",
         fontsize=11,
         fontweight="bold",
+        y=1.02,
     )
-    ax.set_ylim(-0.5, len(agg) - 0.5)
-    fig.tight_layout()
     return fig
 
 
