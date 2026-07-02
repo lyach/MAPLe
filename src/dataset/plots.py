@@ -648,6 +648,10 @@ def plot_plate_grid(
         row_idx = {r: i for i, r in enumerate(rows_sorted)}
         col_idx = {c: i for i, c in enumerate(cols_sorted)}
 
+        od_vals = df_exp[od_col].dropna()
+        ymax = float(od_vals.max()) * 1.05 if not od_vals.empty else 1.0
+        ymax = max(ymax, 0.1)
+
         # collect per-well data
         for (row, col), df_well in df_exp.groupby(["row", "col"], sort=False):
             ax = axes[row_idx[row]][col_idx[col]]
@@ -662,9 +666,13 @@ def plot_plate_grid(
                 color = "#2266cc"
 
             ax.plot(df_well["time_value"], df_well[od_col], color=color, lw=0.8)
-            ax.set_ylim(bottom=0)
+            ax.set_ylim(0, ymax)
             ax.set_xticks([])
-            ax.set_yticks([])
+            if col_idx[col] == 0:
+                ax.yaxis.set_major_locator(mticker.MaxNLocator(3))
+                ax.tick_params(axis="y", labelsize=6, length=2, pad=1)
+            else:
+                ax.set_yticks([])
 
             # row/col labels on outer edges only
             if col_idx[col] == 0:
