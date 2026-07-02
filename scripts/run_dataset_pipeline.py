@@ -170,7 +170,7 @@ def main():
     logger.info("blanks per experiment: {}", blanks)
 
     log_section(3, total_steps, "Extracting growth curves")
-    curves_df, long_df = extract_growth_curves(qc_df)
+    curves_df, long_df = extract_growth_curves(qc_df, smoother="moving_average")
     logger.info("curves shape: {} rows × {} cols", *curves_df.shape)
     logger.debug("curves columns: {}", list(curves_df.columns))
     logger.info("long dataframe shape: {} rows × {} cols", *long_df.shape)

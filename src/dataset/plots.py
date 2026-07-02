@@ -22,7 +22,8 @@ import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from matplotlib.colors import ListedColormap
+from matplotlib import cm
+from matplotlib.colors import ListedColormap, Normalize
 from matplotlib.figure import Figure
 
 
@@ -762,18 +763,25 @@ def _prep_curves(
 
 
 def _filter_param_outliers(df: pd.DataFrame, params: list[str]) -> pd.DataFrame:
-    """Drop rows that are outliers using the Tukey IQR fence.
-    """
+    """Mask outlier values as NaN using the Tukey IQR fence."""
     df = df.copy()
     for col in params:
         if col not in df.columns:
             continue
-        q1 = df[col].quantile(0.25)
-        q3 = df[col].quantile(0.75)
+        values = df[col]
+        q1 = values.quantile(0.25)
+        q3 = values.quantile(0.75)
         iqr = q3 - q1
         lo = q1 - 1.5 * iqr
         hi = q3 + 1.5 * iqr
-        df.loc[(df[col] < lo) | (df[col] > hi), col] = np.nan
+        outlier_mask = values.notna() & ((values < lo) | (values > hi))
+        n_outliers = int(outlier_mask.sum())
+        if n_outliers:
+            df.loc[outlier_mask, col] = np.nan
+        print(
+            f"Filtered {n_outliers} outliers in {col!r} "
+            f"(IQR fence [{lo:.4g}, {hi:.4g}])"
+        )
     return df
 
 
@@ -1328,7 +1336,7 @@ def plot_ranking(
     return fig
 
 # ---------------------------------------------------------------------------
-# MaxOD600 plots
+# Utils
 # ---------------------------------------------------------------------------
 
 def load_align_report(path: Union[str, Path]) -> pd.DataFrame:
@@ -1342,7 +1350,7 @@ def load_align_report(path: Union[str, Path]) -> pd.DataFrame:
     return pd.read_csv(path)
 
 
-def _prep_align(
+def _prep_align_csv(
     df: pd.DataFrame,
     *,
     growth_threshold: float,
@@ -1357,30 +1365,75 @@ def _shorten_organism(name: str, max_len: int = 22) -> str:
     """Abbreviate long organism names to keep axis labels readable."""
     parts = name.split()
     if len(parts) >= 2:
-        abbrev = f"{parts[0][0]}. {' '.join(parts[1:])}"
+        abbrev = f"{parts[0][0].upper()}. {' '.join(parts[1:])}"
         return abbrev[:max_len] if len(abbrev) > max_len else abbrev
     return name[:max_len]
 
 
+MEDIA_MAP: dict[str, str] = {
+    "lb": "LB Broth",
+    "mb": "Marine Broth",
+    "nb": "Nutrient Broth",
+    "bhi": "BHI Broth",
+    "mrs": "MRS Broth",
+    "thy": "TH+Y Broth",
+    "tsb": "Tryptic Soy Broth",
+    "gifu": "GAM Broth",
+    "mrc": "MRC Broth",
+    "cdm": "CDM",
+    "m9": "M9",
+}
+
+
+def _map_media(name: str) -> str:
+    return MEDIA_MAP.get(str(name).lower(), str(name))
+
+
+def _prep_curves_csv(df: pd.DataFrame, 
+                     growth_threshold: float = 0.1) -> pd.DataFrame:
+    df = df.copy()
+    # drop empty or other organisms
+    df = df.drop(df[(df["strain_name"].str.contains("empty")) | (df["strain_name"].str.contains("other"))].index)
+    # drop water media
+    df = df.drop(df[df["media_name"].str.contains("water")].index)
+    # rename columns
+    df = df.rename(columns={"strain_name": "Organism", 
+                            "media_name": "Media",
+                            "max_od": "MaxOD"})
+    df["Media"] = df["Media"].map(_map_media)
+    print(f"Prepared Curves DataFrame has {len(df)} rows")
+    # drop rows with MaxOD below growth threshold
+    df["grows"] = df["MaxOD"] > growth_threshold
+    print(f"Prepared Curves DataFrame has {len(df)} rows after growth threshold removal")
+    return df
+
+# ---------------------------------------------------------------------------
+# MaxOD600 plots
+# ---------------------------------------------------------------------------
+
 def plot_maxod_heatmap(
     df: pd.DataFrame,
     *,
+    align_df: bool = False,
     facet_col: str | None = None,
     growth_threshold: float = 0.1,
     annot: bool = True,
     cmap: str = "YlOrRd",
+    filter_param_outliers: bool = False,
     rc: dict | None = None,
     figsize: tuple[float, float] | None = None,
 ) -> Figure:
     """Organism × Media heatmap of mean MaxOD600.
 
     Rows and columns are sorted by their overall mean MaxOD so the
-    best-performing combinations appear in the top-right corner.
+    best performing combinations appear in the top right corner.
 
     Parameters
     ----------
     df:
-        AlignBio report DataFrame from ``load_align_report``.
+        DataFrame from curves.csv or align.csv
+    align_df:
+        Whether the input dataframe is the AlignBio DataFrame.
     facet_col:
         If given (e.g. ``"Temperature"``), one subplot column is drawn per
         unique value so conditions can be compared side by side.
@@ -1391,6 +1444,9 @@ def plot_maxod_heatmap(
         Annotate each cell with its value.
     cmap:
         Matplotlib colourmap name.
+    filter_param_outliers:
+        If ``True``, values outside the Tukey IQR fence for ``MaxOD`` are
+        masked before aggregation.
     rc:
         Optional rcParams overrides.
     figsize:
@@ -1401,7 +1457,13 @@ def plot_maxod_heatmap(
     Figure
     """
     _apply_style(rc)
-    df = _prep_align(df, growth_threshold=growth_threshold)
+    if align_df:
+        df = _prep_align_csv(df, growth_threshold=growth_threshold)
+    else:
+        df = _prep_curves_csv(df)
+
+    if filter_param_outliers:
+        df = _filter_param_outliers(df, ["MaxOD"])
 
     facet_vals = sorted(df[facet_col].unique()) if facet_col else [None]
     n_facets = len(facet_vals)
@@ -1421,6 +1483,7 @@ def plot_maxod_heatmap(
         n_facets,
         figsize=figsize or (default_w, default_h),
         sharey=True,
+        layout="constrained",
     )
     if n_facets == 1:
         axes = [axes]
@@ -1449,8 +1512,7 @@ def plot_maxod_heatmap(
             annot_kws={"size": 7},
             linewidths=0.4,
             linecolor="white",
-            cbar=ax is axes[-1],
-            cbar_kws={"label": "Mean MaxOD600", "shrink": 0.6},
+            cbar=False,
         )
         # grey out sub-threshold cells
         sns.heatmap(
@@ -1474,13 +1536,12 @@ def plot_maxod_heatmap(
         ax.set_yticklabels(org_labels, rotation=0, fontsize=8)
         ax.set_xticklabels(ax.get_xticklabels(), rotation=40, ha="right", fontsize=8)
 
-    fig.suptitle(
-        "MaxOD600 across organisms and media",
-        fontsize=12,
-        fontweight="bold",
-        y=1.01,
+    sm = cm.ScalarMappable(
+        cmap=cmap,
+        norm=Normalize(vmin=growth_threshold, vmax=vmax),
     )
-    fig.tight_layout()
+    sm.set_array([])
+    fig.colorbar(sm, ax=axes, shrink=0.6)
     return fig
 
 
@@ -1584,17 +1645,26 @@ def plot_maxod_ranking(
     df: pd.DataFrame,
     *,
     group_by: str = "Media",
+    facet_col: str = "atmosphere",
+    growth_threshold: float = 0.1,
     rc: dict | None = None,
     figsize: tuple[float, float] | None = None,
 ) -> Figure:
     """Horizontal bar chart ranking groups by mean MaxOD600 ± std.
 
+    One subplot is drawn per unique ``facet_col`` value (default: atmosphere)
+    so aerobic and anaerobic conditions can be compared side by side.
+
     Parameters
     ----------
     df:
-        AlignBio report DataFrame from ``load_align_report``.
+        DataFrame from curves.csv.
     group_by:
         Column to rank — ``"Media"`` or ``"Organism"``.
+    facet_col:
+        Column to facet on (default ``"atmosphere"``).
+    growth_threshold:
+        Passed to ``_prep_curves_csv`` to flag sub-threshold wells.
     rc:
         Optional rcParams overrides.
     figsize:
@@ -1605,41 +1675,91 @@ def plot_maxod_ranking(
     Figure
     """
     _apply_style(rc)
+    df = _prep_curves_csv(df, growth_threshold=growth_threshold)
 
-    agg = df.groupby(group_by)["MaxOD"].agg(["mean", "std"]).sort_values("mean")
-    colors = _color_cycle(len(agg))
-    default_h = max(4, len(agg) * 0.5)
-    fig, ax = plt.subplots(figsize=figsize or (7, default_h))
+    facet_vals = sorted(df[facet_col].dropna().unique())
+    n_facets = len(facet_vals)
 
-    bars = ax.barh(
-        agg.index,
-        agg["mean"],
-        xerr=agg["std"],
-        color=colors,
-        edgecolor="white",
-        linewidth=0.5,
-        error_kw={"elinewidth": 0.8, "capsize": 3, "ecolor": "#555555"},
+    groups = (
+        df.groupby(group_by)["MaxOD"]
+        .mean()
+        .sort_values(ascending=True)
+        .index.tolist()
     )
-    offset = max(agg["mean"].max() * 0.01, 0.005)
-    for bar, (_, row) in zip(bars, agg.iterrows()):
-        ax.text(
-            row["mean"] + (row["std"] or 0) + offset,
-            bar.get_y() + bar.get_height() / 2,
-            f"{row['mean']:.2f}",
-            va="center",
-            ha="left",
-            fontsize=8,
-        )
+    y_labels = (
+        [_shorten_organism(g) for g in groups]
+        if group_by == "Organism"
+        else groups
+    )
+    colors = dict(zip(groups, _color_cycle(len(groups))))
+    y_pos = np.arange(len(groups))
 
-    ax.set_xlabel("Mean MaxOD600 ± std", fontsize=9)
-    ax.set_ylabel(group_by, fontsize=9)
-    ax.set_title(
+    default_w = max(7, 5.0 * n_facets)
+    default_h = max(4, len(groups) * 0.5)
+    fig, axes = plt.subplots(
+        1,
+        n_facets,
+        figsize=figsize or (default_w, default_h),
+        sharey=True,
+        sharex=True,
+        layout="constrained",
+    )
+    if n_facets == 1:
+        axes = [axes]
+
+    x_max = 0.0
+    for ax, fval in zip(axes, facet_vals):
+        sub = df[df[facet_col] == fval]
+        agg = (
+            sub.groupby(group_by)["MaxOD"]
+            .agg(["mean", "std"])
+            .reindex(groups)
+        )
+        bars = ax.barh(
+            y_pos,
+            agg["mean"],
+            xerr=agg["std"],
+            color=[colors[g] for g in groups],
+            edgecolor="white",
+            linewidth=0.5,
+            error_kw={"elinewidth": 0.8, "capsize": 3, "ecolor": "#555555"},
+        )
+        facet_x_max = (agg["mean"] + agg["std"].fillna(0)).max()
+        if pd.notna(facet_x_max):
+            x_max = max(x_max, facet_x_max)
+        offset = max(facet_x_max * 0.01, 0.005) if pd.notna(facet_x_max) else 0.005
+        for bar, (_, row) in zip(bars, agg.iterrows()):
+            if pd.isna(row["mean"]):
+                continue
+            ax.text(
+                row["mean"] + (row["std"] if pd.notna(row["std"]) else 0) + offset,
+                bar.get_y() + bar.get_height() / 2,
+                f"{row['mean']:.2f}",
+                va="center",
+                ha="left",
+                fontsize=8,
+            )
+
+        ax.set_title(f"{facet_col} = {fval}", fontsize=10, fontweight="bold")
+        ax.set_xlabel("Mean MaxOD600 ± std", fontsize=9)
+        ax.set_ylim(-0.5, len(groups) - 0.5)
+
+    axes[0].set_ylabel(group_by, fontsize=9)
+    axes[0].set_yticks(y_pos)
+    axes[0].set_yticklabels(y_labels, fontsize=8)
+    for ax in axes[1:]:
+        ax.tick_params(axis="y", labelleft=False)
+
+    if x_max:
+        for ax in axes:
+            ax.set_xlim(0, x_max * 1.15)
+
+    fig.suptitle(
         f"{group_by} ranked by mean MaxOD600",
         fontsize=11,
         fontweight="bold",
+        y=1.02,
     )
-    ax.set_ylim(-0.5, len(agg) - 0.5)
-    fig.tight_layout()
     return fig
 
 
@@ -1861,3 +1981,122 @@ def plot_growth_breadth(
     fig.tight_layout()
     return fig
 
+# ---------------------------------------------------------------------------
+# Growth rate plots
+# ---------------------------------------------------------------------------
+def plot_growth_rate_violin(
+    df: pd.DataFrame,
+    organisms: list[str],
+    *,
+    growth_threshold: float = 0.1,
+    exclude_no_growth: bool = False,
+    filter_param_outliers: bool = False,
+    rc: dict | None = None,
+    figsize: tuple[float, float] | None = None,
+) -> Figure:
+    """Violin plot of growth rate for selected organisms, faceted by atmosphere.
+
+    One vertically stacked panel is drawn per unique ``atmosphere`` value.
+    Each violin summarises the per-well ``growth_rate`` distribution for one
+    organism across all media in that atmosphere.
+
+    Parameters
+    ----------
+    df:
+        Curves CSV with ``strain_name``, ``media_name``, ``max_od``,
+        ``growth_rate``, and ``atmosphere`` columns.
+    organisms:
+        Organism names to include (``Organism`` column after normalisation).
+    growth_threshold:
+        Passed to ``_prep_curves_csv`` to flag sub-threshold wells.
+    exclude_no_growth:
+        If ``True``, drop wells with ``grows == False`` before plotting.
+    filter_param_outliers:
+        If ``True``, values outside the Tukey IQR fence for ``growth_rate``
+        are masked before plotting.
+    rc:
+        Optional rcParams overrides.
+    figsize:
+        Override default figure size.
+
+    Returns
+    -------
+    Figure
+    """
+    _apply_style(rc)
+
+    df = _prep_curves_csv(df, growth_threshold=growth_threshold)
+    if "growth_rate" not in df.columns:
+        raise ValueError("Input df must contain a growth_rate column.")
+    if exclude_no_growth:
+        df = df[df["grows"]]
+
+    if filter_param_outliers:
+        df = _filter_param_outliers(df, ["growth_rate"])
+
+    df = df[df["Organism"].isin(organisms)].dropna(subset=["growth_rate"])
+    if df.empty:
+        raise ValueError("No growth_rate data for the requested organisms.")
+
+    atm_vals = sorted(df["atmosphere"].dropna().unique())
+    org_order = [o for o in organisms if o in df["Organism"].unique()]
+    org_labels = [_shorten_organism(o) for o in org_order]
+    palette = dict(zip(org_order, _color_cycle(len(org_order))))
+
+    default_w = max(8, len(org_order) * 1.2)
+    default_h = max(4, 3.0 * len(atm_vals))
+    fig, axes = plt.subplots(
+        len(atm_vals),
+        1,
+        figsize=figsize or (default_w, default_h),
+        sharex=True,
+        layout="constrained",
+    )
+    if len(atm_vals) == 1:
+        axes = [axes]
+
+    for ax, atm in zip(axes, atm_vals):
+        sub = df[df["atmosphere"] == atm]
+        sns.violinplot(
+            data=sub,
+            x="Organism",
+            y="growth_rate",
+            order=org_order,
+            hue="Organism",
+            palette=palette,
+            dodge=False,
+            ax=ax,
+            inner="quart",
+            cut=0,
+            linewidth=0.8,
+            legend=False,
+        )
+        sns.stripplot(
+            data=sub,
+            x="Organism",
+            y="growth_rate",
+            order=org_order,
+            hue="Organism",
+            palette=palette,
+            dodge=False,
+            ax=ax,
+            size=4,
+            alpha=0.55,
+            jitter=0.15,
+            legend=False,
+        )
+        ax.set_title(f"atmosphere = {atm}", fontsize=10, fontweight="bold")
+        ax.set_ylabel(_PARAM_LABELS["growth_rate"], fontsize=9)
+        ax.set_xlabel("")
+        if ax is axes[-1]:
+            ax.set_xticks(range(len(org_order)))
+            ax.set_xticklabels(org_labels, rotation=35, ha="right", fontsize=8)
+        else:
+            ax.tick_params(axis="x", labelbottom=False)
+
+    fig.suptitle(
+        "Growth rate by organism",
+        fontsize=12,
+        fontweight="bold",
+    )
+    return fig
