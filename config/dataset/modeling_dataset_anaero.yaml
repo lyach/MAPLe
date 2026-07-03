@@ -28,9 +28,9 @@ features:
   n50:
     - log_transform
     - "StandardScaler()"
-
-  # other features
-  media_name: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
+  # media features
+  media_name: "path:data/metadata/modeling/media_features.csv"
+  # condition features
   atmosphere: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
   temperature: "StandardScaler()"
 
