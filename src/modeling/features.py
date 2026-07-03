@@ -126,6 +126,54 @@ def _load_embeddings(path: str | Path) -> pd.DataFrame:
     return df
 
 
+def merge_external_features(
+    cfg: DatasetConfig,
+    df: pd.DataFrame,
+    root: Path | None = None,
+) -> pd.DataFrame:
+    """Merge external feature CSVs (``path:`` specs) into the modeling DataFrame.
+
+    Must be called **once** on the full DataFrame before any train/test
+    splitting so that both partitions contain the new columns.
+    """
+    if root is None:
+        root = Path.cwd()
+
+    df = df.copy()
+
+    for col, spec in cfg.features.items():
+        if not (isinstance(spec, str) and spec.startswith("path:")):
+            continue
+        if col not in df.columns:
+            logger.warning("merge key '{}' not in DataFrame — skipping", col)
+            continue
+
+        feat_path = root / spec[5:].strip()
+        logger.info("merging external features from {} on key '{}'", feat_path, col)
+        feat_df = _load_embeddings(feat_path)
+        feat_key = feat_df.columns[0]
+        feat_cols = [c for c in feat_df.columns if c != feat_key]
+
+        already_present = [c for c in feat_cols if c in df.columns]
+        if already_present:
+            logger.debug("columns {} already in DataFrame — skipping merge", already_present)
+            continue
+
+        join_series = df[col].astype(str).str.strip().str.lower()
+        feat_indexed = feat_df.set_index(feat_key)
+        for fc in feat_cols:
+            df[fc] = join_series.map(feat_indexed[fc]).values
+
+        n_missing = df[feat_cols[0]].isna().sum()
+        if n_missing:
+            logger.warning(
+                "{}/{} rows have no match in {} for key '{}'",
+                n_missing, len(df), feat_path.name, col,
+            )
+
+    return df
+
+
 def build_feature_pipeline(
     cfg: DatasetConfig,
     df: pd.DataFrame,
@@ -167,16 +215,38 @@ def build_feature_pipeline(
             continue
 
         if isinstance(spec, str) and spec.startswith("path:"):
-            emb_path = root / spec[5:].strip()
-            logger.info("loading embeddings from {}", emb_path)
-            emb_df = _load_embeddings(emb_path)
-            emb_key = emb_df.columns[0]
-            emb_cols = [c for c in emb_df.columns if c != emb_key]
+            feat_path = root / spec[5:].strip()
+            logger.info("loading feature table from {}", feat_path)
+            feat_df = _load_embeddings(feat_path)
+            feat_key = feat_df.columns[0]
+            feat_cols = [c for c in feat_df.columns if c != feat_key]
+
+            missing = [c for c in feat_cols if c not in df.columns]
+            if missing:
+                logger.error(
+                    "columns {} from {} not in DataFrame — "
+                    "call merge_external_features() first. Skipping.",
+                    missing, feat_path.name,
+                )
+                continue
+
             group_name = "strain_emb" if "strain" in col else "media_emb"
-            for ec in emb_cols:
-                feature_group_map[ec] = group_name
-            transformers.append((col, "passthrough", emb_cols))
-            feature_columns.extend(emb_cols)
+
+            numeric_cols = [c for c in feat_cols if pd.api.types.is_numeric_dtype(feat_df[c])]
+            categorical_cols = [c for c in feat_cols if not pd.api.types.is_numeric_dtype(feat_df[c])]
+
+            for fc in feat_cols:
+                feature_group_map[fc] = group_name
+
+            if numeric_cols:
+                transformers.append((f"{col}_num", "passthrough", numeric_cols))
+                feature_columns.extend(numeric_cols)
+
+            if categorical_cols:
+                cat_encoder = OneHotEncoder(sparse_output=False, handle_unknown="ignore")
+                transformers.append((f"{col}_cat", cat_encoder, categorical_cols))
+                feature_columns.extend(categorical_cols)
+
             continue
 
         try:
@@ -273,6 +343,7 @@ def featurize(
     groups : ndarray of strain names (for group-aware CV)
     feature_group_map : dict mapping raw columns to semantic groups
     """
+    df = merge_external_features(cfg, df, root=root)
     ct, _, feature_group_map = build_feature_pipeline(cfg, df, root=root)
     ct.fit(df)
     X = ct.transform(df)

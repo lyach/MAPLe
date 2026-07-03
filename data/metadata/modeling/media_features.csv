@@ -1,0 +1,12 @@
+media_name,complexity,richness,has_blood_components,has_yeast_extract,has_peptone
+lb,undefined,moderate,0,1,1
+mb,undefined,rich,0,1,1
+nb,undefined,moderate,0,0,1
+bhi,undefined,rich,1,0,1
+mrs,undefined,rich,0,1,1
+thy,undefined,rich,1,1,1
+tsb,undefined,rich,0,0,1
+gifu,undefined,rich,1,1,1
+mrc,semi_defined,rich,0,1,1
+cdm,defined,minimal,0,0,0
+m9,defined,minimal,0,0,0

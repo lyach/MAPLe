@@ -30,6 +30,7 @@ from src.modeling.features import (
     build_feature_group_index,
     build_feature_pipeline,
     get_feature_names,
+    merge_external_features,
     warn_loso_onehot,
 )
 from src.modeling.interpret import run_interpretation
@@ -218,6 +219,9 @@ def main() -> None:
     logger.info("dataset shape: {} rows x {} cols", *df.shape)
 
     df = _filter_for_task(df, exp_cfg.task)
+
+    # Merge external feature tables (path: specs) before splitting
+    df = merge_external_features(ds_cfg, df, root=ROOT)
 
     # --- CV loop ---
     logger.info("=" * 60)
