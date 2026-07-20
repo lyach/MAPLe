@@ -216,7 +216,6 @@ def build_feature_pipeline(
 
         if isinstance(spec, str) and spec.startswith("path:"):
             feat_path = root / spec[5:].strip()
-            logger.info("loading feature table from {}", feat_path)
             feat_df = _load_embeddings(feat_path)
             feat_key = feat_df.columns[0]
             feat_cols = [c for c in feat_df.columns if c != feat_key]

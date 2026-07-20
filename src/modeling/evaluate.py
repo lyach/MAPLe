@@ -110,19 +110,42 @@ def evaluate_fold(
 # Aggregate across folds
 # ---------------------------------------------------------------------------
 
+def _is_numeric_metric(value: Any) -> bool:
+    """True for real floats/ints (incl. NaN); false for str/bool metadata."""
+    if isinstance(value, (bool, str)) or value is None:
+        return False
+    try:
+        float(value)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
 def aggregate_metrics(
-    fold_metrics: list[dict[str, float]],
+    fold_metrics: list[dict[str, Any]],
 ) -> dict[str, dict[str, float]]:
     """Compute mean +/- std of each metric across folds.
+
+    Per-fold NaNs are dropped before aggregation.
     """
     if not fold_metrics:
         return {}
 
-    keys = fold_metrics[0].keys()
+    keys = [
+        k for k, v in fold_metrics[0].items()
+        if _is_numeric_metric(v) and k not in {"fold", "n_train", "n_test"}
+    ]
     agg: dict[str, dict[str, float]] = {}
 
     for k in keys:
-        vals = [fm[k] for fm in fold_metrics if not np.isnan(fm.get(k, float("nan")))]
+        vals = []
+        for fm in fold_metrics:
+            v = fm.get(k, float("nan"))
+            if not _is_numeric_metric(v):
+                continue
+            fv = float(v)
+            if not np.isnan(fv):
+                vals.append(fv)
         if vals:
             agg[k] = {"mean": float(np.mean(vals)), "std": float(np.std(vals))}
         else:
