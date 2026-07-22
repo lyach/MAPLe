@@ -1,0 +1,21 @@
+# Aerobic + XGBoost
+name: maxod_aero_xgb_loso
+dataset: config/dataset/modeling_dataset_aero.yaml
+model: config/models/xgboost.yaml
+task: max_od
+
+cv:
+  strategy: [loso]
+  n_repeats: 1
+
+metrics: [rmse, r2, pearson_r, mae]
+
+interpret:
+  shap: true
+  group_importance: true
+
+seed: 42
+output_dir: reports
+
+wandb:
+  enabled: false

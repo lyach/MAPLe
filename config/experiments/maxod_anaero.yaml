@@ -1,0 +1,21 @@
+# Anaerobic + XGBoost
+name: maxod_anaero_xgb_lomo
+dataset: config/dataset/modeling_dataset_anaero.yaml
+model: config/models/xgboost.yaml
+task: max_od
+
+cv:
+  strategy: [lomo]
+  n_repeats: 1
+
+metrics: [rmse, r2, pearson_r, mae]
+
+interpret:
+  shap: true
+  group_importance: true
+
+seed: 42
+output_dir: reports
+
+wandb:
+  enabled: false

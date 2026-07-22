@@ -1,14 +1,14 @@
-# Experiment: XGBoost on aerobic growth classification
-name: aerobic_xgboost_growth_class
+# Aerobic + XGBoost
+name: growth_class_aero_xgb_lomo
 dataset: config/dataset/modeling_dataset_aero.yaml
 model: config/models/xgboost.yaml
 task: growth_class
 
 cv:
-  strategy: [loso]
+  strategy: [lomo]
   n_repeats: 1
 
-metrics: [auroc, f1, mcc, balanced_accuracy]
+metrics: [auroc, pr_auc, f1, mcc, balanced_accuracy]
 
 interpret:
   shap: true
