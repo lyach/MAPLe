@@ -7,6 +7,7 @@ Strategies
 - ``grouped`` : GroupKFold grouped by ``strain_name``
 - ``stratified_grouped`` : StratifiedGroupKFold (stratified by target, grouped
   by ``strain_name``)
+- ``random`` : Shuffled KFold with no grouping (rows split randomly).
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ import pandas as pd
 from loguru import logger
 from sklearn.model_selection import (
     GroupKFold,
+    KFold,
     LeaveOneGroupOut,
     StratifiedGroupKFold,
 )
@@ -33,6 +35,7 @@ def make_splits(
     df: pd.DataFrame,
     y: np.ndarray | None = None,
     n_splits: int = 5,
+    seed: int = 42,
 ) -> Iterator[tuple[np.ndarray, np.ndarray]]:
     """Yield (train_idx, test_idx) arrays for the chosen CV strategy.
 
@@ -40,13 +43,15 @@ def make_splits(
     ----------
     strategy:
         One of ``"loso"``, ``"lomo"``, ``"grouped"``,
-        ``"stratified_grouped"``.
+        ``"stratified_grouped"``, ``"random"``.
     df:
         Modeling DataFrame (needs ``strain_name`` and/or ``media_name``).
     y:
         Target array, required for ``stratified_grouped``.
     n_splits:
-        Number of folds for ``grouped`` / ``stratified_grouped``
+        Number of folds for ``grouped`` / ``stratified_grouped`` / ``random``.
+    seed:
+        Random seed for shuffled strategies (``random``). Ignored otherwise.
     """
     strategy = strategy.lower().strip()
 
@@ -80,10 +85,19 @@ def make_splits(
         logger.info("StratifiedGroupKFold: {} folds", n_splits)
         yield from splitter.split(df, y, groups=groups)
 
+    elif strategy == "random":
+        n_splits = min(n_splits, len(df))
+        splitter = KFold(n_splits=n_splits, shuffle=True, random_state=seed)
+        logger.info(
+            "KFold (random): {} folds, shuffle=True, seed={}",
+            n_splits, seed,
+        )
+        yield from splitter.split(df)
+
     else:
         raise ValueError(
             f"Unknown CV strategy '{strategy}'. "
-            "Choose from: loso, lomo, grouped, stratified_grouped"
+            "Choose from: loso, lomo, grouped, stratified_grouped, random"
         )
 
 

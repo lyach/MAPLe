@@ -219,6 +219,7 @@ To run a different task, change `task` in the experiment config and re-run. The 
 | `lomo`               | `LeaveOneGroupOut`     | `media_name`  | one per medium           | Generalization to new media     |
 | `grouped`            | `GroupKFold`           | `strain_name` | configurable (default 5) | Replicates stay together        |
 | `stratified_grouped` | `StratifiedGroupKFold` | `strain_name` | configurable (default 5) | Stratified + grouped            |
+| `random`             | `KFold` (shuffled)     | *(none)*      | configurable (default 5) | Interpolation / leakage baseline |
 
 
 Multiple strategies can be specified as a list in the experiment config; each is evaluated independently.

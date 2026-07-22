@@ -87,7 +87,9 @@ def run_cv_loop(
         warn_loso_onehot(ds_cfg, strategy)
 
         fold_num = 0
-        for train_idx, test_idx in make_splits(strategy, df, y=df[task].values):
+        for train_idx, test_idx in make_splits(
+            strategy, df, y=df[task].values, seed=exp_cfg.seed
+        ):
             fold_num += 1
             fold_label = get_fold_group_label(strategy, df, test_idx)
             logger.info("--- {}: fold {} (held-out: {}) ---", strategy, fold_num, fold_label)
@@ -96,7 +98,8 @@ def run_cv_loop(
             df_test = df.iloc[test_idx]
 
             # Fit feature pipeline on train only (leakage-safe)
-            ct, _, fgm = build_feature_pipeline(ds_cfg, df_train, root=ROOT)
+            ct, feature_cols, fgm = build_feature_pipeline(ds_cfg, df_train, root=ROOT)
+            logger.info(" features: {}", feature_cols)
             ct.fit(df_train)
             X_train = ct.transform(df_train)
             X_test = ct.transform(df_test)
