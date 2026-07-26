@@ -1,0 +1,36 @@
+# config/dataset/pathway_features.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# Config for build_pathway_features.py
+#
+# Usage:
+#   python scripts/build_pathway_features.py config/dataset/pathway_features.yaml
+#   python scripts/build_pathway_features.py config/dataset/pathway_features.yaml --emit-diagnostics
+#
+# Run this only after DRAM has been run on DRAC (see docs/pathway_features.md)
+# and its distillate/ output has been copied back to distillate_dir below.
+#
+# The canonical output is always written: kegg_pathway_completeness.csv
+# (continuous 0.0-1.0 fractions). The two tunables below only affect the
+# --emit-diagnostics extras (kegg_pathway_presence.csv, eda_pca_exploratory
+# *.csv) -- neither of those is a modeling input, see build_pathway_features.py.
+# ─────────────────────────────────────────────────────────────────────────────
+
+strains_metadata: data/external/strains_metadata.csv
+distillate_dir: data/external/dram/distillate
+product_tsv: product.tsv
+
+output_dir: data/external
+
+# --emit-diagnostics only. A pathway/module is "present" once its
+# completeness reaches this fraction (0-1) in the diagnostic presence/
+# absence export. 0.8 favors precision: with ~25 strains and ~500 candidate
+# pathways, false positives from partially-annotated genomes are a bigger
+# risk than missing a borderline-complete pathway.
+completeness_threshold: 0.8
+
+# --emit-diagnostics only. Controls the EDA PCA export (eda_pca_exploratory
+# .csv) -- a single global fit for visualization, NOT a modeling input (see
+# eda_pca_exploratory.csv's header comment in pca.py for why). 15 is the
+# mid-point of the plan doc's suggested 10-20 components for n=25 strains.
+pca_n_components: 15
+pca_random_state: 42
