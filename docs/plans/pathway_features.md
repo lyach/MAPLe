@@ -117,3 +117,60 @@ Frameworks that could be used for this pipeline:
    - Cons: would need to write a custom script to map those KOs to KEGG pathways, calculate the completeness thresholds (e.g., 27/30 genes present), and build the final matrix.
    - [Repo](https://github.com/eggnogdb/eggnog-mapper)
 
+
+## Analysis
+
+4 questions to answer: 
+1. Is the pathway matrix trustworthy? (sanity check)
+2. Do pathways separate strains biologically?
+3. Do pathways relate to growth? (MaxOD/growth class)
+4. How many PCs are best for modeling?
+
+Place plots under `src/modeling/plots.py`, visualize in a notebook called `04_pathway_matrix_HA.ipynb`:
+
+### 1. Pathway count vs assembly quality scatter
+**Is the pathway matrix trustworthy?**
+
+| Aspect | Detail |
+| --- | --- |
+| Plot | Scatter: x = `num_contigs` (log scale), y = total pathways detected per strain. Color by `assembly_level` (complete/scaffold/contig). Label each point with strain name. |
+| What to look for | If fragmented assemblies (right side of x-axis) have **fewer** pathways, annotation artifacts are present. A strain with 42 contigs but similar genome size to a complete genome should have a similar pathway count - if it's much lower, missing genes caused false absences. |
+| How to compute | Sum each row of the binary matrix. Merge with `strains_metadata.csv` on strain. |
+
+### 2. PCA biplot
+**Do pathways separate strains biologically?**
+
+| Aspect | Detail |
+| --- | --- |
+| Plot | Scatter of strains in PC1 vs PC2 space. Label each point with strain name. Color by phylum. Overlay the top 10 pathway loadings as arrows to show which pathways drive the separation. |
+| What to look for | Related strains should cluster. If PC1 separates phylums (distance in the x axis), the matrix captures biological signal. If instead PC1 separates "complete" from "fragmented" assemblies, the matrix is encoding technical artifacts. |
+| How to compute | `sklearn.decomposition.PCA` on the binary matrix. For the biplot arrows, use `pca.components_[0:2, :]` and select the top-10 pathways by loading magnitude. |
+
+### 3. Pathway count vs mean max_od scatter
+**Do pathways relate to growth?**
+
+| Aspect | Detail |
+| --- | --- |
+| Plot | Scatter: x = total pathways per strain, y = mean `max_od` across all media (from the curves CSV). Color by phylum. Add Pearson r score. |
+| What to look for | Strains with more pathways might grow better on average across diverse media. A positive correlation supports the hypothesis that pathway features carry signal for growth. A flat line suggests pathways and growth are orthogonal. |
+| How to compute | Group curves CSV by `strain_name`, compute mean `max_od`. Merge with pathway row sums. |
+
+### 4.1. Scree plot (cumulative explained variance)
+**How many PCs are best for modeling?**
+
+| Aspect | Detail |
+| --- | --- |
+| Plot | Line plot: x = number of PCA components (1 to 25), y = cumulative explained variance ratio. Horizontal reference lines at 80%, 90%, 95%. |
+| What to look for | The elbow where additional components add diminishing returns. It tells which components will capture most variance and are worth keeping. |
+| How to compute | `PCA(n_components=25).fit(X_pathway)`, then `np.cumsum(pca.explained_variance_ratio_)`. |
+
+### 4.2. LOSO performance vs number of PCA components
+**How many PCs are best for modeling?**
+
+| Aspect | Detail |
+| --- | --- |
+| Plot | Line plot with error bars: x = number of PCA components used as strain features (1, 2, 3, 5, 7, 10, 15, 20), y = LOSO RMSE for `max_od` regression (mean +/- std across folds). Overlay a horizontal reference line for the LOSO performance with baseline genome features (eg `gc_content_pct`, `genome_size_bp`, etc). |
+| What to look for | Performance should **increase then plateau** (or dip from overfitting). The plateau point is your answer. If pathway PCs never beat baselines, the annotation doesn't add value for LOSO. It's possible to see other overfitting happening, e.g. beating at 7 components but degrade at 15. |
+| How to compute | For each value of k: fit `PCA(n_components=k)` on the **24 training strains** inside each LOSO fold (leakage-safe — do NOT fit PCA on all 25 strains then split). Transform the held-out strain. Concatenate PC features with media + condition features. Run XGBoost. Record metric. IMPORTANT: **PCA must be fit inside the fold**, otherwise there's leakage. |
+| Repeat for | `growth_class` (but change RMSE to AUROC) to see if the optimal k differs by task. |
+
