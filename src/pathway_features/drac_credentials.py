@@ -17,8 +17,9 @@ that works, mirroring strain_metadata/credentials.py's NCBI email pattern:
        over on every subsequent run.
 
 This means a new collaborator (in or outside the lab) gets prompted for
-their own account the first time they run prepare_dram_manifest.py, instead
-of the script silently submitting jobs against someone else's allocation.
+their own account the first time they run prepare_modular_manifest.py,
+instead of the script silently submitting jobs against someone else's
+allocation.
 """
 
 from __future__ import annotations
@@ -65,7 +66,7 @@ def clear_saved_drac_account() -> bool:
 def _prompt_for_account() -> str:
     """Interactively ask for the user's Slurm billing account."""
     print()
-    print("Submitting a DRAM job to a DRAC cluster needs your Slurm billing")
+    print("Submitting an annotation job to a DRAC cluster needs your Slurm billing")
     print("account (e.g. 'def-yourpi' or 'rrg-yourpi') -- this is tied to")
     print("your PI's allocation, so it's asked for locally rather than")
     print("hardcoded in this repo.")
@@ -73,7 +74,7 @@ def _prompt_for_account() -> str:
     print("Don't know yours? SSH into the cluster and run:")
     print("    sacctmgr show associations user=$USER format=account%30")
     print("Prefer a CPU account if you have both CPU and GPU variants --")
-    print("DRAM's annotation needs no GPU.")
+    print("this pipeline needs no GPU.")
     print()
 
     while True:

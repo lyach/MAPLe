@@ -1,23 +1,84 @@
-# Building metabolic-pathway features with DRAM
+# Building metabolic-pathway features (modular pipeline)
 
 ## Overview
 
-This pipeline derives a strain × KEGG-pathway feature matrix from the genome FASTA files in `data/external/fasta/` (see [`docs/plans/pathway_features.md`](plans/pathway_features.md) for the original design). Gene prediction, KO annotation, and pathway-completeness scoring are all done by **DRAM** (`DRAM.py annotate` + `DRAM.py distill`), parsed locally into a continuous strain × pathway completeness matrix — the canonical modeling input. No dimensionality reduction is precomputed here: PCA on this matrix must be fit inside the modeling pipeline's cross-validation loop, on training strains only, not globally in this script (see "What it produces" below).
+This pipeline derives a strain × KEGG-pathway feature matrix from the genome FASTA files in `data/external/fasta/` (see [`docs/plans/pathway_features.md`](plans/pathway_features.md) for the original design). It's a modular, license-independent pipeline built from four small, purpose-specific tools:
 
-**Confirmed working end-to-end on Nibi** (25 strains → `kegg_pathway_completeness.csv`, 25 strains × 52 pathways after dropping 46 constant columns). Getting there required patching four separate upstream bugs, all documented below and searchable by their `RERUN_WHEN_*`/`Known upstream bug` markers — none of them are issues in this repo's own code.
+- **Pyrodigal** — gene calling
+- **PyKofamSearch** — KO (KEGG Orthology) annotation
+- **EBI's `give_completeness`** (kegg-pathways-completeness-tool) — KEGG-module completeness scoring
+- **CheckM2** — genome completeness/contamination (a required confounder feature, independent of pathway coverage)
 
-> **⚠ KEGG license pending — KOfam-only is a temporary fallback, not the final config.**
-> The KEGG license needed for UniRef90 (and true KEGG gene data) hasn't arrived yet. Until it does, `setup_dram_env.sh` runs DRAM with `--skip_uniref` (KOfam-only), which is enough to unblock modeling-pipeline development this week but is **not the final annotation**. Search this repo for `RERUN_WHEN_KEGG_LICENSED` for the exact TODO marker — once the license lands, DRAM must be re-run without `--skip_uniref` and every downstream pathway-feature CSV regenerated. Do not treat KOfam-only output as final for any published result.
->
-> Separately (unrelated to the license): dbCAN and VOGDB are also currently excluded via `--select_db`, but only because DRAM-bio 1.5.0's hardcoded download URLs for both are stale (`bcb.unl.edu` and `fileshare.csb.univie.ac.at` respectively — both hosts have since moved/redirected). MEROPS is **not** gated by anything and downloads normally. Search for `RERUN_WHEN_DBCAN_URL_FIXED` / `RERUN_WHEN_VOGDB_URL_FIXED`.
+No dimensionality reduction is precomputed — if the modeling pipeline wants a reduced pathway representation, it must fit PCA inside its own cross-validation loop, on training strains only, not globally here.
 
-**This is the first HPC-dependent step in the repo.** DRAM's own docs state that even its lightest configuration (KOfam-only, skipping UniRef90) needs ~128GB RAM to build its databases and <50GB RAM to annotate — far more than a typical dev machine has. The pipeline therefore runs across **two environments**:
+**Status: complete, confirmed working end-to-end on real data, all 25 strains.** Environment setup, a smoke test, the full 25-genome annotation run, and all local post-processing (module completeness, CheckM2 confounder, gene × pathway matrix) are done and verified against the real 25-strain dataset — not fixtures. **Full-run footprint: 24.9GB peak RSS / 36m26s** for annotation on Nibi.
 
-1. **Local** (this repo) — `prepare_dram_manifest.py` validates the input FASTA files and prints the commands to ship them out.
-2. **Remote** (a DRAC — Digital Research Alliance of Canada — HPC cluster, Slurm-based) — you run DRAM by hand using the artifacts in `scripts/hpc/`.
-3. **Local again** (this repo) — `build_pathway_features.py` parses DRAM's output back into the modeling-ready CSVs.
+---
 
-Nothing in this repo can execute steps 2 for you — a DRAC account/allocation and a manual `rsync`/`sbatch`/`rsync` round trip are required.
+## Running this pipeline end-to-end
+
+Every command below, in order, no commentary — see "Step-by-step workflow" further down for the reasoning behind each one.
+
+```bash
+# 1. Local: build the manifest
+python scripts/prepare_modular_manifest.py
+
+# 2. Ship FASTA files + HPC scripts to your cluster (replace Nibi with your own SSH host/alias)
+rsync -avz data/external/fasta/ Nibi:scratch/modular_pathway/fasta/
+rsync -avz scripts/hpc/ Nibi:scratch/modular_pathway/hpc/
+
+# 3. On the cluster: one-time environment + database setup
+sbatch --account=<your-cpu-account> --mem=32G --cpus-per-task=4 --time=3:00:00 \
+  --job-name=modular-setup --output=%x-%j.out \
+  --wrap="bash \$HOME/scratch/modular_pathway/hpc/setup_modular_env.sh"
+
+# 4. On the cluster, once step 3 finishes: run the annotation (Pyrodigal -> PyKofamSearch -> CheckM2)
+sbatch --account=<your-cpu-account> $HOME/scratch/modular_pathway/hpc/run_modular_annotate.sbatch
+
+# 5. Copy the results back
+rsync -avz Nibi:scratch/modular_pathway/output/ko_annotation/ data/external/modular_pathway/ko_annotation/
+rsync -avz Nibi:scratch/modular_pathway/output/checkm2/quality_report.tsv data/external/modular_pathway/checkm2/
+rsync -avz --exclude='all_proteins.faa' --include='*.faa' --exclude='*.gff' \
+  Nibi:scratch/modular_pathway/output/genes/ data/external/modular_pathway/genes/
+
+# 6. Local: build the canonical completeness matrix + CheckM2 confounder feature
+python scripts/build_modular_pathway_features.py config/dataset/modular_pathway_features.yaml
+# -> data/external/modular_pathway/kegg_pathway_completeness.csv  (25 strains x 385 modules)
+# -> data/external/modular_pathway/checkm2_quality.csv
+
+# 7. Local: build the gene x pathway membership matrix
+python scripts/build_modular_gene_pathway_matrix.py config/dataset/modular_gene_pathway_membership.yaml
+# -> data/external/modular_pathway/gene_pathway_membership/gene_pathway_membership_{strain}.csv
+# -> data/external/modular_pathway/gene_pathway_membership/kegg_module_lookup.csv
+```
+
+Steps 1 and 6–7 are fast, local, and safe to re-run (pass `--force` to overwrite existing output). Steps 3–5 involve the HPC cluster and take from minutes (step 3) to ~40 minutes (step 4, confirmed on 25 genomes) — not something to re-run live in a short demo.
+
+### Why these tools
+
+No KEGG license, no Ruby/conda dependency (matching Alliance's guidance against conda on the shared filesystem), and no heavy database build — everything installs via pip plus two small hand-installed static binaries (DIAMOND, Prodigal — both needed internally by CheckM2, not by the main gene-calling step).
+
+| Job | Tool | Version | Why this one |
+|---|---|---|---|
+| Gene calling | [Pyrodigal](https://github.com/althonos/pyrodigal) | `3.7.1` | Cython reimplementation of Prodigal, pure pip wheel (no external binary), actively maintained. CLI mirrors Prodigal's own flags. |
+| KO annotation | [PyKofamSearch](https://github.com/jolespin/pykofamsearch) | `2025.9.5` | PyHMMER-based KofamScan reimplementation, pure pip wheel. Checked maintenance health directly: `main` branch activity stops 2025-09, but `dev` branch has a merged PR as recent as 2026-07-22 — actively maintained via a dev-branch workflow, not stale. Pinned to the last PyPI release (`2025.9.5`) rather than installing from `dev`, since that branch's newer feature (`--anvio_bitscore_heuristic`) isn't needed here. |
+| Module completeness | [kegg-pathways-completeness](https://github.com/EBI-Metagenomics/kegg-pathways-completeness-tool) (`give_completeness`) | `1.4.3` | EBI tool, bundles its own reference data (no database download), runs **locally** — see below. Verified live against a real KO table; outputs real KEGG module IDs (`module_accession`) directly, no separate ID-mapping step needed. |
+| Genome quality (confounder feature) | [CheckM2](https://github.com/chklovski/CheckM2) | `1.1.0` | ML-based completeness/contamination predictor. **Installed from its GitHub tag, not PyPI** — PyPI is stuck on the 2023-01 `1.0.1` release, while `1.1.0` (tagged 2025-02) is the version matching the current reference database (Zenodo record 14897628). Needs DIAMOND `2.1.11` + Prodigal `2.6.3` internally (both hand-installed static binaries, versions pinned to exactly what CheckM2's own `checkm2.yml` conda recipe tests against — CheckM2 declares no pip `install_requires` itself, so nothing pins these for you). |
+
+### This is the first HPC-dependent step in the repo
+
+Pyrodigal, PyKofamSearch, and CheckM2 run on a DRAC (Digital Research Alliance of Canada) HPC cluster. `give_completeness` is fast and needs no database, so it runs **locally** instead — meaning the module-completeness step is quick to iterate on/re-run without touching DRAC at all. The pipeline runs across **two environments**:
+
+```
+LOCAL                          REMOTE (DRAC/Nibi)                    LOCAL
+─────                          ───────────────────                  ─────
+prepare_modular_manifest.py →  1. Pyrodigal (gene calling)
+                                2. PyKofamSearch (KO annotation)  →  build_modular_pathway_features.py
+                                3. CheckM2 (genome quality)       →    (give_completeness + CheckM2 confounder)
+                                                                   →  build_modular_gene_pathway_matrix.py
+```
+
+Nothing in this repo can execute the remote step for you — a DRAC account/allocation and a manual `rsync`/`sbatch`/`rsync` round trip are required.
 
 ---
 
@@ -25,15 +86,15 @@ Nothing in this repo can execute steps 2 for you — a DRAC account/allocation a
 
 | Output | Path | Contents |
 |---|---|---|
-| FASTA manifest | `data/interim/dram/fasta_manifest.csv` | strain ↔ accession ↔ FASTA filename, cross-validated against `strains_metadata.csv` |
-| DRAM distillate (copied back from DRAC) | `data/external/dram/distillate/product.tsv` | genome × module completeness percentages, DRAM's raw output |
-| **Completeness matrix — canonical modeling input** | `data/external/kegg_pathway_completeness.csv` | strain × pathway, continuous 0.0-1.0 fractions. **This is what downstream feature pipelines should read.** Always written. |
-| Presence/absence matrix — diagnostic only | `data/external/kegg_pathway_presence.csv` | strain × pathway, 0/1, thresholded from completeness. Manual inspection only, **not a modeling input**. Written only with `--emit-diagnostics`. |
-| EDA PCA scores — exploratory only | `data/external/eda_pca_exploratory.csv` | strain × principal component, numeric. A single fit across *all* strains — **must never be joined into training data**, since that leaks test-strain information ahead of cross-validation. Written only with `--emit-diagnostics`. |
-| EDA PCA loadings | `data/external/eda_pca_exploratory_loadings.csv` | component × pathway, for the exploratory fit above. Written only with `--emit-diagnostics`. |
-| Gene × pathway membership (additive, optional) | `data/external/dram/gene_pathway_membership/gene_pathway_membership_{strain}.csv` | gene × KEGG-module-ID, binary, multi-label. One file per strain. Independent of the completeness matrix — see step 4 below. |
-| KEGG module lookup | `data/external/dram/gene_pathway_membership/kegg_module_lookup.csv` | module ID → human-readable name, written once |
-| Run log | `logs/run_<timestamp>.log` | full record of all three local scripts |
+| FASTA manifest | `data/interim/modular_pathway/fasta_manifest.csv` | strain ↔ accession ↔ FASTA filename, cross-validated against `strains_metadata.csv` |
+| KO annotation (copied back from DRAC) | `data/external/modular_pathway/ko_annotation/ko_hits.tsv` | PyKofamSearch's raw per-protein KO hits |
+| CheckM2 output (copied back from DRAC) | `data/external/modular_pathway/checkm2/quality_report.tsv` | per-genome completeness/contamination, raw |
+| Per-genome protein FASTAs (copied back from DRAC) | `data/external/modular_pathway/genes/{accession}.faa` | Pyrodigal's predicted proteins — needed for the full gene universe, not just hits |
+| **Completeness matrix — canonical modeling input** | `data/external/modular_pathway/kegg_pathway_completeness.csv` | strain × KEGG-module, continuous 0.0-1.0 fractions. **Confirmed on real data: 25 strains × 385 modules.** |
+| **CheckM2 confounder — required feature** | `data/external/modular_pathway/checkm2_quality.csv` | strain × `[checkm2_completeness, checkm2_contamination]`, 0.0-1.0 fractions |
+| Gene × pathway membership (additive) | `data/external/modular_pathway/gene_pathway_membership/gene_pathway_membership_{strain}.csv` | gene × KEGG-module-ID, binary, multi-label. One file per strain. Independent of the completeness matrix. |
+| KEGG module lookup | `data/external/modular_pathway/gene_pathway_membership/kegg_module_lookup.csv` | module ID → human-readable name, written once |
+| Run log | `logs/run_<timestamp>.log` | full record of the local scripts |
 
 ---
 
@@ -42,100 +103,78 @@ Nothing in this repo can execute steps 2 for you — a DRAC account/allocation a
 ### 1. Local: prepare the manifest
 
 ```
-python scripts/prepare_dram_manifest.py
+python scripts/prepare_modular_manifest.py
 ```
 
-Cross-checks `data/external/strains_metadata.csv` against `data/external/fasta/`, writes `data/interim/dram/fasta_manifest.csv`, and prints the rsync + sbatch commands to ship the FASTA files and `scripts/hpc/` to your DRAC cluster. Any FASTA file without a metadata row (or vice versa) is excluded and logged rather than silently included.
+Cross-checks `data/external/strains_metadata.csv` against `data/external/fasta/`, writes `data/interim/modular_pathway/fasta_manifest.csv`, and prints the rsync + sbatch commands to ship the FASTA files and `scripts/hpc/` to your DRAC cluster. Any FASTA file without a metadata row (or vice versa) is excluded and logged rather than silently included. Confirmed working against the real 25/26-strain FASTA set.
 
 The printed `sbatch` commands include your Slurm billing account, filled in automatically. **No lab's account is hardcoded anywhere in this repo** — the first time you run this script, you'll be prompted for your own (e.g. `def-yourpi` or `rrg-yourpi`; find yours on the cluster with `sacctmgr show associations user=$USER format=account%30`), and it's cached locally in `.drac_credentials.json` (gitignored, mirrors how `strain_metadata`'s NCBI email works — see `src/pathway_features/drac_credentials.py`). Set the `DRAC_ACCOUNT` environment variable instead to skip the prompt (e.g. in CI).
 
-### 2. Remote: run DRAM on DRAC
-
-`setup_dram_env.sh`'s database-processing step can need up to ~128GB RAM — too heavy to run directly on a shared login node (Alliance monitors and throttles/kills heavy processes there). Submit it through Slurm instead, as its own job (`prepare_dram_manifest.py` prints both commands below for you, with your account and paths already filled in — the paths are `$HOME`-relative so they work regardless of your current directory):
+### 2. Remote: run the pipeline on DRAC
 
 ```
-sbatch --account=<your-cpu-account> --mem=128G --cpus-per-task=8 --time=6:00:00 \
-  --job-name=dram-setup --output=%x-%j.out \
-  --wrap="bash $HOME/scratch/dram/hpc/setup_dram_env.sh"
+sbatch --account=<your-cpu-account> --mem=32G --cpus-per-task=4 --time=3:00:00 \
+  --job-name=modular-setup --output=%x-%j.out \
+  --wrap="bash $HOME/scratch/modular_pathway/hpc/setup_modular_env.sh"
 ```
 
-This needs internet access for `pip install DRAM-bio`, the `barrnap` download, and the database download — confirmed available from Nibi's compute nodes specifically (not all Alliance clusters allow this; some restrict compute-node internet entirely, in which case the network-heavy parts would need to run from a login node instead and only the heavy processing submitted via Slurm).
-
-Once that job completes (check with `squeue -u $USER`, inspect the `.out` log for errors), submit the actual annotation job (the second printed command):
+then, once that completes:
 
 ```
-sbatch --account=<your-cpu-account> $HOME/scratch/dram/hpc/run_dram_annotate.sbatch
+sbatch --account=<your-cpu-account> $HOME/scratch/modular_pathway/hpc/run_modular_annotate.sbatch
 ```
 
-Setup uses Alliance's module system plus a Python virtualenv rather than conda — Alliance's docs discourage building conda environments in `$HOME`, since the huge file count strains their shared filesystem. Check `module spider <name>` for `prodigal`, `hmmer`, `mmseqs2`, `trnascan-se`, and `bedtools` (a `barrnap` dependency) first; these are commonly available as Alliance modules (confirmed on Nibi). `barrnap` itself typically isn't, but is a pure-Perl script `setup_dram_env.sh` installs by hand — **pinned to tag `0.9`, not `master`**. `master` has grown into a much larger rewrite (barrnap 1.x) that checks for 12 external tools at startup (`cmsearch`, `cmscan`, `bedtools`, `aragorn`, `any2fasta`, `seqkit`, `make`, `transterm`, `ziggypep`, `pyrodigal`, `diamond`, `taxonkit`) — discovered the hard way, one missing dependency at a time. Tag `0.9` is the original, minimal version DRAM-bio 1.5.0 was actually built against: it only needs `nhmmer` (covered by the `hmmer` module) and `bedtools`. `pip install DRAM-bio` itself is confirmed working on Nibi — Alliance has it pre-built in their own wheelhouse (`+computecanada` suffix), so it (and nearly all its dependencies) install from local disk, not PyPI.
+`setup_modular_env.sh` creates a venv, pip-installs Pyrodigal/PyKofamSearch/CheckM2's dependencies (pinned versions per the table above), hand-installs the DIAMOND/Prodigal static binaries CheckM2 needs internally, downloads the KOfam database (`serialize_kofam_models`, over KEGG's FTP server — re-verify compute-node FTP access if run on a cluster other than Nibi), and downloads CheckM2's reference database (`checkm2 database --download`, from Zenodo). Confirmed running clean end-to-end on Nibi with no errors.
 
-**`setup_dram_env.sh` also hand-installs the official Prodigal 2.6.3 static binary and puts it ahead of the module on `PATH`** — Nibi's `prodigal/2.6.3` module is a real module that loads fine, but its build is broken: it silently produces truncated GFF output missing the `ID=`/`partial=`/`start_type=`/score fields DRAM's own annotation code parses. Confirmed by running the identical input through the [official static v2.6.3 binary](https://github.com/hyattpd/Prodigal/releases/tag/v2.6.3) with the exact same flags — same Prodigal version, correct output — so this is specific to Alliance's build, not a real Prodigal/DRAM-bio compatibility gap. Marked `RERUN_WHEN_ALLIANCE_PRODIGAL_FIXED`, though there's no real downside to leaving the override in place indefinitely.
+`run_modular_annotate.sbatch` runs the three remote steps: Pyrodigal once per genome (single mode — these are assembled isolate genomes, not metagenomic contigs, so per-genome training is more accurate than meta mode), a single combined PyKofamSearch call across all genomes' proteins (avoids reloading the KOfam HMM database once per genome), and one batched CheckM2 call across all raw genome FASTAs (CheckM2 does its own internal gene calling, independent of Pyrodigal's output).
 
-#### Known upstream bug: `DRAM.py annotate` crashes on missing gene IDs
-
-If you ever see `AttributeError: 'NoneType' object has no attribute 'group'` in `mag_annotator/annotate_bins.py`'s `annotate_gff`, it means whatever `prodigal` binary is on `PATH` isn't producing `ID=`-tagged GFF output (the regex `ID=\d*_\d*;` won't match, and the code has no fallback). This is what the Prodigal override above prevents. If it recurs on a different cluster, verify with the same test: run `prodigal -i <fasta> -p meta -g 11 -f gff -o test.gff ...` (DRAM's exact invocation, see `run_prodigal()` in `annotate_bins.py`) and check the output has `ID=1_1;partial=...` in the attributes column.
-
-#### Known upstream bug: `DRAM-setup.py` syntax error (DRAM-bio 1.5.0)
-
-The `DRAM-setup.py` entry point installed by `pip install DRAM-bio==1.5.0` (still the latest release on PyPI) has a `SyntaxError` around its `--camper_tar_gz_loc` argument — two `add_argument()` calls got mis-transposed in that release. This is a known, still-unfixed upstream bug ([WrightonLabCSU/DRAM#330](https://github.com/WrightonLabCSU/DRAM/issues/330), [#360](https://github.com/WrightonLabCSU/DRAM/issues/360)), not anything specific to this repo or to DRAC.
-
-**`setup_dram_env.sh` patches this automatically** — no manual step needed. Right after `pip install DRAM-bio`, it runs `python3 -m py_compile` on the installed file; if that fails, it applies an exact-string-match patch (moving the misplaced `help='mmseqs2 database file from ref seq viral gene collection')` line to close the `--viral_loc` call instead of trailing after the CAMPER block) and re-verifies with `py_compile`. If DRAM-bio ever ships a release with a *different* bug in this spot, the patch aborts loudly (rather than guessing) with a pointer back to this section — safe to rerun the whole script if that happens. Idempotent: a second run just sees the file already compiles and skips patching.
-
-#### Known upstream issue: `barrnap`'s `master` branch outgrew what DRAM-bio needs
-
-A naive `git clone` of `barrnap`'s `master` branch (no tag pinned) grabs version 1.10.x, which checks for 12 external tools at startup (`cmsearch`, `cmscan`, `bedtools`, `aragorn`, `any2fasta`, `seqkit`, `make`, `transterm`, `ziggypep`, `pyrodigal`, `diamond`, `taxonkit`) — discovered one missing dependency at a time before realizing the real fix was upstream, not chasing each one down. Tag `0.9` is the original, minimal barrnap DRAM-bio 1.5.0 was actually built against: it only needs `nhmmer` (from the `hmmer` module) and `bedtools`. `setup_dram_env.sh` clones `--branch 0.9` directly, not `master`.
-
-The sbatch job runs `DRAM.py annotate` then `DRAM.py distill`, writing a `distillate/` directory (including `product.tsv`).
+**`#SBATCH --mem`/`--time` are confirmed empirically, not guessed:** a 3-genome smoke test first (`--mem=8G` OOM-killed almost immediately — PyKofamSearch loads its entire ~28k-HMM database into memory up front regardless of genome count, so even a tiny smoke test needs close to full-scale memory; `--mem=32G` then succeeded at 17.5GB peak / 7m22s), followed by the real 25-genome run, measured at **24.9GB peak RSS / 36m26s**. The script's `#SBATCH` directives are set from that real full-run number with headroom, not from a first-pass guess.
 
 Copy the result back:
 
 ```
-rsync -avz <cluster>:~/scratch/dram/output/distillate/ data/external/dram/distillate/
+rsync -avz Nibi:scratch/modular_pathway/output/ko_annotation/ data/external/modular_pathway/ko_annotation/
+rsync -avz Nibi:scratch/modular_pathway/output/checkm2/quality_report.tsv data/external/modular_pathway/checkm2/
+rsync -avz --exclude='all_proteins.faa' --include='*.faa' --exclude='*.gff' \
+  Nibi:scratch/modular_pathway/output/genes/ data/external/modular_pathway/genes/
 ```
 
-### 3. Local: build the feature CSVs
+### 3. Local: module completeness (`give_completeness`) + CheckM2 confounder
 
 ```
-python scripts/build_pathway_features.py config/dataset/pathway_features.yaml
+python scripts/build_modular_pathway_features.py config/dataset/modular_pathway_features.yaml
 ```
 
-Parses `product.tsv`, joins genome IDs back to strain names via `strains_metadata.csv`, and writes `kegg_pathway_completeness.csv` — the canonical, continuous-valued modeling input. Add `--emit-diagnostics` to also write the binary presence/absence matrix and a global exploratory PCA — neither is a modeling input, see the table above. Refuses to overwrite existing outputs unless `--force` is passed (a DRAM run is expensive and remote, so accidental clobbering is guarded against). Fails loudly — not with a silently-shrunk matrix — if any strain from `strains_metadata.csv` is missing from the distillate.
+Runs `give_completeness` **locally via subprocess** (it's fast and database-free) against PyKofamSearch's KO hits, and writes both required outputs:
 
-### 4. Local (optional, additive): build the gene x pathway membership matrices
+- `data/external/modular_pathway/kegg_pathway_completeness.csv` — canonical modeling input, strain × KEGG-module, continuous `[0, 1]` fractions. **Confirmed on real data: 25 strains × 385 modules** — `give_completeness` reports real module IDs directly for everything it scores.
+- `data/external/modular_pathway/checkm2_quality.csv` — required confounder feature, strain × `[checkm2_completeness, checkm2_contamination]`, `[0, 1]` (CheckM2 reports 0–100, rescaled to match this repo's convention).
 
-A separate, independent output from `kegg_pathway_completeness.csv` — does not read, write, or affect it in any way. For each strain, produces a binary matrix of every predicted gene (rows) against KEGG module IDs (columns), indicating which module(s) each gene's KO belongs to.
+Two things worth knowing before trusting this script's output on new data:
 
-Requires the **raw** `annotation/` output rsynced back from DRAC — the `distillate/` sync alone isn't enough, since this needs gene-level KO calls (`annotations.tsv`), not the genome-level summary:
+- **`give_completeness` without `--add-per-contig` pools every genome in the input into one combined result** — confirmed by testing directly. This script always passes `--add-per-contig` to get real per-genome rows.
+- **A genome with zero KO hits produces zero rows in the output, silently — not an error, not a zero-filled row.** `build_completeness_matrix` explicitly reindexes against the full known strain list and zero-fills, rather than trusting a plain pivot to include every strain.
+
+`quality_report.tsv`'s row presence also doubles as this script's per-strain validation (a strain missing from it means the pipeline genuinely failed on that genome) — a genome with real predicted genes but zero KO hits is a separate, valid, non-error case (all-zero completeness row), since `ko_hits.tsv` alone can't tell the two apart.
+
+Same `--force` overwrite guard pattern used throughout this pipeline: refuses to overwrite existing output unless `--force` is passed.
+
+### 4. Local: gene × pathway membership
 
 ```
-rsync -avz Nibi:scratch/dram/output/annotation/ data/external/dram/annotation/
+python scripts/build_modular_gene_pathway_matrix.py config/dataset/modular_gene_pathway_membership.yaml
 ```
 
-Then:
+ADDITIVE: does not read, write, or modify `kegg_pathway_completeness.csv` or `checkm2_quality.csv`, or their generation logic. Sourced from PyKofamSearch's `ko_hits.tsv`. Produces a binary matrix of every predicted gene (rows, including zero-hit genes as explicit all-zero rows) against KEGG module IDs (columns, the same module set `kegg_pathway_completeness.csv` actually has). **Confirmed on real data: 25 strains, 94,149 total genes, 11,589 genes (12.3%) with ≥1 module hit.**
 
-```
-python scripts/build_gene_pathway_matrix.py config/dataset/gene_pathway_membership.yaml
-```
+**Multi-label, not one-hot.** A gene's KO can legitimately belong to more than one KEGG module. Confirmed directly on real output: 258 genes in *E. coli* K12 alone hit more than one module, one hitting 8 simultaneously (a central-metabolism enzyme spanning TCA/related modules). Every applicable module gets a 1 for that gene; this is not forced into a single "best" pathway assignment, because that would misrepresent real biology.
 
-Writes one file per strain — `data/external/dram/gene_pathway_membership/gene_pathway_membership_{strain}.csv` — plus `kegg_module_lookup.csv` (module ID → human-readable name, once). Columns are bare KEGG module IDs (`M00001`), not names, so the matrix stays directly joinable with `kegg_pathway_completeness.csv` on the same module-ID axis; look up readable labels from `kegg_module_lookup.csv` separately rather than expecting them in the matrix header.
+Two design points that came from testing against real output, not assumption:
 
-**Multi-label, not one-hot.** A gene's KO can legitimately belong to more than one KEGG module — e.g. malate dehydrogenase (K00024) belongs to 9 different modules in DRAM's own reference data, since it's a central-carbon enzyme feeding the TCA cycle, glyoxylate cycle, and several others at once. Every applicable module gets a 1 for that gene; this is not forced into a single "best" pathway assignment, because that would misrepresent real biology. See `src/pathway_features/gene_pathway_membership.py`'s docstring.
+- **Requires the per-genome protein FASTAs** (`data/external/modular_pathway/genes/{accession}.faa`, rsynced from `$MODULAR_ROOT/output/genes/` — excluding the combined `all_proteins.faa`), not just `ko_hits.tsv`. Genes with zero KO hits never appear in `ko_hits.tsv` at all, so the all-zero-row spec needs Pyrodigal's own header list as the true gene universe. **The per-genome `.faa` files on disk still have Pyrodigal's raw, unprefixed headers** (e.g. `NZ_AP023410.1_1`) — only the *combined* `all_proteins.faa` that PyKofamSearch actually ran on got accession-prefixed (`run_modular_annotate.sbatch`'s `sed` step). `load_gene_universe` re-applies that same prefix so gene IDs match `ko_hits.tsv`'s `id_protein` values exactly — verified directly against real IDs.
+- **The KO → module mapping is sourced from `give_completeness`'s own bundled reference data** (`kegg_pathways_completeness/pathways_data/modules_table.tsv`, installed alongside the package — no download needed), not re-derived from a separate source. This guarantees the gene × pathway matrix and the completeness matrix share the same KO → module ground truth. Covers 570 modules / 3091 KOs — confirmed to fully cover every module the completeness matrix actually reports (checked directly, 0 gaps).
 
-**Column scope — only 31 of `kegg_pathway_completeness.csv`'s 98 columns are covered.** Checked directly: only 32 of the 98 columns in DRAM's `product.tsv` (31 unique module IDs — one, M00153, legitimately appears under two different labels) correspond to a real, ID-able KEGG module, sourced from DRAM's own `module_step_form.tsv`/`etc_module_database.tsv` reference sheets. The other 66 (`CAZy: *`, `Nitrogen metabolism: *`, `SCFA and alcohol conversions: *`, `Other Reductases: *`, `Photosynthesis: *`, `Sulfur metabolism: *`, `Methanogenesis and methanotrophy: *`) are DRAM's own hand-curated marker-gene categories (from a different sheet, `function_heatmap_form.tsv`) that were never official KEGG modules with M-numbers at all — fabricating an ID for them would be actively wrong, so they're excluded from this matrix rather than faked. See `src/pathway_features/kegg_modules.py`'s docstring for the full accounting.
-
-Same `--force` overwrite guard as `build_pathway_features.py`. Fails loudly and writes nothing (not a partial result set) if any strain's accession has zero rows in `annotations.tsv` — this is different from a strain's genes legitimately having no KO hits, which is normal and produces an all-zero-but-present row, not an error. `--refresh-mapping` re-downloads DRAM's reference sheets instead of using the local cache at `data/interim/dram/kegg_module_mapping/`.
-
----
-
-## Tunables (`config/dataset/pathway_features.yaml`)
-
-Both of these only affect the `--emit-diagnostics` extras — neither touches the canonical `kegg_pathway_completeness.csv` output, which has no tunables (it's just DRAM's completeness fractions, joined to strain names).
-
-| Key | Default | Meaning |
-|---|---|---|
-| `completeness_threshold` | `0.8` | Fraction of a module's KOs that must be present to call it "present" in the diagnostic binary matrix. Set high to favor precision — with only ~25 strains and ~500 candidate pathways, false positives from partially-annotated genomes are riskier than missing a borderline pathway. |
-| `pca_n_components` | `15` | Number of components in the exploratory PCA fit. Runs on raw completeness percentages, so the gradient between e.g. 40%- and 90%-complete pathways isn't lost. |
-| `pca_random_state` | `42` | For reproducible exploratory PCA fits. |
+Same `--force` overwrite guard as step 3. Fails loudly and writes nothing (not a partial result set) if any strain's protein FASTA is missing or empty — this is different from a strain's genes legitimately having no KO hits, which is normal and produces an all-zero-but-present row, not an error.
 
 ---
 
@@ -143,36 +182,37 @@ Both of these only affect the `--emit-diagnostics` extras — neither touches th
 
 ```
 scripts/
-├── prepare_dram_manifest.py       entry point — local, pre-DRAM
-├── build_pathway_features.py      entry point — local, post-DRAM
-├── build_gene_pathway_matrix.py   entry point — local, post-DRAM, additive/optional
+├── prepare_modular_manifest.py          entry point — local, pre-annotation
+├── build_modular_pathway_features.py    entry point — local, post-annotation
+│                                          (give_completeness + CheckM2 confounder)
+├── build_modular_gene_pathway_matrix.py entry point — local, post-annotation, additive
 └── hpc/
-    ├── setup_dram_env.sh          remote — one-time module/venv + database setup
-    ├── run_dram_annotate.sbatch   remote — the annotation job
+    ├── setup_modular_env.sh        remote — venv + binaries + database setup
+    ├── run_modular_annotate.sbatch remote — Pyrodigal + PyKofamSearch + CheckM2
     └── README.md
 src/
 ├── common/
 │   └── logging_setup.py           shared console + timestamped-file logging
 └── pathway_features/
-    ├── config.py                  paths, tunable defaults
-    ├── manifest.py                 strain ↔ accession ↔ FASTA-path table
-    ├── drac_credentials.py          resolves your Slurm billing account (no lab hardcoded)
-    ├── distillate.py                parses product.tsv, joins strain names (canonical output)
-    ├── matrix.py                     completeness → presence/absence (--emit-diagnostics only)
-    ├── pca.py                          StandardScaler + global PCA (--emit-diagnostics only, EDA use only)
-    ├── validation.py                    sanity checks (missing strains, constant columns)
-    ├── kegg_modules.py                   KO → KEGG-module-ID mapping (multi-label; sourced from DRAM's own reference sheets)
-    └── gene_pathway_membership.py          per-strain gene × module-ID binary matrix (multi-label, additive output)
+    ├── config.py                        paths, tunable defaults
+    ├── manifest.py                        strain ↔ accession ↔ FASTA-path table
+    ├── drac_credentials.py                  resolves your Slurm billing account (no lab hardcoded)
+    ├── strain_names.py                        joins any accession-indexed table to canonical strain names
+    ├── checkm2_quality.py                       parses quality_report.tsv (confounder feature)
+    ├── modular_ko.py                              loads ko_hits.tsv + Pyrodigal's per-genome gene universe
+    ├── modular_completeness.py                      runs give_completeness locally, reshapes its sparse
+    │                                                  output into the dense completeness matrix (canonical
+    │                                                  modeling input, written directly)
+    ├── modular_kegg_modules.py                        KO → KEGG-module-ID mapping, from give_completeness's
+    │                                                    own bundled reference data
+    └── modular_gene_pathway_membership.py               per-strain gene × module-ID binary matrix
+                                                            (multi-label, additive output)
 ```
 
 ---
 
 ## Known limitations
 
-- **Requires a DRAC account** — both `setup_dram_env.sh` and `run_dram_annotate.sbatch` are confirmed working end-to-end on Nibi, but re-check module versions/availability on other clusters, as they can differ.
-- **DRAM-bio 1.5.0 ships a broken `DRAM-setup.py`** (see "Known upstream bug" above) — patched automatically by `setup_dram_env.sh`, unrelated to this repo otherwise.
-- **Nibi's `prodigal/2.6.3` module produces broken output** (see "Known upstream bug" above) — overridden with an official static binary in `setup_dram_env.sh`/`run_dram_annotate.sbatch`. Worth re-checking `module spider prodigal` output quality on any other cluster before trusting it.
-- **`barrnap`'s `master` branch has expanded far beyond what DRAM-bio needs** — pinned to tag `0.9` in `setup_dram_env.sh` instead. See "Known upstream bug" below.
-- **KOfam-only annotation — license-pending fallback, not final.** `setup_dram_env.sh` skips UniRef90 (`--skip_uniref`) because the KEGG license needed for it hasn't arrived yet, not because it's the intended long-term config. Marked `RERUN_WHEN_KEGG_LICENSED` in `setup_dram_env.sh` — re-run without `--skip_uniref` once licensed, and regenerate every downstream pathway-feature CSV. Current footprint (~30GB disk / ~128GB RAM to build) was sized against DRAM's documented KOfam-only numbers, not against Nibi's actual available memory partitions — worth confirming with `sinfo` before the full-database rerun, since that job will need proportionally more.
-- **dbCAN and VOGDB excluded — unrelated upstream bugs, not licensing.** `setup_dram_env.sh` excludes `dbcan`/`dbcan_fam_activities`/`dbcan_subfam_ec` and `vogdb`/`vog_annotations` via `--select_db`. Both are the same class of problem, different hosts: DRAM-bio 1.5.0 hardcodes download URLs at `bcb.unl.edu` (dbCAN) and `fileshare.csb.univie.ac.at` (VOGDB), and both hosts have since moved — `bcb.unl.edu` now redirects to a webpage instead of serving files, and `fileshare.csb.univie.ac.at` 301-redirects to `fileshare.lisc.univie.ac.at`, which silently produces a 0-byte file rather than erroring at download time (the failure only surfaces later, when `hmmpress` rejects the empty file). Neither database is needed for the KEGG/KOfam pathway-completeness scoring this pipeline actually produces, so both are safe to leave out for now. Marked `RERUN_WHEN_DBCAN_URL_FIXED` / `RERUN_WHEN_VOGDB_URL_FIXED`. MEROPS is unaffected by either issue and downloads normally.
-- **Not yet wired into the modeling dataset.** `src/modeling/features.py` lives only on the unmerged `origin/modeling` branch, and its example config references the old `kegg_pathway_pca.csv` path — that file no longer exists (see above). Wiring this in now means pointing a `path:` feature spec at `kegg_pathway_completeness.csv` instead, **and** making sure `features.py` fits any PCA/dimensionality reduction on pathway columns inside its own cross-validation, not by re-reading a precomputed PCA file. Do not repoint that config at `eda_pca_exploratory.csv` as a shortcut — it's a global fit and leaks test-strain information into training.
+- **Requires a DRAC account** — both `setup_modular_env.sh` and `run_modular_annotate.sbatch` are confirmed working end-to-end on Nibi, but re-check module/FTP availability on other clusters, as they can differ.
+- **PyKofamSearch's memory footprint is dominated by its database load, not genome count** — confirmed directly: a 3-genome smoke test needed nearly the same memory as the full 25-genome run (loading the ~28k-HMM serialized database up front is the fixed cost). Don't assume a smaller test run implies proportionally smaller memory needs at full scale.
+- **Not yet wired into the modeling dataset.** `src/modeling/features.py` lives only on the unmerged `origin/modeling` branch. Wiring this in means pointing a `path:` feature spec at `kegg_pathway_completeness.csv`, **and** making sure `features.py` fits any PCA/dimensionality reduction on pathway columns inside its own cross-validation, not by re-reading a precomputed PCA file.

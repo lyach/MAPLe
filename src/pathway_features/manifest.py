@@ -2,9 +2,10 @@
 manifest.py
 ===========
 Builds the strain <-> accession <-> FASTA-path table that gets shipped to
-DRAC for DRAM annotation. Cross-validates strains_metadata.csv against the
+DRAC for annotation. Cross-validates strains_metadata.csv against the
 FASTA files actually on disk so mismatches are caught locally, before an
-expensive remote run, rather than surfacing as a silent gap in DRAM's output.
+expensive remote run, rather than surfacing as a silent gap in the
+annotation output.
 """
 
 from __future__ import annotations

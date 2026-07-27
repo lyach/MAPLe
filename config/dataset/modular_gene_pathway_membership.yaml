@@ -1,0 +1,26 @@
+# config/dataset/modular_gene_pathway_membership.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# Config for build_modular_gene_pathway_matrix.py.
+#
+# Usage:
+#   python scripts/build_modular_gene_pathway_matrix.py config/dataset/modular_gene_pathway_membership.yaml
+#
+# Run this only after build_modular_pathway_features.py has produced
+# kegg_pathway_completeness.csv (this script reuses its module-ID column
+# scope) AND you've rsynced back the per-genome protein FASTAs (needed for
+# the full gene universe -- ko_hits.tsv alone only has genes that DID hit a
+# KO):
+#   rsync -avz --exclude='all_proteins.faa' --include='*.faa' --exclude='*.gff' \
+#     Nibi:scratch/modular_pathway/output/genes/ data/external/modular_pathway/genes/
+# ─────────────────────────────────────────────────────────────────────────────
+
+strains_metadata: data/external/strains_metadata.csv
+ko_annotation_dir: data/external/modular_pathway/ko_annotation
+genes_dir: data/external/modular_pathway/genes
+
+# Only used to determine WHICH KEGG modules to use as matrix columns -- the
+# same module set that build_modular_pathway_features.py's give_completeness
+# run actually produced, so the two matrices share a module-ID axis.
+completeness_csv: data/external/modular_pathway/kegg_pathway_completeness.csv
+
+output_dir: data/external/modular_pathway/gene_pathway_membership

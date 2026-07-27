@@ -45,6 +45,11 @@ dependencies = [
     "pre-commit",
     "ipywidgets>=8.1.8",
     "biopython>=1.87",
+    # kegg-pathways-completeness-tool (give_completeness): runs locally --
+    # no database download, no heavy compute, needs only the KO tables
+    # already shipped back from the modular pathway-feature pipeline's HPC
+    # run. See docs/pathway_features.md.
+    "kegg-pathways-completeness==1.4.3",
 ]
 
 # uv

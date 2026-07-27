@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
 """
-prepare_dram_manifest.py
-=========================
-Local, pre-DRAM step. Cross-validates data/external/strains_metadata.csv
-against the FASTA files in data/external/fasta/, and writes:
+prepare_modular_manifest.py
+=============================
+Local, pre-annotation step for the modular pathway pipeline. Uses
+build_manifest/write_manifest and resolve_drac_account (they only validate
+strain<->FASTA correspondence and resolve a Slurm billing account).
 
-    data/interim/dram/fasta_manifest.csv   -- strain, accession, fasta filename
+Cross-validates data/external/strains_metadata.csv against the FASTA files
+in data/external/fasta/, and writes:
 
-Prints the rsync command to ship the FASTA files + scripts/hpc/ to DRAC.
-This is the local half of a two-environment pipeline -- the actual DRAM
-annotation runs on a DRAC HPC cluster, not here. See docs/pathway_features.md.
+    data/interim/modular_pathway/fasta_manifest.csv
+
+Prints the rsync command to ship the FASTA files + scripts/hpc/ to DRAC, and
+the sbatch commands for setup_modular_env.sh + run_modular_annotate.sbatch.
+The actual annotation runs on a DRAC HPC cluster, not here. See
+docs/pathway_features.md.
 
 USAGE:
-    python scripts/prepare_dram_manifest.py
-    python scripts/prepare_dram_manifest.py --remote-host narval.alliancecan.ca --remote-dir scratch/dram
+    python scripts/prepare_modular_manifest.py
+    python scripts/prepare_modular_manifest.py --remote-host narval.alliancecan.ca --remote-dir scratch/modular_pathway
 
 NOTE: --remote-dir must not start with '~' -- if passed as its own shell
 argument, your LOCAL shell expands a leading '~' to your own home directory
@@ -34,7 +39,7 @@ from src.common.logging_setup import setup_logging
 from src.pathway_features.manifest import build_manifest, write_manifest
 from src.pathway_features.drac_credentials import resolve_drac_account
 
-log = logging.getLogger("prepare_dram_manifest")
+log = logging.getLogger("prepare_modular_manifest")
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -43,11 +48,11 @@ def parse_args(argv=None) -> argparse.Namespace:
                    help=f"Path to strains_metadata.csv (default: {config.STRAINS_METADATA_CSV})")
     p.add_argument("--fasta-dir", type=Path, default=config.FASTA_DIR,
                    help=f"Directory of genome FASTA files (default: {config.FASTA_DIR})")
-    p.add_argument("--output", type=Path, default=config.FASTA_MANIFEST_CSV,
-                   help=f"Path to write the manifest CSV (default: {config.FASTA_MANIFEST_CSV})")
+    p.add_argument("--output", type=Path, default=config.MODULAR_FASTA_MANIFEST_CSV,
+                   help=f"Path to write the manifest CSV (default: {config.MODULAR_FASTA_MANIFEST_CSV})")
     p.add_argument("--remote-host", default="<your-drac-cluster>",
                    help="DRAC hostname to fill in the printed rsync command (e.g. beluga.alliancecan.ca)")
-    p.add_argument("--remote-dir", default="scratch/dram",
+    p.add_argument("--remote-dir", default="scratch/modular_pathway",
                    help="Destination directory on the remote host for the printed rsync command "
                         "(relative to the remote $HOME -- avoid a leading '~': if this flag is "
                         "passed as its own shell argument, your LOCAL shell tilde-expands it to "
@@ -79,10 +84,12 @@ def main(argv=None) -> int:
     print(f"  rsync -avz {args.fasta_dir}/ {args.remote_host}:{args.remote_dir}/fasta/")
     print(f"  rsync -avz {config.ROOT / 'scripts' / 'hpc'}/ {args.remote_host}:{args.remote_dir}/hpc/")
     print("\nThen on the cluster (these use $HOME-relative paths, so you can run them from anywhere):")
-    print(f"  sbatch --account={account} --mem=128G --cpus-per-task=8 --time=6:00:00 \\")
-    print('    --job-name=dram-setup --output=%x-%j.out \\')
-    print(f'    --wrap="bash $HOME/{args.remote_dir}/hpc/setup_dram_env.sh"')
-    print(f"  sbatch --account={account} $HOME/{args.remote_dir}/hpc/run_dram_annotate.sbatch")
+    print(f"  sbatch --account={account} --mem=32G --cpus-per-task=4 --time=3:00:00 \\")
+    print('    --job-name=modular-setup --output=%x-%j.out \\')
+    print(f'    --wrap="bash $HOME/{args.remote_dir}/hpc/setup_modular_env.sh"')
+    print(f"  sbatch --account={account} $HOME/{args.remote_dir}/hpc/run_modular_annotate.sbatch")
+    print("\nAfter it completes, rsync back ko_annotation/ and checkm2/ (see the job's own")
+    print("printed output for exact paths) into data/external/modular_pathway/.")
     print("See docs/pathway_features.md for the full workflow.")
 
     return 0
