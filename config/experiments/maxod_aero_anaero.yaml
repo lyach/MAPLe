@@ -1,11 +1,11 @@
 # Aerobic+Anaerobic + XGBoost
-name: maxod_aero_anaero_xgb
+name: maxod_aero_anaero_xgb_loso
 dataset: config/dataset/modeling_dataset_aero_anaero.yaml
 model: config/models/xgboost.yaml
 task: max_od
 
 cv:
-  strategy: [loso, lomo, grouped, random]
+  strategy: [loso]
   n_repeats: 1
 
 metrics: [rmse, r2, pearson_r, mae]

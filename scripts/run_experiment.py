@@ -1,7 +1,7 @@
 """Run a modeling experiment end-to-end: CV, evaluation, interpretability.
 
 Usage:
-    python scripts/run_experiment.py config/experiments/aero_xgboost.yaml
+    python scripts/run_experiment.py config/experiments/maxod_aero_anaero.yaml
 """
 
 import argparse
@@ -141,6 +141,8 @@ def run_cv_loop(
                 pred_df["strain_name"] = df_test["strain_name"].values
             if "media_name" in df.columns:
                 pred_df["media_name"] = df_test["media_name"].values
+            if "atmosphere" in df.columns:
+                pred_df["atmosphere"] = df_test["atmosphere"].values
             all_predictions.append(pred_df)
 
     return all_fold_metrics, pd.concat(all_predictions, ignore_index=True)
