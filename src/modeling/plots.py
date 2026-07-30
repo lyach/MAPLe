@@ -108,11 +108,14 @@ def _add_shared_side_legend(
     legend_handles: dict,
     *,
     title: str | None = None,
+    fig_title: str | None = None,
     axes_right: float = 0.72,
 ) -> None:
     """Reserve space on the right and draw one figure-level legend."""
+    layout_top = 0.90 if fig_title else 0.96
+    layout_rect = (0, 0, axes_right if legend_handles else 1.0, layout_top)
+    fig.tight_layout(rect=layout_rect)
     if legend_handles:
-        fig.tight_layout(rect=(0, 0, axes_right, 0.96))
         fig.legend(
             legend_handles.values(),
             legend_handles.keys(),
@@ -122,8 +125,8 @@ def _add_shared_side_legend(
             frameon=True,
             borderaxespad=0.5,
         )
-    else:
-        fig.tight_layout(rect=(0, 0, 1.0, 0.96))
+    if fig_title is not None:
+        fig.suptitle(fig_title, fontsize=12, fontweight="bold", y=layout_top + 0.04)
 
 
 def plot_scatter_predictions(
@@ -136,6 +139,7 @@ def plot_scatter_predictions(
     col_wrap: int = 2,
     figsize: tuple[float, float] | None = None,
     palette: str | None = None,
+    fig_title: str | None = None,
 ) -> Figure:
     """Plot predicted-vs-true scatter panels for one or more prediction sets.
 
@@ -156,7 +160,9 @@ def plot_scatter_predictions(
     figsize:
         Overall figure size; auto-computed from the grid shape if omitted.
     palette:
-        Seaborn palette name.Falls back to the default matplotlib colour cycle when ``None``.
+        Seaborn palette name. Falls back to the default matplotlib colour cycle when ``None``.
+    fig_title:
+        Optional title for the whole figure (``fig.suptitle``).
 
     Returns
     -------
@@ -214,7 +220,9 @@ def plot_scatter_predictions(
         ax.set_ylabel(y_true_col)
 
     _hide_unused_panel_axes(axes, n, n_rows, n_cols)
-    _add_shared_side_legend(fig, legend_handles, title=color_by)
+    _add_shared_side_legend(
+        fig, legend_handles, title=color_by, fig_title=fig_title
+    )
 
     return fig
 
@@ -225,10 +233,11 @@ def plot_metrics_comparison(
     *,
     metric_titles: list[str] | None = None,
     json_titles: list[str] | None = None,
-    legend_title: str | None = "experiment",
-    col_wrap: int = 3,
+    legend_title: str | None = "Model",
+    col_wrap: int = 2,
     figsize: tuple[float, float] | None = None,
     palette: str = "Set1",
+    fig_title: str | None = None,
 ) -> Figure:
     """Compare aggregated metrics across experiments as bar panels.
 
@@ -254,6 +263,8 @@ def plot_metrics_comparison(
         Overall figure size; auto-computed from the grid shape if omitted.
     palette:
         Seaborn palette name. Defaults to ``"Set1"``.
+    fig_title:
+        Optional title for the whole figure (``fig.suptitle``).
 
     Returns
     -------
@@ -318,11 +329,12 @@ def plot_metrics_comparison(
                 legend_handles[label] = bar
 
         ax.set_title(panel_title, fontsize=10)
-        ax.set_xticks(x)
-        ax.set_xticklabels(json_titles, rotation=45, ha="right", fontsize=8)
+        ax.tick_params(axis="x", labelbottom=False)
         ax.axhline(0, color="grey", lw=0.6, alpha=0.5, zorder=0)
 
     _hide_unused_panel_axes(axes, n_metrics, n_rows, n_cols)
-    _add_shared_side_legend(fig, legend_handles, title=legend_title)
+    _add_shared_side_legend(
+        fig, legend_handles, title=legend_title, fig_title=fig_title
+    )
 
     return fig

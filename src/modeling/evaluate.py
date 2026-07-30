@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from loguru import logger
-from scipy.stats import pearsonr
+from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import (
     average_precision_score,
     balanced_accuracy_score,
@@ -55,6 +55,7 @@ _REG_METRICS: dict[str, Any] = {
     "r2": lambda yt, yp: float(r2_score(yt, yp)) if len(yt) > 1 else float("nan"),
     "pearson_r": lambda yt, yp: _safe_pearsonr(yt, yp),
     "mae": lambda yt, yp: float(mean_absolute_error(yt, yp)),
+    "spearman_r": lambda yt, yp: float(spearmanr(yt, yp)[0]),
 }
 
 

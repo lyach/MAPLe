@@ -1,4 +1,4 @@
-# Anaerobic + XGBoost
+# Anaerobic dataset
 name: maxod_anaero_xgb_lomo
 dataset: config/dataset/modeling_dataset_anaero.yaml
 model: config/models/xgboost.yaml
