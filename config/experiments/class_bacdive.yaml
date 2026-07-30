@@ -1,0 +1,21 @@
+# BacDive growth classification + XGBoost
+name: growth_class_bacdive_xgb
+dataset: config/dataset/modeling_dataset_bacdive.yaml
+model: config/models/xgboost.yaml
+task: growth_class
+
+cv:
+  strategy: [loso, lomo]
+  n_repeats: 1
+
+metrics: [auroc, pr_auc, f1, mcc, balanced_accuracy]
+
+interpret:
+  shap: true
+  group_importance: true
+
+seed: 42
+output_dir: reports
+
+wandb:
+  enabled: false

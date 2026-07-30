@@ -1,0 +1,16 @@
+# Taxonomic scope for the BacDive growth pipeline.
+#
+# Each entry is passed to BacdiveClient.search(taxonomy=...). Accepted forms:
+#   - "Genus"                      e.g. Escherichia   (all species in genus)
+#   - "Genus species"              e.g. Escherichia coli
+#   - "Genus species subspecies"   e.g. Bacillus subtilis subtilis
+#
+# Edit this list to control which subset of BacDive is downloaded, then run:
+#   python scripts/get_bacdive_dataset.py --taxa bacdive/taxa.yaml
+
+taxa:
+  - Escherichia coli
+  - Bacillus subtilis
+  - Bifidobacterium animalis
+  - Lactobacillus
+  - Staphylococcus aureus

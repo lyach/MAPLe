@@ -1,0 +1,163 @@
+Name and taxonomic classification
+Domain* 
+Phylum* 
+Class* 
+Order* 
+Family* 
+Genus* 
+Species epithet* 
+Subspecies epithet* 
+Species name* 
+Full scientific name* 
+Strain designation* 
+Variant* 
+Type strain* 
+Morphology
+Gram stain* 
+Cell length* 
+Cell width* 
+Cell shape* 
+Motility* 
+Flagellum arrangement* 
+Hemolysis* 
+Colony size* 
+Incubation period* 
+Pigment production* 
+Pigmentation color* 
+Pigment name* 
+Multicellular complex forming ability* 
+Culture and growth conditions
+Culture medium* 
+Culture medium growth* 
+Culture medium link* 
+Culture medium composition* 
+Temperature* 
+Temperature type* 
+Temperature test result* 
+pH* 
+pH type* 
+pH test result* 
+Physiology and metabolism
+Spore formation ability* 
+Produced compound* 
+Salt* 
+Salt concentration* 
+Salt concentration unit* 
+Salt relation* 
+Salt test result* 
+Peptidoglycan (short)* 
+Peptidoglycan* 
+Oxygen tolerance* 
+Nutrition type* 
+Utilized metabolite* 
+Metabolite utilization ability* 
+Metabolite utilization type* 
+Antibiotic* 
+Sensitivity against antibiotic* 
+Antibiotic sensitivity conc.* 
+Antibiotic intermediate conc.* 
+Resistance against antibiotic* 
+Antibiotic resistance conc.* 
+Produced metabolite* 
+Metabolite production* 
+Voges-Proskauer test (acetoin)* 
+Methyl Red test (glucose)* 
+Indole test* 
+Citrate test* 
+Enzyme* 
+Enzyme activity* 
+EC number* 
+API test* 
+EnzymeDetector pathway* 
+EnzymeDetector enzyme coverage* 
+Isolation, sampling and environmental information
+Sample type/isolated from* 
+Host species* 
+Geographic location* 
+Country* 
+Continent* 
+Interaction and safety
+Pathogenicity (human)* 
+Pathogenicity (animal)* 
+Pathogenicity (plant)* 
+Biosafety level* 
+Sequence information
+INSDC 16S rRNA accession* 
+INSDC genome accesion* 
+BV-BRC genome accession* 
+IMG genome accession* 
+GC content* 
+Literature
+Culture collection number* 
+Straininfo SI-ID* 
+Infecting phage* 
+Special collection* 
+Antibiotic susceptibility testing
+Amikacin (30 µg disc)* 
+Ampicillin (10 µg disc)* 
+Aztreonam (30 µg disc)* 
+Bacitracin (10 units)* 
+Cefalotin (30 µg disc)* 
+Cefazolin (30 µg disc)* 
+Cefiderocol (30 µg disc)* 
+Cefotaxime (30 µg disc)* 
+Ceftazidime (10 µg disc)* 
+Ceftriaxone (30 µg disc)* 
+Chloramphenicol (30 µg disc)* 
+Ciprofloxacin (5 µg disc)* 
+Clindamycin (10 µg disc)* 
+Colistin (10 µg disc)* 
+Colistin sulphate (10 µg disc)* 
+Doxycycline (30 µg disc)* 
+Erythromycin (15 µg disc)* 
+Fosfomycin (50 µg disc)* 
+Gentamicin (30 µg disc)* 
+Gentamycin (10 µg disc)* 
+Imipenem (10 µg disc)* 
+Kanamycin (30 µg disc)* 
+Levofloxacin (5 µg disc)* 
+Lincomycin (15 µg disc)* 
+Linezolid (10 µg disc)* 
+Meropenem (10 µg disc)* 
+Mezlocillin (30 µg disc)* 
+Moxifloxacin (5 µg disc)* 
+Neomycin (30 µg disc)* 
+Nitrofurantoin (100 µg disc)* 
+Norfloxacin (10 µg disc)* 
+Nystatin (100 units)* 
+Ofloxacin (5 µg disc)* 
+Oxacillin (5 µg disc)* 
+Penicillin G (6 µg disc)* 
+Pipemidic acid (20 µg disc)* 
+Piperacillin/Tazobactam (110 µg disc)* 
+Piperacillin/Tazobactam (30/10 µg disc)* 
+Polymyxin B (300 units)* 
+Quinupristin/Dalfopristin (15 µg disc)* 
+Rifampicin (5 µg disc)* 
+Teicoplanin (30 µg disc)* 
+Tetracycline (30 µg disc)* 
+Ticarcillin (75 µg disc)* 
+Tigecycline (15 µg disc)* 
+Trimethoprim-sulfamethoxazole (1:19, 10 µg disc)* 
+Vancomycin (30 µg disc)* 
+Fatty acid profile
+Fatty acid* 
+ECL* 
+FA percent-share* 
+FA analysis culture medium* 
+FA analysis medium type* 
+FA analysis incubation temperature* 
+FA analysis incubation period* 
+FA analysis incubation pH* 
+FA analysis incubation oxygen condition* 
+FA analysis software* 
+FA analysis reference table* 
+FA analysis instrument* 
+FA analysis protocol* 
+Reference
+Title* 
+Author(s)* 
+Journal* 
+Publication year* 
+DOI* 
+ID_reference* 
