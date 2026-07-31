@@ -13,6 +13,7 @@ that plugs straight into the existing modeling pipeline (see
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -32,7 +33,6 @@ TAXA_YAML = ROOT / "bacdive" / "taxa.yaml"
 # --- outputs (data/external/) ---
 EXTERNAL_DIR = ROOT / "data" / "external"
 CACHE_DIR = EXTERNAL_DIR / "bacdive_cache"          # one <bacdive_id>.json per record
-OUTPUT_CSV = EXTERNAL_DIR / "bacdive_growth.csv"    # tidy strain x medium rows
 FAILURES_CSV = EXTERNAL_DIR / "bacdive_failures.csv"  # taxa that returned nothing / errored
 
 # --- logs ---
@@ -47,19 +47,11 @@ LOGS_DIR = ROOT / "logs"
 REQUEST_DELAY = 0.2
 
 # --------------------------------------------------------------------------
-# OUTPUT SCHEMA
+# OUTPUT SCHEMAS (per target)
 # --------------------------------------------------------------------------
 
-# Column order for bacdive_growth.csv. One row = one (strain, culture medium).
-OUTPUT_FIELDNAMES = [
-    # identifiers
-    "bacdive_id",
-    "strain_name",
-    "media_name",
-    "mediadive_id",
-    # target
-    "growth_class",
-    # strain features
+# Strain feature columns
+_STRAIN_FEATURES = [
     "genus",
     "family",
     "order",
@@ -73,9 +65,35 @@ OUTPUT_FIELDNAMES = [
     "gc_content",
     "genome_accession",
     "n16s_accession",
-    # condition features (strain-level)
     "temperature",
     "ph",
+]
+
+# Strain categoricals
+_STRAIN_CATEGORICALS = [
+    "genus",
+    "family",
+    "order",
+    "phylum",
+    "gram_stain",
+    "cell_shape",
+    "motility",
+    "oxygen_tolerance",
+    "nutrition_type",
+    "spore_formation",
+]
+
+# --- medium_growth: one row = (strain, culture medium) ---
+_MEDIUM_GROWTH_FIELDNAMES = [
+    # identifiers
+    "bacdive_id",
+    "strain_name",
+    "media_name",
+    "mediadive_id",
+    # target
+    "growth_class",
+    # strain features
+    *_STRAIN_FEATURES,
     # media features (parsed from composition text)
     "n_ingredients",
     "has_yeast_extract",
@@ -89,31 +107,95 @@ OUTPUT_FIELDNAMES = [
     "refs",
 ]
 
+# --- metabolite_utilization: one row = (strain, metabolite, assay kind) ---
+_METABOLITE_FIELDNAMES = [
+    # identifiers
+    "bacdive_id",
+    "strain_name",
+    "substrate_name",
+    "chebi_id",
+    "kind_of_utilization",
+    # target (named growth_class so it plugs into the classification task)
+    "growth_class",
+    # strain features
+    *_STRAIN_FEATURES,
+    # provenance
+    "refs",
+]
+
 # Columns for the failures.csv diagnostic report.
 FAILURE_FIELDNAMES = [
     "taxon",
     "reason",
 ]
 
-# Categorical feature columns whose missing values are filled with "unknown"
-# before writing, so downstream OneHotEncoder never sees NaN.
-CATEGORICAL_FEATURES = [
-    "genus",
-    "family",
-    "order",
-    "phylum",
-    "gram_stain",
-    "cell_shape",
-    "motility",
-    "oxygen_tolerance",
-    "nutrition_type",
-    "spore_formation",
-]
+
+# --------------------------------------------------------------------------
+# TARGET REGISTRY
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class TargetSpec:
+    """Everything the pipeline needs to build one target's output table.
+
+    ``id_col`` / ``name_col`` / ``extra_key_cols`` define the de-duplication
+    "unit": rows sharing the same ``(strain, unit)`` are collapsed, with the
+    positive ``growth_class`` winning on conflict. ``unit_col`` is the column
+    counted as "unique units" in the run summary.
+    """
+
+    name: str
+    output_csv: Path
+    fieldnames: list[str]
+    categorical_features: list[str]
+    id_col: str                         # preferred stable id for the unit key
+    name_col: str                       # fallback name for the unit key
+    extra_key_cols: list[str] = field(default_factory=list)
+    positive_only: bool = False         # if True, warn about PU when negatives ~0
+
+    @property
+    def unit_col(self) -> str:
+        return self.name_col
+
+
+TARGETS: dict[str, TargetSpec] = {
+    "medium_growth": TargetSpec(
+        name="medium_growth",
+        output_csv=EXTERNAL_DIR / "bacdive_growth.csv",
+        fieldnames=_MEDIUM_GROWTH_FIELDNAMES,
+        categorical_features=_STRAIN_CATEGORICALS,
+        id_col="mediadive_id",
+        name_col="media_name",
+        positive_only=True,
+    ),
+    "metabolite_utilization": TargetSpec(
+        name="metabolite_utilization",
+        output_csv=EXTERNAL_DIR / "bacdive_metabolite.csv",
+        fieldnames=_METABOLITE_FIELDNAMES,
+        categorical_features=[*_STRAIN_CATEGORICALS, "kind_of_utilization"],
+        id_col="chebi_id",
+        name_col="substrate_name",
+        extra_key_cols=["kind_of_utilization"],
+        positive_only=False,
+    ),
+}
+
+DEFAULT_TARGET = "medium_growth"
+# Back-compat aliases
+OUTPUT_CSV = TARGETS["medium_growth"].output_csv
+OUTPUT_FIELDNAMES = TARGETS["medium_growth"].fieldnames
+CATEGORICAL_FEATURES = TARGETS["medium_growth"].categorical_features
 
 
 # --------------------------------------------------------------------------
-# taxa.yaml loader
+# taxa.yaml loaders
 # --------------------------------------------------------------------------
+
+def _load_yaml(path: Path | None) -> dict | list:
+    path = path or TAXA_YAML
+    with open(path, encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
 
 def load_taxa(path: Path | None = None) -> list[str]:
     """Read the taxonomic scope from ``taxa.yaml``.
@@ -125,9 +207,7 @@ def load_taxa(path: Path | None = None) -> list[str]:
 
     Returns a de-duplicated, order-preserving list of non-empty taxon strings.
     """
-    path = path or TAXA_YAML
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
+    data = _load_yaml(path)
 
     if isinstance(data, dict):
         raw = data.get("taxa", [])
@@ -144,3 +224,19 @@ def load_taxa(path: Path | None = None) -> list[str]:
             seen.add(taxon)
             taxa.append(taxon)
     return taxa
+
+
+def load_target(path: Path | None = None) -> str:
+    """Read the ``target`` key from ``taxa.yaml`` (default ``medium_growth``).
+
+    Raises ``ValueError`` if the configured target is not a known target.
+    """
+    data = _load_yaml(path)
+    target = DEFAULT_TARGET
+    if isinstance(data, dict) and data.get("target"):
+        target = str(data["target"]).strip()
+    if target not in TARGETS:
+        raise ValueError(
+            f"unknown target {target!r}; choose one of {sorted(TARGETS)}"
+        )
+    return target

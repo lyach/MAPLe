@@ -2,24 +2,28 @@
 """
 get_bacdive_dataset.py
 ======================
-Download a taxonomy-scoped subset of BacDive (DSMZ) and build a tidy
-``(strain x culture medium)`` table with a binary ``growth_class`` target that
-feeds the modeling pipeline (``docs/modeling_pipeline.md``).
+Download a taxonomy-scoped subset of BacDive (DSMZ) and build a tidy table with
+a binary ``growth_class`` target that feeds the modeling pipeline
+(``docs/modeling_pipeline.md``). The extraction target selects what one row is:
 
-Writes:
-    data/external/bacdive_growth.csv     -- one row per (strain, culture medium)
+    medium_growth           -- one row per (strain, culture medium)
+    metabolite_utilization  -- one row per (strain, metabolite, assay kind)
+
+Writes (target-dependent output name):
+    data/external/bacdive_growth.csv | bacdive_metabolite.csv
     data/external/bacdive_failures.csv   -- taxa that returned nothing / errored
     data/external/bacdive_cache/*.json   -- raw per-record cache
     logs/run_<timestamp>.log             -- full run log
 
-The taxonomic scope is read from bacdive/taxa.yaml (edit it to control which
-strains are downloaded). The public BacDive v2 API needs no credentials.
+The taxonomic scope and target are read from bacdive/taxa.yaml (edit it to
+control what is downloaded). The public BacDive v2 API needs no credentials.
 
 USAGE:
     python scripts/get_bacdive_dataset.py
     python scripts/get_bacdive_dataset.py --taxa bacdive/taxa.yaml
+    python scripts/get_bacdive_dataset.py --target metabolite_utilization
     python scripts/get_bacdive_dataset.py --limit 5          # quick smoke test
-    python scripts/get_bacdive_dataset.py --out data/external/bacdive_growth.csv
+    python scripts/get_bacdive_dataset.py --no-progress       # disable tqdm bars
 """
 
 from __future__ import annotations
@@ -43,8 +47,11 @@ def parse_args(argv=None) -> argparse.Namespace:
     )
     p.add_argument("--taxa", type=Path, default=config.TAXA_YAML,
                    help=f"Path to taxa.yaml (default: {config.TAXA_YAML})")
-    p.add_argument("--out", type=Path, default=config.OUTPUT_CSV,
-                   help=f"Output CSV path (default: {config.OUTPUT_CSV})")
+    p.add_argument("--target", choices=sorted(config.TARGETS), default=None,
+                   help="Extraction target (default: 'target' key in taxa.yaml, "
+                        f"else {config.DEFAULT_TARGET})")
+    p.add_argument("--out", type=Path, default=None,
+                   help="Output CSV path (default: resolved from the target)")
     p.add_argument("--cache-dir", type=Path, default=config.CACHE_DIR,
                    help=f"Raw record cache dir (default: {config.CACHE_DIR})")
     p.add_argument("--limit", type=int, default=None,
@@ -55,6 +62,8 @@ def parse_args(argv=None) -> argparse.Namespace:
                    help="Show DEBUG detail on the console too (always in the log file)")
     p.add_argument("--quiet", action="store_true",
                    help="Console shows warnings/errors only (full detail still logged)")
+    p.add_argument("--no-progress", action="store_true",
+                   help="Disable tqdm progress bars (e.g. for non-interactive/log-only runs)")
     return p.parse_args(argv)
 
 
@@ -74,19 +83,29 @@ def main(argv=None) -> int:
     if not taxa:
         log.error("no taxa listed in %s", args.taxa)
         return 1
-    log.info("loaded %d taxa from %s", len(taxa), args.taxa)
+
+    try:
+        target = args.target or config.load_target(args.taxa)
+    except ValueError as exc:
+        log.error("%s", exc)
+        return 1
+
+    output_csv = args.out or config.TARGETS[target].output_csv
+    log.info("loaded %d taxa from %s (target: %s)", len(taxa), args.taxa, target)
 
     n_rows, n_taxa_ok, n_failures = pipeline.run(
         taxa=taxa,
-        output_csv=args.out,
+        target=target,
+        output_csv=output_csv,
         failures_csv=config.FAILURES_CSV,
         cache_dir=args.cache_dir,
         limit=args.limit,
         force=args.force,
+        show_progress=not (args.no_progress or args.quiet),
     )
 
     print(f"\nDone. {n_rows} datapoints from {n_taxa_ok} taxa, {n_failures} failed.")
-    print(f"Output: {args.out}")
+    print(f"Output: {output_csv}")
     print(f"Log file: {log_path}")
     if n_failures:
         print(f"Review failures in: {config.FAILURES_CSV}")

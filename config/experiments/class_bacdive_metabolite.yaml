@@ -1,0 +1,22 @@
+# BacDive metabolite-utilization classification + XGBoost
+# NOTE: no `lomo` — the metabolite table has no `media_name` column
+name: growth_class_bacdive_metabolite_xgb
+dataset: config/dataset/modeling_dataset_bacdive_metabolite.yaml
+model: config/models/xgboost.yaml
+task: growth_class
+
+cv:
+  strategy: [loso, grouped, random]
+  n_repeats: 1
+
+metrics: [auroc, pr_auc, f1, mcc, balanced_accuracy]
+
+interpret:
+  shap: true
+  group_importance: true
+
+seed: 42
+output_dir: reports
+
+wandb:
+  enabled: false

@@ -72,17 +72,19 @@ def build_modeling_dataset(
     logger.info("loading curves: {}", curves_paths)
     df = _load_curves(curves_paths)
     
-    # remove water controls
-    df = df.loc[df["media_name"] != "water"]
-    logger.info("removed water controls, shape: {} rows x {} cols", *df.shape)
-    
-    # remove `other` strains
-    df = df.loc[~df["strain_name"].str.contains("other")]
-    logger.info("removed `other` strains, shape: {} rows x {} cols", *df.shape)
-    
-    # remove `empty` strains
-    df = df.loc[df["strain_name"] != "empty"]
-    logger.info("removed `empty` strains, shape: {} rows x {} cols", *df.shape)
+    # remove water controls (only when a media_name column is present)
+    if "media_name" in df.columns:
+        df = df.loc[df["media_name"] != "water"]
+        logger.info("removed water controls, shape: {} rows x {} cols", *df.shape)
+
+    if "strain_name" in df.columns:
+        # remove `other` strains
+        df = df.loc[~df["strain_name"].str.contains("other")]
+        logger.info("removed `other` strains, shape: {} rows x {} cols", *df.shape)
+
+        # remove `empty` strains
+        df = df.loc[df["strain_name"] != "empty"]
+        logger.info("removed `empty` strains, shape: {} rows x {} cols", *df.shape)
 
     # merge strain metadata
     if cfg.strain_metadata_file:

@@ -7,7 +7,9 @@ public / no credentials required). Handles:
   * searching by taxonomy and iterating every matching record,
   * on-disk JSON caching (one file per BacDive-ID) so re-runs don't re-hit
     the API,
-  * polite pacing between paged calls.
+  * polite pacing between paged calls,
+  * a tqdm progress bar over records within the current taxon (toggle via
+    ``show_progress``; the outer per-taxon bar lives in ``pipeline.py``).
 
 Only the small surface the pipeline needs is exposed; everything else is left
 to the vendor client.
@@ -22,6 +24,7 @@ from pathlib import Path
 from typing import Iterator, Optional
 
 import bacdive  # the installed PyPI client (NOT this package)
+from tqdm import tqdm
 
 from src.bacdive import config
 
@@ -49,10 +52,12 @@ class BacDiveFetcher:
         cache_dir: Path | None = None,
         request_delay: float = config.REQUEST_DELAY,
         force: bool = False,
+        show_progress: bool = True,
     ) -> None:
         self.cache_dir = cache_dir or config.CACHE_DIR
         self.request_delay = request_delay
         self.force = force
+        self.show_progress = show_progress
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         # A single client instance is reused across taxa.
         self._client = bacdive.BacdiveClient()
@@ -85,8 +90,18 @@ class BacDiveFetcher:
 
         log.info("taxon %r -> %d record(s)", taxon, count)
 
+        records = tqdm(
+            self._client.retrieve(),
+            total=count,
+            desc=f"BacDive: {taxon}",
+            unit="rec",
+            leave=False,
+            position=1,
+            disable=not self.show_progress,
+        )
+
         n = 0
-        for record in self._client.retrieve():
+        for record in records:
             if not isinstance(record, dict):
                 continue
             bid = _bacdive_id(record)
@@ -98,4 +113,5 @@ class BacDiveFetcher:
             if self.request_delay:
                 time.sleep(self.request_delay)
 
+        records.close()
         log.debug("taxon %r fully retrieved (%d records)", taxon, n)

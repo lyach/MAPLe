@@ -1,14 +1,18 @@
 """
 extract.py
 ==========
-Flatten a single nested BacDive record into one or more
-``(strain x culture medium)`` rows for the modeling table.
+Flatten a single nested BacDive record into modeling rows, for one of two
+targets (see ``record_to_rows``):
 
-The natural datapoint in BacDive is a culture-medium entry with a binary
-``growth`` flag. Temperature, pH and oxygen tolerance are recorded in separate
-blocks keyed by publication ``@ref`` (not by medium), so we summarise them at
-the *strain* level and attach the same value to every medium row for that
-strain. This is documented as a caveat in ``bacdive/README.md``.
+* ``medium_growth`` -- one row per ``(strain, culture medium)`` with a binary
+  ``growth`` flag. This label is effectively positive-only in BacDive (see the
+  PU-aware notes in ``bacdive/README.md``).
+* ``metabolite_utilization`` -- one row per
+  ``(strain, metabolite, assay kind)`` with a real ``+``/``-`` label.
+
+Temperature, pH and oxygen tolerance are recorded in separate blocks keyed by
+publication ``@ref`` (not by medium/metabolite), so we summarise them at the
+*strain* level and attach the same value to every row for that strain.
 """
 
 from __future__ import annotations
@@ -28,6 +32,12 @@ _GROWTH_MAP = {
     "positive": 1,
     "no": 0,
     "negative": 0,
+}
+
+# metabolite "utilization activity" -> binary label
+_UTILIZATION_MAP = {
+    "+": 1,
+    "-": 0,
 }
 
 _NUM_RE = re.compile(r"-?\d+(?:\.\d+)?")
@@ -227,8 +237,8 @@ def _bacdive_id(record: dict) -> str:
 # row assembly
 # --------------------------------------------------------------------------
 
-def record_to_rows(record: dict) -> list[dict]:
-    """Flatten one BacDive record into (strain x medium) rows.
+def record_to_medium_rows(record: dict) -> list[dict]:
+    """Flatten one BacDive record into (strain x culture medium) rows.
 
     Only culture-medium entries with a mappable growth value are kept. Returns
     an empty list when the record has no usable culture-medium data.
@@ -264,3 +274,59 @@ def record_to_rows(record: dict) -> list[dict]:
         rows.append(row)
 
     return rows
+
+
+def record_to_metabolite_rows(record: dict) -> list[dict]:
+    """Flatten one BacDive record into (strain x metabolite x assay) rows.
+
+    Reads ``Physiology and metabolism -> metabolite utilization``; one row per
+    entry with a mappable ``utilization activity`` (``+``/``-``). Returns an
+    empty list when the record has no usable metabolite-utilization data.
+    """
+    phys = record.get("Physiology and metabolism", {})
+    if not isinstance(phys, dict):
+        return []
+    entries = as_list(phys.get("metabolite utilization"))
+    if not entries:
+        return []
+
+    base = strain_features(record)
+    rows: list[dict] = []
+
+    for entry in entries:
+        activity = str(entry.get("utilization activity", "")).strip()
+        label = _UTILIZATION_MAP.get(activity)
+        if label is None:
+            continue  # e.g. "+/-" or blank -> not a usable datapoint
+
+        substrate = entry.get("metabolite", "") or ""
+        if not substrate:
+            continue
+
+        chebi = entry.get("Chebi-ID")
+        row = dict(base)
+        row["substrate_name"] = substrate
+        row["chebi_id"] = "" if chebi is None else str(chebi)
+        row["kind_of_utilization"] = entry.get("kind of utilization tested", "") or ""
+        row["growth_class"] = label
+        row["refs"] = str(entry.get("@ref", ""))
+        rows.append(row)
+
+    return rows
+
+
+_EXTRACTORS = {
+    "medium_growth": record_to_medium_rows,
+    "metabolite_utilization": record_to_metabolite_rows,
+}
+
+
+def record_to_rows(record: dict, target: str = "medium_growth") -> list[dict]:
+    """Flatten one BacDive record into rows for the requested ``target``."""
+    try:
+        extractor = _EXTRACTORS[target]
+    except KeyError:
+        raise ValueError(
+            f"unknown target {target!r}; choose one of {sorted(_EXTRACTORS)}"
+        ) from None
+    return extractor(record)
