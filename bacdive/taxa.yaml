@@ -1,10 +1,6 @@
 # Taxonomic scope + extraction target for the BacDive pipeline.
 
-target: metabolite_utilization
+target: medium_growth
 
 taxa:
-  - Escherichia coli
   - Bacillus subtilis
-  - Bifidobacterium animalis
-  - Lactobacillus
-  - Staphylococcus aureus
