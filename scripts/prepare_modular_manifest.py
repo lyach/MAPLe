@@ -14,7 +14,7 @@ in data/external/fasta/, and writes:
 Prints the rsync command to ship the FASTA files + scripts/hpc/ to DRAC, and
 the sbatch commands for setup_modular_env.sh + run_modular_annotate.sbatch.
 The actual annotation runs on a DRAC HPC cluster, not here. See
-docs/pathway_features.md.
+docs/modular_pathway_features.md.
 
 USAGE:
     python scripts/prepare_modular_manifest.py
@@ -90,7 +90,7 @@ def main(argv=None) -> int:
     print(f"  sbatch --account={account} $HOME/{args.remote_dir}/hpc/run_modular_annotate.sbatch")
     print("\nAfter it completes, rsync back ko_annotation/ and checkm2/ (see the job's own")
     print("printed output for exact paths) into data/external/modular_pathway/.")
-    print("See docs/pathway_features.md for the full workflow.")
+    print("See docs/modular_pathway_features.md for the full workflow.")
 
     return 0
 

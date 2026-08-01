@@ -36,7 +36,7 @@ def load_quality_report(quality_report_tsv: Path) -> pd.DataFrame:
             f"CheckM2 quality_report.tsv not found at {quality_report_tsv} -- "
             "run the modular pipeline on DRAC first and copy "
             "$MODULAR_ROOT/output/checkm2/quality_report.tsv back into "
-            "data/external/modular_pathway/checkm2/. See docs/pathway_features.md."
+            "data/external/modular_pathway/checkm2/. See docs/modular_pathway_features.md."
         )
 
     df = pd.read_csv(quality_report_tsv, sep="\t", index_col="Name")

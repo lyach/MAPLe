@@ -34,7 +34,7 @@ annotation) + EBI's give_completeness (module completeness) + CheckM2
 Gene calling and KO annotation run on a DRAC HPC cluster, driven by
 scripts/hpc/ -- nothing in this package invokes them itself.
 give_completeness and CheckM2's quality_report.tsv parsing run locally. See
-docs/pathway_features.md for the full two-environment workflow.
+docs/modular_pathway_features.md for the full two-environment workflow.
 """
 
 from .manifest import build_manifest, write_manifest

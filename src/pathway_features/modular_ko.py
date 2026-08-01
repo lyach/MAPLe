@@ -43,7 +43,7 @@ def load_ko_hits(ko_hits_tsv: Path) -> pd.DataFrame:
             "pipeline on DRAC first and copy "
             "$MODULAR_ROOT/output/ko_annotation/ back into "
             "data/external/modular_pathway/ko_annotation/. See "
-            "docs/pathway_features.md."
+            "docs/modular_pathway_features.md."
         )
     df = pd.read_csv(ko_hits_tsv, sep="\t", usecols=["id_protein", "id_ko"])
     log.info("Loaded ko_hits.tsv: %d hit(s) across %d protein(s)", len(df), df["id_protein"].nunique())

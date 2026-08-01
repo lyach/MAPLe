@@ -70,7 +70,7 @@ def build_completeness_matrix(contigs_tsv: Path, accessions: list[str]) -> pd.Da
     output (zero KO hits) become real all-zero rows, not missing ones; the
     module (column) universe is whatever set of modules appears anywhere in
     the output, which the gene x pathway membership matrix reuses as its own
-    column axis (see modular_ko.py / docs/pathway_features.md).
+    column axis (see modular_ko.py / docs/modular_pathway_features.md).
     """
     if not contigs_tsv.exists():
         raise FileNotFoundError(f"give_completeness output not found at {contigs_tsv}")

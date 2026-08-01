@@ -11,4 +11,4 @@ and you run them by hand on the cluster.
 - `run_modular_annotate.sbatch` — the actual annotation job (`sbatch` this).
 
 Full workflow, including what to do with the output afterward: see
-[docs/pathway_features.md](../../docs/pathway_features.md).
+[docs/modular_pathway_features.md](../../docs/modular_pathway_features.md).

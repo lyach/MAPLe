@@ -13,7 +13,7 @@ This pipeline has two halves that run in different environments:
   * REMOTE -- Pyrodigal, PyKofamSearch, and CheckM2 run on a DRAC HPC
               cluster, driven by the artifacts under scripts/hpc/.
               give_completeness runs locally (fast, database-free). See
-              docs/pathway_features.md.
+              docs/modular_pathway_features.md.
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ DRAC_CREDENTIALS_FILE = ROOT / ".drac_credentials.json"
 
 # --- modular pipeline paths -------------------------------------------------
 # Pyrodigal + pykofamsearch (PyHMMER-based KOfam search) + CheckM2 +
-# EBI kegg-pathways-completeness-tool. See docs/pathway_features.md.
+# EBI kegg-pathways-completeness-tool. See docs/modular_pathway_features.md.
 MODULAR_INTERIM_DIR = ROOT / "data" / "interim" / "modular_pathway"
 MODULAR_FASTA_MANIFEST_CSV = MODULAR_INTERIM_DIR / "fasta_manifest.csv"
 
