@@ -41,6 +41,7 @@ FASTA_DIR    = EXTERNAL_DIR / "fasta"                     # one .fna per assembl
 GBK_DIR      = EXTERNAL_DIR / "gbk"                       # one .gbk per assembly
 OUTPUT_CSV   = EXTERNAL_DIR / "strains_metadata.csv"      # successful rows
 FAILURES_CSV = EXTERNAL_DIR / "failures.csv"              # diagnostic failure report
+PHYLUM_CSV   = EXTERNAL_DIR / "strain_phylum.csv"          # ncbi_taxon_id -> phylum lookup
 
 # --- logs ---
 LOGS_DIR = ROOT / "logs"                                  # timestamped run logs

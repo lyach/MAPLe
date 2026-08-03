@@ -1,15 +1,6 @@
-# config/dataset/modular_pathway_features.yaml
-# ─────────────────────────────────────────────────────────────────────────────
 # Config for build_modular_pathway_features.py.
-#
-# Usage:
-#   python scripts/build_modular_pathway_features.py config/dataset/modular_pathway_features.yaml
-#
-# Run this only after the modular pipeline has been run on DRAC AND you've
-# rsynced back its output (see docs/pathway_features.md):
-#   rsync -avz Nibi:scratch/modular_pathway/output/ko_annotation/ data/external/modular_pathway/ko_annotation/
-#   rsync -avz Nibi:scratch/modular_pathway/output/checkm2/quality_report.tsv data/external/modular_pathway/checkm2/
-# ─────────────────────────────────────────────────────────────────────────────
+# Usage: python scripts/build_modular_pathway_features.py config/dataset/modular_pathway_features.yaml
+# Run after rsyncing ko_annotation/ and checkm2/ back from DRAC.
 
 strains_metadata: data/external/strains_metadata.csv
 ko_annotation_dir: data/external/modular_pathway/ko_annotation

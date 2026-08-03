@@ -1,25 +1,5 @@
-"""
-drac_credentials.py
-====================
-Submitting a job to a DRAC (Digital Research Alliance of Canada) HPC cluster
-requires a Slurm billing account string (e.g. "def-yourpi" or "rrg-yourpi")
--- this is tied to a specific PI's allocation, so it can't be hardcoded in a
-repo meant to be reused outside one lab.
-
-Resolved in three steps, trying each in order and stopping at the first one
-that works, mirroring strain_metadata/credentials.py's NCBI email pattern:
-
-    1. Environment variable (DRAC_ACCOUNT) -- best for CI or anyone who
-       already manages secrets this way.
-    2. A small local JSON file saved from a previous run (gitignored, never
-       committed, lives at the project root as .drac_credentials.json).
-    3. An interactive prompt, asked only once -- after which step 2 takes
-       over on every subsequent run.
-
-This means a new collaborator (in or outside the lab) gets prompted for
-their own account the first time they run prepare_modular_manifest.py,
-instead of the script silently submitting jobs against someone else's
-allocation.
+"""Resolves the user's DRAC Slurm billing account: env var, then cached
+file, then interactive prompt.
 """
 
 from __future__ import annotations
@@ -32,9 +12,7 @@ from .config import DRAC_CREDENTIALS_FILE
 
 
 def _load_saved_account() -> str | None:
-    """Read the local credentials cache, if it exists. Returns None (rather
-    than raising) if the file is missing or corrupted, since a bad cache
-    should just fall through to re-prompting, not crash."""
+    """Read the cached account, or None if missing/corrupted."""
     if not DRAC_CREDENTIALS_FILE.exists():
         return None
     try:
@@ -45,9 +23,7 @@ def _load_saved_account() -> str | None:
 
 
 def _save_account(account: str) -> None:
-    """Write the account to the local cache so future runs don't ask again.
-    Failure to save (e.g. read-only filesystem) is non-fatal -- we just log
-    it and move on, since the run itself can still proceed."""
+    """Cache the account locally for future runs."""
     try:
         DRAC_CREDENTIALS_FILE.write_text(json.dumps({"account": account}, indent=2))
     except OSError as exc:
@@ -55,8 +31,7 @@ def _save_account(account: str) -> None:
 
 
 def clear_saved_drac_account() -> bool:
-    """Delete the local credentials cache, e.g. because a saved account was
-    a typo. Returns True if a file was actually removed."""
+    """Delete the cached account. Returns True if a file was removed."""
     if DRAC_CREDENTIALS_FILE.exists():
         DRAC_CREDENTIALS_FILE.unlink()
         return True
@@ -94,24 +69,15 @@ def _prompt_for_account() -> str:
 
 
 def resolve_drac_account() -> str:
-    """Top-level entry point used by the rest of the pipeline. Returns the
-    Slurm billing account string.
-
-    Raises RuntimeError only if no account is available AND we're not
-    attached to an interactive terminal (so a cron job or CI run fails fast
-    with a clear message instead of hanging on input())."""
-
-    # --- Tier 1: environment variable ---
+    """Returns the Slurm billing account: env var, cache, or prompt."""
     env_account = os.environ.get("DRAC_ACCOUNT", "").strip()
     if env_account:
         return env_account
 
-    # --- Tier 2: previously-saved local file ---
     saved = _load_saved_account()
     if saved:
         return saved
 
-    # --- Tier 3: interactive prompt (only reachable if tiers 1 and 2 missed) ---
     if not sys.stdin.isatty():
         raise RuntimeError(
             "No DRAC billing account is configured, and this isn't an "

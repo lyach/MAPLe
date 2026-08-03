@@ -1,34 +1,5 @@
 #!/usr/bin/env python3
-"""
-build_modular_pathway_features.py
-====================================
-Local, post-annotation step for the modular pathway pipeline. Produces the
-two REQUIRED outputs from this pipeline's spec:
-
-    data/external/modular_pathway/kegg_pathway_completeness.csv
-        CANONICAL modeling input: strain x KEGG-module, continuous [0, 1]
-        completeness fractions, from EBI's give_completeness run locally
-        against PyKofamSearch's KO hits (see src/pathway_features/
-        modular_completeness.py -- give_completeness itself is invoked here,
-        not on DRAC, since it's fast and needs no database).
-
-    data/external/modular_pathway/checkm2_quality.csv
-        REQUIRED confounder feature: strain x [checkm2_completeness,
-        checkm2_contamination], [0, 1], from CheckM2's quality_report.tsv.
-        Independent of the KEGG-module completeness matrix above -- CheckM2
-        measures genome assembly/annotation quality, not pathway coverage.
-
-CheckM2's quality_report.tsv also doubles as this script's per-strain
-validation: every genome the pipeline actually processed gets a row there
-regardless of KO-hit outcome, so a strain missing from it means the
-pipeline genuinely failed/skipped that genome -- distinct from (and not
-raised on) a genome with zero KO hits, which is a normal, valid all-zero
-completeness row, not an error.
-
-Requires ko_annotation/ (PyKofamSearch's ko_hits.tsv) and checkm2/
-(quality_report.tsv) rsynced back from DRAC first:
-    rsync -avz Nibi:scratch/modular_pathway/output/ko_annotation/ data/external/modular_pathway/ko_annotation/
-    rsync -avz Nibi:scratch/modular_pathway/output/checkm2/quality_report.tsv data/external/modular_pathway/checkm2/
+"""Builds kegg_pathway_completeness.csv and checkm2_quality.csv from DRAC output.
 
 Usage:
     python scripts/build_modular_pathway_features.py config/dataset/modular_pathway_features.yaml
@@ -102,8 +73,7 @@ def main(argv=None) -> int:
     strains_df = pd.read_csv(strains_metadata)
     accessions = strains_df["ncbi_assembly_accession"].tolist()
 
-    # ── 1. CheckM2 confounder feature -- also this script's per-strain
-    #        validation (see module docstring) ─────────────────────────────
+    # 1. CheckM2 confounder feature (also validates per-strain coverage)
     quality = load_quality_report(quality_report_tsv)
     missing = sorted(set(accessions) - set(quality.index))
     if missing:
@@ -115,7 +85,7 @@ def main(argv=None) -> int:
         )
     quality_named = join_strain_names(quality, strains_metadata)
 
-    # ── 2. Module completeness via give_completeness (runs locally) ────────
+    # 2. Module completeness via give_completeness (runs locally)
     ko_hits = load_ko_hits(ko_hits_tsv)
     accession_to_kos = {a: sorted(kos_for_accession(ko_hits, a).unique()) for a in accessions}
     n_zero_hit = sum(1 for kos in accession_to_kos.values() if not kos)
@@ -128,7 +98,7 @@ def main(argv=None) -> int:
     completeness = build_completeness_matrix(contigs_tsv, accessions)
     completeness_named = join_strain_names(completeness, strains_metadata)
 
-    # ── 3. Write ─────────────────────────────────────────────────────────
+    # 3. Write
     output_dir.mkdir(parents=True, exist_ok=True)
     completeness_named.to_csv(completeness_csv)
     quality_named.to_csv(checkm2_csv)

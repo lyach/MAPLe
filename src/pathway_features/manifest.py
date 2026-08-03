@@ -1,12 +1,4 @@
-"""
-manifest.py
-===========
-Builds the strain <-> accession <-> FASTA-path table that gets shipped to
-DRAC for annotation. Cross-validates strains_metadata.csv against the
-FASTA files actually on disk so mismatches are caught locally, before an
-expensive remote run, rather than surfacing as a silent gap in the
-annotation output.
-"""
+"""Builds the strain <-> accession <-> FASTA-path manifest shipped to DRAC."""
 
 from __future__ import annotations
 
@@ -19,12 +11,7 @@ log = logging.getLogger("pathway_features.manifest")
 
 
 def build_manifest(strains_metadata_csv: Path, fasta_dir: Path) -> pd.DataFrame:
-    """Return a DataFrame with one row per strain that has both a metadata
-    row and a FASTA file on disk: columns [strain, ncbi_assembly_accession,
-    fasta_filename]. Logs (but does not raise on) any mismatches -- callers
-    that want a hard failure should check the return value's length against
-    the input metadata's.
-    """
+    """One row per strain with both a metadata row and a FASTA file on disk."""
     if not strains_metadata_csv.exists():
         raise FileNotFoundError(
             f"strains_metadata.csv not found at {strains_metadata_csv} "

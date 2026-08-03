@@ -10,34 +10,30 @@ requires-python = ">=3.10"
 
 # --- Dependencies ---
 dependencies = [
-    
     # Deep Learning
     "torch",
     "torchvision",
     "torchaudio",
     "coral-pytorch",
-
     # Data Science
     "numpy",
     "pandas",
     "scikit-learn",
     "pyarrow",
     "umap-learn>=0.5.11",
-
+    "xgboost",
+    "shap",
     # Data & Utils
     "matplotlib",
     "seaborn",
     "tqdm",
     "loguru",
-
     # MLOps
     "wandb",
-
     # Config
     "pydantic",
     "pydantic-settings",
     "pyyaml",
-
     # Development
     "ruff",
     "jupyterlab",
@@ -48,8 +44,10 @@ dependencies = [
     # kegg-pathways-completeness-tool (give_completeness): runs locally --
     # no database download, no heavy compute, needs only the KO tables
     # already shipped back from the modular pathway-feature pipeline's HPC
-    # run. See docs/pathway_features.md.
+    # run. See docs/modular_pathway_features.md.
     "kegg-pathways-completeness==1.4.3",
+    "mpl-axes-aligner>=1.3",
+    "adjusttext>=1.4.0",
 ]
 
 # uv

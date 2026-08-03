@@ -1,20 +1,4 @@
-"""
-logging_setup.py
-================
-Shared dual-output logging config for pipeline scripts that need a forensic
-run record (as opposed to run_dataset_pipeline.py's loguru-based banners,
-used for quick single-shot transforms). Ported from
-strain_metadata/logging_setup.py so a third near-identical copy doesn't
-appear the next time a multi-stage, external-tool-adjacent pipeline is added.
-
-  * CONSOLE  -- clean, human-friendly progress (INFO and above).
-  * LOG FILE -- everything at DEBUG level, one timestamped file per run,
-                kept permanently so a run can be diffed or investigated later.
-
-The log file lives at logs/run_<YYYY-MM-DD_HH-MM-SS>.log relative to the
-project root. The function returns the path so the caller can mention it
-to the user at the end of the run.
-"""
+"""Shared console + timestamped-file logging for pipeline scripts."""
 
 from __future__ import annotations
 
@@ -35,21 +19,7 @@ def setup_logging(
     file_level: int = logging.DEBUG,
     quiet_console: bool = False,
 ) -> Path:
-    """Configure root logging with a clean console stream and a verbose
-    timestamped file. Returns the path to the log file created.
-
-    Parameters
-    ----------
-    project_root : Path
-        Used to locate the logs/ directory.
-    console_level : int
-        Minimum level shown on the console (default INFO).
-    file_level : int
-        Minimum level written to the log file (default DEBUG -- everything).
-    quiet_console : bool
-        If True, the console only shows WARNING and above (useful for
-        cron jobs); the file still captures everything.
-    """
+    """Configure console + timestamped log-file handlers. Returns the log file path."""
     logs_dir = project_root / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
 

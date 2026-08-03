@@ -1,61 +1,13 @@
 #!/usr/bin/env bash
-# scripts/hpc/setup_modular_env.sh
-# ─────────────────────────────────────────────────────────────────────────────
-# One-time environment + database setup for the modular pathway pipeline,
-# on a DRAC HPC cluster.
-#
-# Tools (versions confirmed/pinned after checking upstream maintenance
-# health and, for CheckM2, that PyPI is stale relative to its own tagged
-# releases -- see CHECKPOINT 1 report and docs/pathway_features.md):
-#   * Pyrodigal 3.7.1        -- gene calling, pure pip wheel, no external binary
-#   * PyKofamSearch 2025.9.5 -- PyHMMER-based KOfam search, pure pip wheel
-#   * CheckM2 1.1.0          -- genome completeness/contamination confounder
-#                                feature. PyPI is stuck on the 2023-01 1.0.1
-#                                release; 1.1.0 is tagged on GitHub (2025-02)
-#                                and matches the current reference database
-#                                (Zenodo record 14897628), so installed from
-#                                the GitHub tag, not PyPI.
-#   * DIAMOND v2.1.11, Prodigal v2.6.3 -- CheckM2's own internal dependencies
-#                                (gene calling + fast alignment it runs on
-#                                itself before ML scoring). Versions pinned
-#                                to exactly what CheckM2's own conda recipe
-#                                (checkm2.yml) tests against, NOT the latest
-#                                releases -- CheckM2 doesn't declare these as
-#                                pip installable deps, so pip can't pin them
-#                                for us; hand-installed as static binaries
-#                                instead.
-#
-# give_completeness (EBI kegg-pathways-completeness-tool) is DELIBERATELY
-# NOT installed here -- it runs locally against the KO tables shipped back
-# from this script's output, not on the cluster. See pyproject.toml /
-# docs/pathway_features.md.
-#
-# Alliance's docs discourage conda envs on the shared filesystem (too many
-# small files). Everything here is pip + hand-installed static binaries, no
-# conda/Ruby dependency.
-#
-# Do NOT run this directly on a login node -- submit it through Slurm
-# instead (database downloads + CheckM2's ML deps are more than a login
-# node should be doing):
+# One-time environment + database setup for the modular pathway pipeline
+# on a DRAC HPC cluster: Pyrodigal, PyKofamSearch, CheckM2 + its DIAMOND/
+# Prodigal dependencies. Submit via Slurm, not on a login node:
 #
 #   sbatch --account=<your-cpu-account> --mem=32G --cpus-per-task=4 --time=3:00:00 \
 #     --job-name=modular-setup --output=%x-%j.out \
 #     --wrap="bash \$HOME/scratch/modular_pathway/hpc/setup_modular_env.sh"
 #
-# ($HOME-relative, not a relative path -- so it works regardless of your
-# current directory when you submit. prepare_modular_manifest.py prints
-# this exact command for you, with your account and remote dir filled in.)
-# --mem/--time above ran clean with no OOM on Nibi (see the confirmed
-# footprint note near the end of this script).
-#
-# Needs internet access for pip installs, the DIAMOND/Prodigal binary
-# downloads, the pykofamsearch KOfam database download (KEGG's own FTP
-# server), and the CheckM2 database download (Zenodo) -- confirmed
-# available from Nibi's compute nodes; re-verify FTP specifically (KOfam's
-# DB is served over FTP, not HTTPS) if this is run on a different cluster.
-#
-# See docs/pathway_features.md for the full local + DRAC workflow.
-# ─────────────────────────────────────────────────────────────────────────────
+# See docs/modular_pathway_features.md for the full workflow.
 set -euo pipefail
 
 MODULAR_ROOT="${MODULAR_ROOT:-$HOME/scratch/modular_pathway}"
@@ -116,12 +68,6 @@ if [ -z "$(find "${CHECKM2_DB_DIR}" -name '*.dmnd' -print -quit 2>/dev/null)" ];
 else
     echo "   A .dmnd database already exists under ${CHECKM2_DB_DIR} -- skipping re-download."
 fi
-
-# This script's own --mem=32G/--time=3:00:00 setup-job estimate above ran
-# clean with no OOM (real peak not separately measured -- database downloads
-# dominate wall time here, not RAM). run_modular_annotate.sbatch's own
-# #SBATCH directives ARE now confirmed empirically: full 25-genome run
-# measured at 24.9GB peak RSS / 36m26s.
 
 echo "== Done. run_modular_annotate.sbatch expects this environment: =="
 echo "   module load StdEnv/2023 python"

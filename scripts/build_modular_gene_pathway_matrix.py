@@ -1,27 +1,5 @@
 #!/usr/bin/env python3
-"""
-build_modular_gene_pathway_matrix.py
-=======================================
-Local, post-annotation step for the modular pathway pipeline. ADDITIVE:
-does not read, write, or modify kegg_pathway_completeness.csv or
-checkm2_quality.csv, or their generation logic.
-
-Parses PyKofamSearch's ko_hits.tsv plus Pyrodigal's per-genome protein
-FASTAs into ONE gene x KEGG-module binary membership matrix PER STRAIN:
-
-    data/external/modular_pathway/gene_pathway_membership/gene_pathway_membership_{strain}.csv
-        Rows: every gene Pyrodigal predicted for that strain (including
-              genes with no KO hit at all -- an all-zero row, not omitted).
-        Columns: KEGG module IDs (e.g. M00001) -- the SAME module set
-              build_modular_pathway_features.py's kegg_pathway_completeness
-              .csv actually has as columns (read from that file's header).
-        Values: binary 0/1. MULTI-LABEL -- a gene's KO can and often does
-              belong to more than one module; all applicable modules get a
-              1, not just one.
-
-    data/external/modular_pathway/gene_pathway_membership/kegg_module_lookup.csv
-        module_id -> human-readable module_name, written once, sourced
-        directly from give_completeness's own reference data.
+"""Builds the per-strain gene x KEGG-module membership matrix + module-name lookup.
 
 Usage:
     python scripts/build_modular_gene_pathway_matrix.py config/dataset/modular_gene_pathway_membership.yaml
@@ -88,16 +66,11 @@ def main(argv=None) -> int:
     if not strains_metadata.exists():
         sys.exit(f"Error: strains_metadata.csv not found at {strains_metadata}")
     if not completeness_csv.exists():
-        sys.exit(
-            f"Error: {completeness_csv} not found -- run build_modular_pathway_features.py "
-            "first (this script reuses its module-ID scope, see docstring)."
-        )
+        sys.exit(f"Error: {completeness_csv} not found -- run build_modular_pathway_features.py first.")
 
     strains_df = pd.read_csv(strains_metadata)
 
-    # ── 1. Module-ID column universe: reuse kegg_pathway_completeness.csv's
-    #        own columns (this branch's give_completeness run), joined to
-    #        readable names from give_completeness's own reference data ────
+    # 1. Module-ID column universe, reused from kegg_pathway_completeness.csv
     _, module_id_to_name = load_ko_module_mapping()
     with completeness_csv.open(encoding="utf-8") as f:
         module_ids = next(csv.reader(f))[1:]
@@ -108,7 +81,7 @@ def main(argv=None) -> int:
             f"give_completeness's reference data -- unexpected, investigate before proceeding: {unknown}"
         )
 
-    # ── 2. Output paths up front, for the --force guard ─────────────────────
+    # 2. Output paths up front, for the --force guard
     per_strain_outputs = {
         strain: output_dir / f"gene_pathway_membership_{_slugify(strain)}.csv"
         for strain in strains_df["strain"]
@@ -124,9 +97,7 @@ def main(argv=None) -> int:
 
     ko_hits = load_ko_hits(ko_hits_tsv)
 
-    # ── 3. Validate every strain FIRST (full gene universe must exist),
-    #        before writing anything -- all-or-nothing, so a failure never
-    #        leaves a partial/misleading result set on disk ────────────────
+    # 3. Validate every strain before writing anything (all-or-nothing)
     ko_to_modules, _ = load_ko_module_mapping()
     gene_universe_by_strain: dict[str, list[str]] = {}
     hits_by_strain: dict[str, pd.Series] = {}
@@ -147,7 +118,7 @@ def main(argv=None) -> int:
             f"before writing any output: {[s for s, _, _ in failures]}"
         )
 
-    # ── 4. All strains validated -- now build and write ─────────────────────
+    # 4. All strains validated -- build and write
     output_dir.mkdir(parents=True, exist_ok=True)
     coverage_rows = []
     for strain, gene_universe in gene_universe_by_strain.items():
@@ -165,13 +136,13 @@ def main(argv=None) -> int:
         })
         print(f"Wrote {out_path} ({n_genes} genes x {len(module_ids)} modules, {n_with_hit} genes with >=1 module hit)")
 
-    # ── 5. Write the module_id -> module_name lookup, once ─────────────────
+    # 5. Write the module_id -> module_name lookup, once
     lookup_df = pd.Series({m: module_id_to_name[m] for m in module_ids}, name="module_name")
     lookup_df.index.name = "module_id"
     lookup_df.sort_index().to_csv(lookup_csv)
     print(f"\nWrote {lookup_csv} ({len(module_ids)} module(s))")
 
-    # ── 6. Summary ───────────────────────────────────────────────────────────
+    # 6. Summary
     coverage_df = pd.DataFrame(coverage_rows)
     print(f"\n{len(coverage_df)} strain(s) processed, {len(module_ids)} KEGG module column(s) each.")
     print(f"Total genes: {coverage_df['total_genes'].sum()}")

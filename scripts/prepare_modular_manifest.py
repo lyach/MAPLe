@@ -1,28 +1,9 @@
 #!/usr/bin/env python3
-"""
-prepare_modular_manifest.py
-=============================
-Local, pre-annotation step for the modular pathway pipeline. Uses
-build_manifest/write_manifest and resolve_drac_account (they only validate
-strain<->FASTA correspondence and resolve a Slurm billing account).
-
-Cross-validates data/external/strains_metadata.csv against the FASTA files
-in data/external/fasta/, and writes:
-
-    data/interim/modular_pathway/fasta_manifest.csv
-
-Prints the rsync command to ship the FASTA files + scripts/hpc/ to DRAC, and
-the sbatch commands for setup_modular_env.sh + run_modular_annotate.sbatch.
-The actual annotation runs on a DRAC HPC cluster, not here. See
-docs/modular_pathway_features.md.
+"""Builds the FASTA manifest and prints the rsync/sbatch commands for DRAC.
 
 USAGE:
     python scripts/prepare_modular_manifest.py
     python scripts/prepare_modular_manifest.py --remote-host narval.alliancecan.ca --remote-dir scratch/modular_pathway
-
-NOTE: --remote-dir must not start with '~' -- if passed as its own shell
-argument, your LOCAL shell expands a leading '~' to your own home directory
-before Python ever sees it (see the --remote-dir help text below for why).
 """
 
 from __future__ import annotations
@@ -53,11 +34,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--remote-host", default="<your-drac-cluster>",
                    help="DRAC hostname to fill in the printed rsync command (e.g. beluga.alliancecan.ca)")
     p.add_argument("--remote-dir", default="scratch/modular_pathway",
-                   help="Destination directory on the remote host for the printed rsync command "
-                        "(relative to the remote $HOME -- avoid a leading '~': if this flag is "
-                        "passed as its own shell argument, your LOCAL shell tilde-expands it to "
-                        "your own home directory before Python ever sees it, since '~' only "
-                        "escapes expansion when it's not at the start of a word)")
+                   help="Remote destination dir, relative to $HOME (no leading '~' -- your "
+                        "local shell would expand it before Python sees it)")
     return p.parse_args(argv)
 
 
