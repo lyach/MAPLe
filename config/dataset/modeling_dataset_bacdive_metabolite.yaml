@@ -1,15 +1,9 @@
 # Modeling dataset config — BacDive metabolite utilization (strain x substrate)
-#
-# Source table is produced by:
-#   python scripts/get_bacdive_dataset.py --target metabolite_utilization
-# One row = one (strain, metabolite, assay kind); target = binary utilization
-# (growth_class: 1 = utilizes/"+", 0 = "-"). Unlike medium_growth this label has
-# real negatives, so it is directly trainable/evaluable.
 
 # ================ FILES ================
-curves_file: "data/external/bacdive_metabolite.csv"
-strain_metadata_file: null          # BacDive rows already carry strain features
-output_name: "bacdive_metabolite_modeling_dataset.csv"
+curves_file: "data/external/bacdive_metabolite.parquet"
+strain_metadata_file: null
+output_name: "bacdive_metabolite_modeling_dataset.parquet"
 
 # ================ MERGE ================
 merge:

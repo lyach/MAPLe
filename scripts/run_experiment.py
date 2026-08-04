@@ -31,8 +31,9 @@ from src.modeling.features import (  # noqa: E402
     merge_external_features,
     warn_loso_onehot,
 )
-from src.modeling.interpret import run_interpretation  # noqa: E402
-from src.modeling.models import build_model, gpu_available  # noqa: E402
+from src.modeling.interpret import run_interpretation
+from src.modeling.io import read_table
+from src.modeling.models import build_model, gpu_available
 
 
 def setup_logging(level: str = "INFO", log_file: Path | None = None) -> None:
@@ -223,7 +224,7 @@ def main() -> None:
     # Load data
     interim_path = ROOT / "data" / "interim" / ds_cfg.output_name
     logger.info("loading modeling dataset: {}", interim_path)
-    df = pd.read_csv(interim_path)
+    df = read_table(interim_path)
     logger.info("dataset shape: {} rows x {} cols", *df.shape)
 
     df = _filter_for_task(df, exp_cfg.task)

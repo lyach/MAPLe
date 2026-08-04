@@ -1,16 +1,12 @@
 # Modeling dataset config — BacDive growth (strain x medium)
-#
-# Source table is produced by:
-#   python scripts/get_bacdive_dataset.py --taxa bacdive/taxa.yaml
-# One row = one (strain, culture medium) datapoint; target = binary growth.
 
 # ================ FILES ================
-curves_file: "data/external/bacdive_growth.csv"
-strain_metadata_file: null          # BacDive rows already carry strain features
-output_name: "bacdive_modeling_dataset.csv"
+curves_file: "data/external/bacdive_growth.parquet"
+strain_metadata_file: null
+output_name: "bacdive_modeling_dataset.parquet"
 
 # ================ MERGE ================
-# No external metadata merge; keys left at defaults for schema compatibility.
+# No external metadata merge; keys left at defaults for compatibility.
 merge:
   left: "strain_name"
   right: "strain"

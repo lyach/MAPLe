@@ -5,7 +5,7 @@ model: config/models/xgboost.yaml
 task: growth_class
 
 cv:
-  strategy: [loso, lomo]
+  strategy: [stratified_grouped]
   n_repeats: 1
 
 metrics: [auroc, pr_auc, f1, mcc, balanced_accuracy]

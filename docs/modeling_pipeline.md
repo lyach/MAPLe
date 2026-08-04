@@ -47,8 +47,8 @@ Before running the modeling pipeline, you need:
 
 | Input               | Source                                                                          | Required |
 | ------------------- | ------------------------------------------------------------------------------- | -------- |
-| Curves CSV          | `data/processed/*_tidy_curves.csv` from [dataset pipeline](dataset_pipeline.md) | Yes      |
-| Strain metadata CSV | `data/external/strains_metadata.csv` (via `get_strain_metadata.py`)             | No       |
+| Curves table         | `data/processed/*_tidy_curves.csv` or `.parquet` from [dataset pipeline](dataset_pipeline.md) / external sources | Yes      |
+| Strain metadata table | `data/external/strains_metadata.csv` (via `get_strain_metadata.py`)                                             | No       |
 | Dataset config      | `config/dataset/modeling_dataset_*.yaml`                                        | Yes      |
 | Model config        | `config/models/*.yaml`                                                          | Yes      |
 | Experiment config   | `config/experiments/*.yaml`                                                     | Yes      |
@@ -65,8 +65,8 @@ The interim modeling dataset must be created **before** running an experiment. `
 
 | Field                  | Type                         | Description                                                                                                                |
 | ---------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `curves_file`          | str or list[str]             | One or more curves CSV paths; multiple files are concatenated                                                              |
-| `strain_metadata_file` | str                          | Strain metadata CSV                                                                                                        |
+| `curves_file`          | str or list[str]             | One or more curves CSV/Parquet paths; multiple files are concatenated                                                      |
+| `strain_metadata_file` | str                          | Strain metadata CSV/Parquet                                                                                                |
 | `output_name`          | str                          | Output filename under `data/interim/`                                                                                      |
 | `grain`                | `"per_well"` or `"averaged"` | Datapoint (row) granularity (see [2c](#2c-merge-and-grain-srcmodelingdatasetpy))                                           |
 | `merge.left`           | str                          | Join key in the curves table                                                                                               |
@@ -85,7 +85,7 @@ python scripts/create_modeling_dataset.py config/dataset/modeling_dataset_aero_a
 
 `build_modeling_dataset` performs three operations:
 
-1. **Load curves** — reads one or more curves CSVs and concatenates them.
+1. **Load curves** — reads one or more curves CSV/Parquet files and concatenates them.
 2. **Merge strain metadata** — left-joins curves CSV with strain metadata columns.
 3. **Replicate averaging** (optional) — controlled by `grain`:
 
@@ -103,7 +103,7 @@ When `grain: "averaged"`, rows are grouped by `(strain_name, media_name, atmosph
 
 ### 2d. Interim output
 
-The output is a CSV at `data/interim/<output_name>`.
+The output is a CSV or Parquet file at `data/interim/<output_name>` (format follows the file extension).
 
 **One row = one (experiment, well) datapoint** when `grain: "per_well"`.  
 **One row = one (strain, media, condition) average** when `grain: "averaged"`.
@@ -189,7 +189,7 @@ python scripts/run_experiment.py config/experiments/aerobic_xgboost.yaml
 The script:
 
 1. Loads and resolves the experiment, dataset, and model configs.
-2. Reads the interim CSV from `data/interim/<output_name>`.
+2. Reads the interim CSV/Parquet from `data/interim/<output_name>`.
 3. Filters rows for the task (e.g. `growth_rate` keeps only `growth_class == 1`).
 4. Runs CV: for each fold, fits the feature pipeline on train, transforms train/test, fits the model, predicts, and evaluates.
 5. Aggregates metrics across folds (mean ± std per strategy).
@@ -372,6 +372,7 @@ All modules live under `src/modeling/` and are importable from notebooks:
 | -------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
 | `config.py`    | `load_dataset_config`, `load_model_config`, `load_experiment_config`, `resolve_experiment` | Pydantic config models + YAML loading                 |
 | `dataset.py`   | `build_modeling_dataset`                                                                   | Merge curves + metadata, optional replicate averaging |
+| `io.py`        | `read_table`, `write_table`                                                                | CSV/Parquet load and save by file extension           |
 | `features.py`  | `build_feature_pipeline`, `featurize`, `warn_loso_onehot`                                  | Leakage-safe sklearn `ColumnTransformer`              |
 | `models.py`    | `build_model`                                                                              | Model registry (linear, RF, XGBoost, MLP, dummy)      |
 | `cv.py`        | `make_splits`, `get_fold_group_label`                                                      | LOSO, LOMO, grouped, stratified-grouped splitters     |
@@ -384,7 +385,7 @@ All modules live under `src/modeling/` and are importable from notebooks:
 
 | Script                               | Usage                          |
 | ------------------------------------ | ------------------------------ |
-| `scripts/create_modeling_dataset.py` | Step 1: build interim CSV      |
+| `scripts/create_modeling_dataset.py` | Step 1: build interim CSV/Parquet |
 | `scripts/run_experiment.py`          | Step 2: CV + evaluation + SHAP |
 
 

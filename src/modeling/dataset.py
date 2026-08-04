@@ -1,4 +1,4 @@
-"""Build the modeling dataset by merging curves CSV with strain metadata."""
+"""Build the modeling dataset by merging curves tables with strain metadata."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import pandas as pd
 from loguru import logger
 
 from src.modeling.config import DatasetConfig
+from src.modeling.io import read_table
 
 # Columns that identify a unique condition for replicate averaging
 _GROUP_COLS = ["strain_name", "media_name", "atmosphere", "temperature"]
@@ -25,14 +26,14 @@ def _normalize_key(s: pd.Series) -> pd.Series:
 
 
 def _resolve_curves_paths(cfg: DatasetConfig, root: Path) -> list[Path]:
-    """Return absolute paths for one or more curves CSV files."""
+    """Return absolute paths for one or more curves CSV/Parquet files."""
     paths = cfg.curves_file if isinstance(cfg.curves_file, list) else [cfg.curves_file]
     return [root / p for p in paths]
 
 
 def _load_curves(curves_paths: list[Path]) -> pd.DataFrame:
-    """Load and concatenate one or more curves CSV files."""
-    dfs = [pd.read_csv(path) for path in curves_paths]
+    """Load and concatenate one or more curves CSV/Parquet files."""
+    dfs = [read_table(path) for path in curves_paths]
     if len(dfs) == 1:
         logger.info("loaded 1 curves file, shape: {} rows x {} cols", *dfs[0].shape)
         return dfs[0]
@@ -90,7 +91,7 @@ def build_modeling_dataset(
     if cfg.strain_metadata_file:
         meta_path = root / cfg.strain_metadata_file
         logger.info("loading strain metadata: {}", meta_path)
-        meta = pd.read_csv(meta_path)
+        meta = read_table(meta_path)
         logger.info("strain metadata shape: {} rows x {} cols", *meta.shape)
 
         left_key = cfg.merge.left
