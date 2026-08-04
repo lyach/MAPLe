@@ -7,6 +7,9 @@ __pycache__/
 local/
 reports/
 notebooks/
+scripts/slurm/
+databases/
+tools/
 
 # data
 data/*

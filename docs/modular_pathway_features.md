@@ -2,14 +2,12 @@
 
 ## Overview
 
-This pipeline derives a strain × KEGG-pathway feature matrix from the genome FASTA files in `data/external/fasta/` (see [`docs/plans/pathway_features.md`](plans/pathway_features.md) for the original design). It's a modular, license-independent pipeline built from four small, purpose-specific tools:
+This pipeline derives a strain × KEGG-pathway feature matrix from the genome FASTA files in `data/external/fasta/` (see [`docs/plans/pathway_features.md`](plans/pathway_features.md) for the original design). It's a modular, license-independent pipeline built from four tools:
 
 - **Pyrodigal**: gene calling
 - **PyKofamSearch**: KO (KEGG Orthology) annotation
 - **EBI's `give_completeness`** (kegg-pathways-completeness-tool): KEGG-module completeness scoring
 - **CheckM2**: genome completeness/contamination (a required confounder feature, independent of pathway coverage)
-
-No dimensionality reduction is precomputed - if the modeling pipeline wants a reduced pathway representation, it must fit PCA inside its own cross-validation loop, on training strains only, not globally here.
 
 ## Running this pipeline end-to-end
 
@@ -102,9 +100,9 @@ Nothing in this repo can execute the remote step for you - a DRAC account/alloca
 python scripts/prepare_modular_manifest.py
 ```
 
-Cross-checks `data/external/strains_metadata.csv` against `data/external/fasta/`, writes `data/interim/modular_pathway/fasta_manifest.csv`, and prints the rsync + sbatch commands to ship the FASTA files and `scripts/hpc/` to your DRAC cluster. Any FASTA file without a metadata row (or vice versa) is excluded and logged rather than silently included.
+Cross-checks `data/external/strains_metadata.csv` against `data/external/fasta/`, writes `data/interim/modular_pathway/fasta_manifest.csv`, and prints the rsync + sbatch commands to ship the FASTA files and `scripts/hpc/` to an HPC cluster. Any FASTA file without a metadata row (or vice versa) is excluded and logged.
 
-The printed `sbatch` commands include your Slurm billing account, filled in automatically. **No lab's account is hardcoded anywhere in this repo** - the first time you run this script, you'll be prompted for your own (e.g. `def-yourpi` or `rrg-yourpi`; find yours on the cluster with `sacctmgr show associations user=$USER format=account%30`), and it's cached locally in `.drac_credentials.json` (gitignored, mirrors how `strain_metadata`'s NCBI email works - see `src/pathway_features/drac_credentials.py`). Set the `DRAC_ACCOUNT` environment variable instead to skip the prompt (e.g. in CI).
+The printed `sbatch` commands include your Slurm account, filled in automatically. The first time you run this script, you'll be prompted for your own (e.g. `def-yourpi` or `rrg-yourpi`), and it's cached locally in `.drac_credentials.json` (gitignored).
 
 ### 2. Remote: run the pipeline on DRAC
 

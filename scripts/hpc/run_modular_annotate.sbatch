@@ -8,9 +8,9 @@
 # See docs/modular_pathway_features.md.
 
 #SBATCH --job-name=modular-annotate
-#SBATCH --time=01:00:00                   # sized from a measured run
+#SBATCH --time=01:00:00                   
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=32G                         # PyKofamSearch's HMM DB load dominates, not genome count
+#SBATCH --mem=32G
 #SBATCH --output=%x-%j.out
 
 set -euo pipefail
