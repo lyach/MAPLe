@@ -1,0 +1,9 @@
+# Config for build_modular_pathway_features.py.
+# Usage: python scripts/build_modular_pathway_features.py config/dataset/modular_pathway_features.yaml
+# Run after rsyncing ko_annotation/ and checkm2/ back from DRAC.
+
+strains_metadata: data/external/strains_metadata.csv
+ko_annotation_dir: data/external/modular_pathway/ko_annotation
+checkm2_dir: data/external/modular_pathway/checkm2
+
+output_dir: data/external/modular_pathway

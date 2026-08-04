@@ -1,0 +1,12 @@
+# Config for build_modular_gene_pathway_matrix.py.
+# Usage: python scripts/build_modular_gene_pathway_matrix.py config/dataset/modular_gene_pathway_membership.yaml
+# Run after build_modular_pathway_features.py and rsyncing back per-genome protein FASTAs.
+
+strains_metadata: data/external/strains_metadata.csv
+ko_annotation_dir: data/external/modular_pathway/ko_annotation
+genes_dir: data/external/modular_pathway/genes
+
+# Module-ID column scope, shared with kegg_pathway_completeness.csv.
+completeness_csv: data/external/modular_pathway/kegg_pathway_completeness.csv
+
+output_dir: data/external/modular_pathway/gene_pathway_membership

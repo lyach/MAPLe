@@ -6,12 +6,10 @@ Usage:
 
 import argparse
 import json
-import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import yaml
 from loguru import logger
@@ -19,22 +17,22 @@ from loguru import logger
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.modeling.config import resolve_experiment
-from src.modeling.cv import get_fold_group_label, make_splits
-from src.modeling.evaluate import (
+from src.modeling.config import resolve_experiment  # noqa: E402
+from src.modeling.cv import get_fold_group_label, make_splits  # noqa: E402
+from src.modeling.evaluate import (  # noqa: E402
     aggregate_metrics,
     evaluate_fold,
     per_group_metrics,
 )
-from src.modeling.features import (
+from src.modeling.features import (  # noqa: E402
     build_feature_group_index,
     build_feature_pipeline,
     get_feature_names,
     merge_external_features,
     warn_loso_onehot,
 )
-from src.modeling.interpret import run_interpretation
-from src.modeling.models import build_model, gpu_available
+from src.modeling.interpret import run_interpretation  # noqa: E402
+from src.modeling.models import build_model, gpu_available  # noqa: E402
 
 
 def setup_logging(level: str = "INFO", log_file: Path | None = None) -> None:
@@ -201,9 +199,9 @@ def main() -> None:
     logger.info("model: {} ({})", mdl_cfg.type, mdl_cfg.params)
     if mdl_cfg.type == "xgboost":
         if gpu_available():
-            logger.info("GPU available — XGBoost will train on CUDA")
+            logger.info("GPU available, XGBoost will train on CUDA")
         else:
-            logger.info("No GPU available — XGBoost will train on CPU")
+            logger.info("No GPU available, XGBoost will train on CPU")
     logger.info("CV strategies: {}", exp_cfg.cv.strategy)
     logger.info("output: {}", output_dir)
 

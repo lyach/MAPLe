@@ -8,7 +8,9 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from adjustText import adjust_text
 from matplotlib.figure import Figure
+from sklearn.decomposition import PCA
 import seaborn as sns
 
 def _read_dataframe_from_csv(path: str) -> pd.DataFrame:
@@ -336,5 +338,348 @@ def plot_metrics_comparison(
     _add_shared_side_legend(
         fig, legend_handles, title=legend_title, fig_title=fig_title
     )
+
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# Pathway-matrix analysis plots (docs/plans/pathway_features.md "Analysis")
+# ---------------------------------------------------------------------------
+
+# Colorblind-safe categorical triplet (blue/orange/aqua), validated for
+# scatter all-pairs separation. Groups beyond 3 fold into "Other".
+_ACADEMIC_CATEGORICAL = ["#2a78d6", "#eb6834", "#1baf7a"]
+_OTHER_COLOR = "#9a9a94"
+
+
+def _fold_small_groups(series: pd.Series, max_groups: int = 3, other_label: str = "Other") -> pd.Series:
+    """Keep the `max_groups` most frequent categories; fold the rest into `other_label`."""
+    top = series.value_counts().nlargest(max_groups).index
+    return series.where(series.isin(top), other_label)
+
+
+def _style_axis(ax) -> None:
+    """Despine, recessive gridlines, publication-sized tick labels."""
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.set_axisbelow(True)
+    ax.grid(True, color="0.88", linewidth=0.6)
+    ax.tick_params(labelsize=9.5)
+
+
+def _label_outliers(ax, x: pd.Series, y: pd.Series, labels: pd.Series, n: int | None = 5) -> list:
+    """Text-label points (all, if n=None; else the n most extreme by
+    centroid distance), for `_declutter_labels` to position.
+    """
+    if len(x) == 0 or (n is not None and n <= 0):
+        return []
+    if n is None:
+        top_idx = x.index
+    else:
+        xz = (x - x.mean()) / (x.std() or 1)
+        yz = (y - y.mean()) / (y.std() or 1)
+        dist = np.hypot(xz, yz)
+        top_idx = dist.nlargest(min(n, len(dist))).index
+    return [ax.text(x.loc[i], y.loc[i], labels.loc[i], fontsize=8, color="0.25") for i in top_idx]
+
+
+def _declutter_labels(ax, texts: list, avoid_x=None, avoid_y=None) -> None:
+    """Auto-repel overlapping labels (adjustText), with a leader line back
+    to each moved label's point. Uses point coordinates, not adjustText's
+    `objects=` bbox avoidance, which crashes on a log-scale axis. Defaults
+    for time/force/movement are raised -- too low for 25+ dense labels.
+    """
+    if not texts:
+        return
+    kwargs = {}
+    if avoid_x is not None:
+        kwargs["x"] = list(avoid_x)
+        kwargs["y"] = list(avoid_y)
+    adjust_text(
+        texts, ax=ax,
+        arrowprops=dict(arrowstyle="-", color="0.6", lw=0.6, shrinkA=0, shrinkB=2),
+        time_lim=25, force_text=(0.6, 0.8), max_move=(60, 60), expand=(1.3, 1.4),
+        **kwargs,
+    )
+
+
+def _scatter_by_group(ax, df: pd.DataFrame, x: str, y: str, color_by: str | None, palette: str | None):
+    """Scatter df[x] vs df[y] colored by df[color_by]; returns legend handles."""
+    if color_by is None:
+        ax.scatter(df[x], df[y], s=45, alpha=0.85, color=_ACADEMIC_CATEGORICAL[0],
+                   edgecolors="white", linewidths=0.7)
+        return {}
+
+    grouped_col = _fold_small_groups(df[color_by].astype(str), max_groups=3)
+    real_groups = sorted(g for g in grouped_col.unique() if g != "Other")
+    has_other = "Other" in grouped_col.unique()
+    groups = real_groups + (["Other"] if has_other else [])
+
+    swatches = _color_cycle(len(real_groups), palette=palette) if palette else _ACADEMIC_CATEGORICAL[: len(real_groups)]
+    colors = dict(zip(real_groups, swatches))
+    colors["Other"] = _OTHER_COLOR
+
+    handles: dict = {}
+    for gval in groups:
+        mask = grouped_col == gval
+        scatter = ax.scatter(
+            df.loc[mask, x], df.loc[mask, y], color=colors[gval], s=45, alpha=0.85,
+            edgecolors="white", linewidths=0.7,
+        )
+        handles[gval] = scatter
+    return handles
+
+
+def plot_pathway_count_vs_assembly_quality(
+    pathway_df: pd.DataFrame | str | Path,
+    metadata_df: pd.DataFrame | str | Path,
+    *,
+    completeness_threshold: float = 0.0,
+    color_by: str = "assembly_level",
+    label_top_n: int = 5,
+    palette: str | None = None,
+    figsize: tuple[float, float] = (7, 6),
+    fig_title: str | None = "Pathway count vs assembly quality",
+) -> Figure:
+    """Sanity check: pathway count vs assembly fragmentation (num_contigs, log scale)."""
+    pdf = _as_dataframe(pathway_df)
+    pdf = pdf.set_index("strain") if "strain" in pdf.columns else pdf
+    metadata_df = _as_dataframe(metadata_df)
+
+    pathway_count = (pdf > completeness_threshold).sum(axis=1).rename("pathway_count")
+    merged = metadata_df.merge(pathway_count, left_on="strain", right_index=True, how="inner")
+
+    fig, ax = plt.subplots(figsize=figsize)
+    handles = _scatter_by_group(ax, merged, "num_contigs", "pathway_count", color_by, palette)
+    ax.set_xscale("log")
+    ax.set_xlabel("num_contigs (log scale)", fontsize=11)
+    ax.set_ylabel("pathway count", fontsize=11)
+    _style_axis(ax)
+
+    texts = _label_outliers(ax, merged["num_contigs"], merged["pathway_count"], merged["strain"], n=label_top_n)
+    _declutter_labels(ax, texts, avoid_x=merged["num_contigs"], avoid_y=merged["pathway_count"])
+
+    if handles:
+        fig.tight_layout(rect=(0, 0, 0.72, 0.94 if fig_title else 1.0))
+        fig.legend(handles.values(), handles.keys(), title=color_by,
+                   loc="center left", bbox_to_anchor=(0.74, 0.5), frameon=True, fontsize=9.5, title_fontsize=10)
+    else:
+        fig.tight_layout(rect=(0, 0, 1.0, 0.94 if fig_title else 1.0))
+    if fig_title:
+        fig.suptitle(fig_title, fontsize=13, fontweight="bold")
+
+    return fig
+
+
+def plot_pathway_pca_biplot(
+    pathway_df: pd.DataFrame | str | Path,
+    color_df: pd.DataFrame | str | Path | None = None,
+    *,
+    color_col: str = "phylum",
+    binary: bool = False,
+    completeness_threshold: float = 0.0,
+    n_top_loadings: int = 10,
+    label_top_n: int | None = None,
+    palette: str | None = None,
+    figsize: tuple[float, float] = (11, 9),
+    fig_title: str | None = "Pathway PCA biplot",
+) -> Figure:
+    """PCA biplot: do pathways separate strains biologically? Arrow labels
+    are module IDs (full names collide); ``binary=True`` thresholds to
+    presence/absence instead of continuous completeness.
+    """
+    pdf = _as_dataframe(pathway_df)
+    pdf = pdf.set_index("strain") if "strain" in pdf.columns else pdf
+    if binary:
+        pdf = (pdf > completeness_threshold).astype(int)
+
+    pca = PCA(n_components=2)
+    scores = pca.fit_transform(pdf.values)
+    scores_df = pd.DataFrame(scores, index=pdf.index, columns=["PC1", "PC2"]).reset_index()
+    scores_df = scores_df.rename(columns={scores_df.columns[0]: "strain"})
+
+    if color_df is not None:
+        color_df = _as_dataframe(color_df)
+        scores_df = scores_df.merge(color_df[["strain", color_col]], on="strain", how="left")
+
+    fig, ax = plt.subplots(figsize=figsize)
+    handles = _scatter_by_group(
+        ax, scores_df, "PC1", "PC2", color_col if color_df is not None else None, palette
+    )
+    var = pca.explained_variance_ratio_
+    ax.set_xlabel(f"PC1 ({var[0]:.1%} var)", fontsize=11)
+    ax.set_ylabel(f"PC2 ({var[1]:.1%} var)", fontsize=11)
+    _style_axis(ax)
+
+    point_texts = _label_outliers(ax, scores_df["PC1"], scores_df["PC2"], scores_df["strain"], n=label_top_n)
+
+    # Top-N loading arrows, scaled to roughly span the score cloud.
+    loadings = pca.components_[:2, :]
+    magnitude = np.linalg.norm(loadings, axis=0)
+    top_idx = np.argsort(magnitude)[::-1][:n_top_loadings]
+    scale = 0.8 * max(scores_df["PC1"].abs().max(), scores_df["PC2"].abs().max()) / max(magnitude[top_idx].max(), 1e-9)
+    arrow_x = loadings[0, top_idx] * scale
+    arrow_y = loadings[1, top_idx] * scale
+    arrow_texts = []
+    for i, ax_i, ay_i in zip(top_idx, arrow_x, arrow_y):
+        ax.annotate(
+            "", xy=(ax_i, ay_i), xytext=(0, 0),
+            arrowprops=dict(arrowstyle="->", color="0.4", alpha=0.8, lw=1.1),
+        )
+        arrow_texts.append(ax.text(ax_i, ay_i, pdf.columns[i], fontsize=8, color="0.3"))
+
+    # ax.annotate's arrows don't participate in autoscaling -- expand the
+    # limits explicitly so arrow tips (which can extend past the score
+    # cloud) aren't silently clipped outside the visible axes, before
+    # adjustText runs (it needs final axes limits to place labels well).
+    x_lo, x_hi = ax.get_xlim()
+    y_lo, y_hi = ax.get_ylim()
+    pad_x = 0.08 * (x_hi - x_lo)
+    pad_y = 0.08 * (y_hi - y_lo)
+    ax.set_xlim(min(x_lo, arrow_x.min()) - pad_x, max(x_hi, arrow_x.max()) + pad_x)
+    ax.set_ylim(min(y_lo, arrow_y.min()) - pad_y, max(y_hi, arrow_y.max()) + pad_y)
+
+    # One combined declutter pass so strain labels and arrow labels repel
+    # each other too, not just within their own group. Every strain point
+    # (not just labeled ones) and every arrow tip is passed as something
+    # to avoid, so labels don't drift onto an unlabeled point either.
+    _declutter_labels(
+        ax, point_texts + arrow_texts,
+        avoid_x=list(scores_df["PC1"]) + list(arrow_x),
+        avoid_y=list(scores_df["PC2"]) + list(arrow_y),
+    )
+
+    if handles:
+        fig.tight_layout(rect=(0, 0, 0.72, 0.94 if fig_title else 1.0))
+        fig.legend(handles.values(), handles.keys(), title=color_col,
+                   loc="center left", bbox_to_anchor=(0.74, 0.5), frameon=True, fontsize=9.5, title_fontsize=10)
+    else:
+        fig.tight_layout(rect=(0, 0, 1.0, 0.94 if fig_title else 1.0))
+    if fig_title:
+        fig.suptitle(fig_title, fontsize=12, fontweight="bold")
+
+    return fig
+
+
+def plot_pathway_count_vs_growth(
+    pathway_df: pd.DataFrame | str | Path,
+    curves_df: pd.DataFrame | str | Path,
+    *,
+    growth_col: str = "max_od",
+    completeness_threshold: float = 0.0,
+    color_df: pd.DataFrame | str | Path | None = None,
+    color_col: str = "phylum",
+    label_top_n: int = 5,
+    palette: str | None = None,
+    figsize: tuple[float, float] = (7, 6),
+    fig_title: str | None = "Pathway count vs growth",
+) -> Figure:
+    """Pathway count vs mean growth (e.g. max_od), with Pearson r."""
+    pdf = _as_dataframe(pathway_df)
+    pdf = pdf.set_index("strain") if "strain" in pdf.columns else pdf
+    pathway_count = (pdf > completeness_threshold).sum(axis=1).rename("pathway_count")
+
+    curves_df = _as_dataframe(curves_df)
+    mean_growth = curves_df.groupby("strain_name")[growth_col].mean().rename(growth_col)
+
+    merged = pd.DataFrame(pathway_count).join(mean_growth, how="inner").reset_index()
+    merged = merged.rename(columns={merged.columns[0]: "strain"})
+
+    if color_df is not None:
+        color_df = _as_dataframe(color_df)
+        merged = merged.merge(color_df[["strain", color_col]], on="strain", how="left")
+
+    fig, ax = plt.subplots(figsize=figsize)
+    handles = _scatter_by_group(
+        ax, merged, "pathway_count", growth_col, color_col if color_df is not None else None, palette
+    )
+    ax.set_xlabel("pathway count", fontsize=11)
+    ax.set_ylabel(f"mean {growth_col}", fontsize=11)
+    _style_axis(ax)
+
+    texts = _label_outliers(ax, merged["pathway_count"], merged[growth_col], merged["strain"], n=label_top_n)
+    _declutter_labels(ax, texts, avoid_x=merged["pathway_count"], avoid_y=merged[growth_col])
+
+    r = np.corrcoef(merged["pathway_count"], merged[growth_col])[0, 1] if len(merged) > 2 else float("nan")
+    ax.text(0.05, 0.95, f"Pearson r = {r:.2f}", transform=ax.transAxes,
+            fontsize=10, va="top", bbox=dict(boxstyle="round", fc="white", ec="0.7", alpha=0.9))
+
+    if handles:
+        fig.tight_layout(rect=(0, 0, 0.72, 0.94 if fig_title else 1.0))
+        fig.legend(handles.values(), handles.keys(), title=color_col,
+                   loc="center left", bbox_to_anchor=(0.74, 0.5), frameon=True, fontsize=9.5, title_fontsize=10)
+    else:
+        fig.tight_layout(rect=(0, 0, 1.0, 0.94 if fig_title else 1.0))
+    if fig_title:
+        fig.suptitle(fig_title, fontsize=13, fontweight="bold")
+
+    return fig
+
+
+def plot_pca_scree(
+    pathway_df: pd.DataFrame | str | Path,
+    *,
+    max_components: int | None = None,
+    reference_lines: tuple[float, ...] = (0.8, 0.9, 0.95),
+    figsize: tuple[float, float] = (7, 5),
+    fig_title: str | None = "Cumulative explained variance",
+) -> Figure:
+    """Cumulative explained variance vs number of PCA components."""
+    pdf = _as_dataframe(pathway_df)
+    pdf = pdf.set_index("strain") if "strain" in pdf.columns else pdf
+
+    n = max_components or min(pdf.shape)
+    pca = PCA(n_components=n).fit(pdf.values)
+    cumvar = np.cumsum(pca.explained_variance_ratio_)
+
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.plot(np.arange(1, n + 1), cumvar, marker="o", ms=4, lw=1.8, color=_ACADEMIC_CATEGORICAL[0])
+    for ref in reference_lines:
+        ax.axhline(ref, color="0.6", lw=0.8, ls="--", alpha=0.8)
+        ax.text(n, ref, f"{ref:.0%}", fontsize=8.5, color="0.35", va="bottom", ha="right")
+    ax.set_xlabel("number of components", fontsize=11)
+    ax.set_ylabel("cumulative explained variance", fontsize=11)
+    ax.set_ylim(0, 1.02)
+    _style_axis(ax)
+    fig.tight_layout(rect=(0, 0, 1.0, 0.94 if fig_title else 1.0))
+    if fig_title:
+        fig.suptitle(fig_title, fontsize=13, fontweight="bold")
+
+    return fig
+
+
+def plot_loso_vs_n_components(
+    results_df: pd.DataFrame | str | Path,
+    *,
+    n_col: str = "n_components",
+    mean_col: str = "metric_mean",
+    std_col: str = "metric_std",
+    metric_label: str = "RMSE",
+    baseline_value: float | None = None,
+    baseline_label: str = "baseline features",
+    figsize: tuple[float, float] = (7, 5),
+    fig_title: str | None = "LOSO performance vs number of PCA components",
+) -> Figure:
+    """LOSO performance (mean +/- std) vs number of PCA components, with an
+    optional baseline reference line. Expects `results_df` already computed.
+    """
+    df = _as_dataframe(results_df)
+
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.errorbar(
+        df[n_col], df[mean_col], yerr=df[std_col],
+        marker="o", ms=6, lw=1.8, capsize=3, capthick=1.2, color=_ACADEMIC_CATEGORICAL[0],
+        markeredgecolor="white", markeredgewidth=0.7, label=metric_label,
+    )
+    if baseline_value is not None:
+        ax.axhline(baseline_value, color="0.5", lw=1.2, ls="--", alpha=0.9, label=baseline_label)
+
+    ax.set_xlabel("number of PCA components", fontsize=11)
+    ax.set_ylabel(metric_label, fontsize=11)
+    _style_axis(ax)
+    ax.legend(frameon=True, fontsize=9.5)
+    fig.tight_layout(rect=(0, 0, 1.0, 0.94 if fig_title else 1.0))
+    if fig_title:
+        fig.suptitle(fig_title, fontsize=13, fontweight="bold")
 
     return fig
