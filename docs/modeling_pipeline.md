@@ -125,6 +125,7 @@ The table retains all columns from the curves CSV plus any merged metadata colum
 | `task`                       | str              | `"growth_class"`                              | Prediction target                                 |
 | `cv.strategy`                | str or list[str] | `[loso, lomo]`                                | CV strategy                                       |
 | `cv.n_repeats`               | int              | `1`                                           | Number of CV repeats                              |
+| `class_weight`               | str or dict      | `"balanced"`                                  | Per-sample class reweighting (see [3d](#3d-class-imbalance-handling-reweighting)) |
 | `metrics`                    | list[str]        | `[auroc, f1, mcc]`                            | Metrics to compute                                |
 | `interpret.shap`             | bool             | `true`                                        | Run SHAP analysis after CV                        |
 | `interpret.group_importance` | bool             | `true`                                        | Compute strain/media/condition grouped importance |
@@ -145,6 +146,8 @@ task: growth_class
 cv:
   strategy: [loso, lomo]
   n_repeats: 1
+
+class_weight: balanced
 
 metrics: [auroc, f1, mcc, balanced_accuracy]
 
@@ -195,6 +198,18 @@ The script:
 5. Aggregates metrics across folds (mean ± std per strategy).
 6. Refits on all data and runs SHAP interpretability (if enabled).
 7. Saves everything to `reports/<name>/`.
+
+### 3d. Class imbalance handling (reweighting)
+
+For skewed targets (e.g. `growth_class` with rare no-growth wells), set `class_weight` in the experiment config:
+
+```yaml
+class_weight: balanced          # or a {class: weight} dict, e.g. {0: 5.0, 1: 1.0}
+```
+
+- Weights are computed with `sklearn.utils.class_weight.compute_sample_weight` on the **train fold only** (leakage-safe) and passed as `sample_weight` to `model.fit`. Estimators whose `fit` doesn't accept `sample_weight` fall back to an unweighted fit with a warning.
+- The decision threshold is not fixed at 0.5: `tune_threshold` (`src/modeling/evaluate.py`) sweeps thresholds over the **train fold's** predicted probabilities and picks the one maximizing MCC (or F1 of the no-growth class), stored as `threshold` per fold in `fold_metrics.csv`.
+- Because rare classes make per-fold estimates noisy, headline metrics are also computed on **pooled out-of-fold predictions** across all folds and saved under the `pooled` key in `metrics.json`, alongside the threshold-free ranking metrics.
 
 ---
 
@@ -291,14 +306,19 @@ X, y, feature_names, groups, fgm = featurize(df, cfg, target="growth_class")
 **Classification** (`growth_class`):
 
 
-| Metric               | Key                 |
-| -------------------- | ------------------- |
-| AUROC                | `auroc`             |
-| PR-AUC               | `pr_auc`            |
-| F1 score             | `f1`                |
-| Matthews correlation | `mcc`               |
-| Balanced accuracy    | `balanced_accuracy` |
+| Metric                             | Key                   |
+| ----------------------------------- | --------------------- |
+| AUROC                               | `auroc`               |
+| PR-AUC (growth, label 1)            | `pr_auc`               |
+| PR-AUC (no-growth, label 0)         | `pr_auc_nogrowth`     |
+| F1 score (growth)                   | `f1`                  |
+| F1 score (no-growth)                | `f1_nogrowth`         |
+| Recall (no-growth)                  | `recall_nogrowth`     |
+| Precision (no-growth)               | `precision_nogrowth`  |
+| Matthews correlation                | `mcc`                 |
+| Balanced accuracy                   | `balanced_accuracy`   |
 
+`auroc`, `pr_auc`, and `pr_auc_nogrowth` are threshold-free (ranking); the rest are computed at the fold's tuned `threshold` (see [3d](#3d-class-imbalance-handling-reweighting)). The `*_nogrowth` variants target the minority class and are recommended over `f1`/`pr_auc` for imbalanced growth-class datasets.
 
 **Regression** (`max_od`, `growth_rate`):
 
@@ -311,7 +331,7 @@ X, y, feature_names, groups, fgm = featurize(df, cfg, target="growth_class")
 | MAE       | `mae`       |
 
 
-Metrics are computed per fold, then aggregated (mean ± std) per CV strategy. Per-strain and per-media breakdowns are saved separately.
+Metrics are computed per fold, then aggregated (mean ± std) per CV strategy, plus a pooled out-of-fold summary (see [3d](#3d-class-imbalance-handling-reweighting)). Per-strain and per-media breakdowns are saved separately, with support counts `n`/`n_pos`/`n_neg` so `NaN` ranking metrics on single-class groups are self-explanatory; a `*_withneg.csv` variant filters to groups containing at least one no-growth case.
 
 ---
 
@@ -350,11 +370,13 @@ Each run writes to `reports/<experiment_name>/`:
 reports/aerobic_xgboost_growth_class/
   config.yaml              ← snapshot of all three configs + timestamp
   experiment.log           ← full run log
-  fold_metrics.csv         ← per-fold metrics (strategy, fold, fold_label, metrics)
-  metrics.json             ← aggregate mean ± std per CV strategy
+  fold_metrics.csv         ← per-fold metrics (strategy, fold, fold_label, threshold, metrics)
+  metrics.json             ← aggregate mean ± std per CV strategy + pooled OOF summary
   predictions.csv          ← y_true, y_pred, y_prob, strategy, fold, strain, media
-  metrics_by_strain_name.csv
+  metrics_by_strain_name.csv          ← includes n, n_pos, n_neg
+  metrics_by_strain_name_withneg.csv  ← filtered to groups with n_neg > 0
   metrics_by_media_name.csv
+  metrics_by_media_name_withneg.csv
   figures/
     shap_beeswarm.png
     shap_bar.png

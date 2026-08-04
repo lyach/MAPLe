@@ -15,7 +15,9 @@ from sklearn.metrics import (
     matthews_corrcoef,
     mean_absolute_error,
     mean_squared_error,
+    precision_score,
     r2_score,
+    recall_score,
     roc_auc_score,
 )
 
@@ -36,6 +38,18 @@ def _safe_prauc(y_true: np.ndarray, y_prob: np.ndarray) -> float:
     return float(average_precision_score(y_true, y_prob))
 
 
+def _safe_prauc_nogrowth(y_true: np.ndarray, y_prob: np.ndarray) -> float:
+    """PR-AUC for the minority no-growth event (label 0).
+
+    ``y_prob`` is P(growth); the no-growth score is ``1 - y_prob`` and the
+    positive label becomes ``y_true == 0``.
+    """
+    if len(np.unique(y_true)) < 2:
+        return float("nan")
+    y_nogrowth = (np.asarray(y_true) == 0).astype(int)
+    return float(average_precision_score(y_nogrowth, 1.0 - np.asarray(y_prob)))
+
+
 def _safe_pearsonr(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     if len(y_true) < 3 or np.std(y_true) == 0 or np.std(y_pred) == 0:
         return float("nan")
@@ -45,7 +59,11 @@ def _safe_pearsonr(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 _CLF_METRICS: dict[str, Any] = {
     "auroc": lambda yt, yp, yprob: _safe_auroc(yt, yprob),
     "pr_auc": lambda yt, yp, yprob: _safe_prauc(yt, yprob),
+    "pr_auc_nogrowth": lambda yt, yp, yprob: _safe_prauc_nogrowth(yt, yprob),
     "f1": lambda yt, yp, yprob: float(f1_score(yt, yp, zero_division=0)),
+    "f1_nogrowth": lambda yt, yp, yprob: float(f1_score(yt, yp, pos_label=0, zero_division=0)),
+    "recall_nogrowth": lambda yt, yp, yprob: float(recall_score(yt, yp, pos_label=0, zero_division=0)),
+    "precision_nogrowth": lambda yt, yp, yprob: float(precision_score(yt, yp, pos_label=0, zero_division=0)),
     "mcc": lambda yt, yp, yprob: float(matthews_corrcoef(yt, yp)),
     "balanced_accuracy": lambda yt, yp, yprob: float(balanced_accuracy_score(yt, yp)),
 }
@@ -57,6 +75,39 @@ _REG_METRICS: dict[str, Any] = {
     "mae": lambda yt, yp: float(mean_absolute_error(yt, yp)),
     "spearman_r": lambda yt, yp: float(spearmanr(yt, yp)[0]),
 }
+
+
+# ---------------------------------------------------------------------------
+# Decision-threshold tuning
+# ---------------------------------------------------------------------------
+
+def tune_threshold(
+    y_true: np.ndarray,
+    y_prob: np.ndarray,
+    objective: str = "mcc",
+) -> float:
+    """Return the ``y_prob`` (P(growth)) threshold maximizing MCC or ``f1_nogrowth``."""
+    y_true = np.asarray(y_true)
+    y_prob = np.asarray(y_prob)
+    if len(np.unique(y_true)) < 2:
+        return 0.5
+
+    if objective == "f1_nogrowth":
+        score_fn = lambda yt, yp: f1_score(yt, yp, pos_label=0, zero_division=0)
+    else:
+        score_fn = matthews_corrcoef
+
+    candidates = np.unique(y_prob)
+    if len(candidates) > 200:
+        candidates = np.quantile(candidates, np.linspace(0.0, 1.0, 200))
+
+    best_thr, best_score = 0.5, -np.inf
+    for thr in candidates:
+        y_pred = (y_prob >= thr).astype(int)
+        score = float(score_fn(y_true, y_pred))
+        if score > best_score:
+            best_score, best_thr = score, float(thr)
+    return best_thr
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +233,12 @@ def per_group_metrics(
         y_pred = grp["y_pred"].values
         y_prob = grp["y_prob"].values if "y_prob" in grp.columns else None
         m = evaluate_fold(y_true, y_pred, y_prob, task, requested)
+        # Support counts make single-class NaNs (undefined AUROC/PR-AUC on a
+        # group with no negatives) interpretable at a glance.
+        m["n"] = int(len(y_true))
+        if task == "growth_class":
+            m["n_pos"] = int((y_true == 1).sum())  # growth
+            m["n_neg"] = int((y_true == 0).sum())  # no-growth
         m[group_col] = name
         rows.append(m)
 

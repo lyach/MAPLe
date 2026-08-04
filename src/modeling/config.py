@@ -98,6 +98,7 @@ class ExperimentConfig(BaseModel):
     model: str
     task: Literal["growth_class", "max_od", "growth_rate"]
     cv: CVConfig = CVConfig()
+    class_weight: str | dict[Any, float] | None = None
     metrics: list[str] = []
     interpret: InterpretConfig = InterpretConfig()
     seed: int = 42

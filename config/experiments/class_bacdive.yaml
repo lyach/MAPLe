@@ -8,7 +8,9 @@ cv:
   strategy: [stratified_grouped]
   n_repeats: 1
 
-metrics: [auroc, pr_auc, f1, mcc, balanced_accuracy]
+class_weight: balanced # Upweights the rare class (no-growth, 0) during training
+
+metrics: [auroc, pr_auc_nogrowth, recall_nogrowth, precision_nogrowth, mcc, balanced_accuracy]
 
 interpret:
   shap: true

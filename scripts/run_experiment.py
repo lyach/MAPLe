@@ -5,6 +5,7 @@ Usage:
 """
 
 import argparse
+import inspect
 import json
 import sys
 from datetime import datetime
@@ -13,6 +14,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 from loguru import logger
+from sklearn.utils.class_weight import compute_sample_weight
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -23,6 +25,7 @@ from src.modeling.evaluate import (  # noqa: E402
     aggregate_metrics,
     evaluate_fold,
     per_group_metrics,
+    tune_threshold,
 )
 from src.modeling.features import (  # noqa: E402
     build_feature_group_index,
@@ -53,6 +56,31 @@ def setup_logging(level: str = "INFO", log_file: Path | None = None) -> None:
             colorize=False,
             mode="w",
         )
+
+
+def _supports_sample_weight(fit_fn) -> bool:
+    """True if ``fit_fn(..., sample_weight=...)`` is safe to call (incl. ``**kwargs`` wrappers)."""
+    params = inspect.signature(fit_fn).parameters
+    if "sample_weight" in params:
+        return True
+    return any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
+
+
+def _fit_with_weights(model, X, y, class_weight) -> None:
+    """Fit with per-sample weights from ``class_weight`` (computed on this fold only).
+
+    Falls back to an unweighted fit with a warning when unsupported.
+    """
+    fit_kwargs = {}
+    if class_weight:
+        if _supports_sample_weight(model.fit):
+            fit_kwargs["sample_weight"] = compute_sample_weight(class_weight, y)
+        else:
+            logger.warning(
+                "{} does not support sample_weight; ignoring class_weight={}",
+                type(model).__name__, class_weight,
+            )
+    model.fit(X, y, **fit_kwargs)
 
 
 def _filter_for_task(df: pd.DataFrame, task: str) -> pd.DataFrame:
@@ -109,21 +137,30 @@ def run_cv_loop(
             y_train = df_train[task].values
             y_test = df_test[task].values
 
-            # Build and fit model
+            # Build and fit model (reweighting on train fold only)
             model = build_model(mdl_cfg, task, seed=exp_cfg.seed)
-            model.fit(X_train, y_train)
+            _fit_with_weights(model, X_train, y_train, exp_cfg.class_weight)
 
             # Predict
-            y_pred = model.predict(X_test)
             y_prob = None
+            threshold = 0.5
             if task == "growth_class" and hasattr(model, "predict_proba"):
                 y_prob = model.predict_proba(X_test)[:, 1]
+                # Tune the decision threshold on train-fold probabilities
+                # to give the minority no-growth class a real
+                # operating point instead of the 0.5 default.
+                y_prob_train = model.predict_proba(X_train)[:, 1]
+                threshold = tune_threshold(y_train, y_prob_train, objective="mcc")
+                y_pred = (y_prob >= threshold).astype(int)
+            else:
+                y_pred = model.predict(X_test)
 
             # Evaluate
             metrics = evaluate_fold(y_test, y_pred, y_prob, task, exp_cfg.metrics or None)
             metrics["strategy"] = strategy
             metrics["fold"] = fold_num
             metrics["fold_label"] = fold_label
+            metrics["threshold"] = threshold
             metrics["n_train"] = len(train_idx)
             metrics["n_test"] = len(test_idx)
             all_fold_metrics.append(metrics)
@@ -151,6 +188,37 @@ def run_cv_loop(
     return all_fold_metrics, pd.concat(all_predictions, ignore_index=True)
 
 
+def pooled_oof_metrics(
+    predictions_df: pd.DataFrame,
+    task: str,
+    requested: list[str] | None,
+) -> dict[str, float]:
+    """Compute headline metrics on the pooled out-of-fold predictions.
+    """
+    if predictions_df.empty:
+        return {}
+
+    y_true = predictions_df["y_true"].values
+    y_prob = (
+        predictions_df["y_prob"].values
+        if "y_prob" in predictions_df.columns else None
+    )
+
+    threshold = 0.5
+    if task == "growth_class" and y_prob is not None:
+        threshold = tune_threshold(y_true, y_prob, objective="mcc")
+        y_pred = (y_prob >= threshold).astype(int)
+    else:
+        y_pred = predictions_df["y_pred"].values
+
+    metrics = evaluate_fold(y_true, y_pred, y_prob, task, requested)
+    metrics["threshold"] = threshold
+    metrics["n"] = int(len(y_true))
+    if task == "growth_class":
+        metrics["n_nogrowth"] = int((y_true == 0).sum())
+    return metrics
+
+
 def run_interpretability(
     df: pd.DataFrame,
     exp_cfg,
@@ -168,7 +236,7 @@ def run_interpretability(
     feature_names = get_feature_names(ct)
 
     model = build_model(mdl_cfg, task, seed=exp_cfg.seed)
-    model.fit(X, y)
+    _fit_with_weights(model, X, y, exp_cfg.class_weight)
 
     group_index = build_feature_group_index(feature_names, fgm)
 
@@ -251,11 +319,20 @@ def main() -> None:
     metrics_df = pd.DataFrame(fold_metrics)
     metrics_df.to_csv(output_dir / "fold_metrics.csv", index=False)
 
-    # Save aggregate
+    # Save aggregate (per-fold mean +/- std per strategy) + pooled OOF headline
     all_agg: dict[str, dict] = {}
     for strategy in exp_cfg.cv.strategy:
         strat_folds = [m for m in fold_metrics if m.get("strategy") == strategy]
         all_agg[strategy] = aggregate_metrics(strat_folds)
+
+    pooled = pooled_oof_metrics(predictions_df, exp_cfg.task, exp_cfg.metrics or None)
+    if pooled:
+        all_agg["pooled"] = pooled
+        logger.info("--- pooled OOF metrics (threshold={:.3f}) ---", pooled["threshold"])
+        for k, v in pooled.items():
+            if isinstance(v, float):
+                logger.info("  {}: {:.4f}", k, v)
+
     with open(output_dir / "metrics.json", "w") as f:
         json.dump(all_agg, f, indent=2, default=str)
 
@@ -267,7 +344,17 @@ def main() -> None:
         if group_col in predictions_df.columns:
             pg = per_group_metrics(predictions_df, group_col, exp_cfg.task, exp_cfg.metrics or None)
             pg.to_csv(output_dir / f"metrics_by_{group_col}.csv")
-            logger.info("per-{} metrics:\n{}", group_col, pg.to_string())
+            # Groups with at least one no-growth case are the only ones where
+            # ranking metrics (AUROC/PR-AUC) are defined.
+            if exp_cfg.task == "growth_class" and "n_neg" in pg.columns:
+                pg_withneg = pg[pg["n_neg"] > 0]
+                pg_withneg.to_csv(output_dir / f"metrics_by_{group_col}_withneg.csv")
+                logger.info(
+                    "per-{} metrics ({} groups with no-growth cases):\n{}",
+                    group_col, len(pg_withneg), pg_withneg.to_string(),
+                )
+            else:
+                logger.info("per-{} metrics:\n{}", group_col, pg.to_string())
 
     # --- Interpretability ---
     if exp_cfg.interpret.shap:
