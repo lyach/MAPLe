@@ -24,6 +24,7 @@ USAGE:
     python scripts/get_bacdive_dataset.py --target metabolite_utilization
     python scripts/get_bacdive_dataset.py --limit 5          # quick smoke test
     python scripts/get_bacdive_dataset.py --no-progress       # disable tqdm bars
+    python scripts/get_bacdive_dataset.py --max-workers 10 --taxa-workers 8
 """
 
 from __future__ import annotations
@@ -58,6 +59,12 @@ def parse_args(argv=None) -> argparse.Namespace:
                    help="Only process the first N records (quick test)")
     p.add_argument("--force", action="store_true",
                    help="Re-fetch records even if cached")
+    p.add_argument("--max-workers", type=int, default=config.MAX_WORKERS,
+                   help="Concurrent threads fetching record batches within a "
+                        f"taxon (default: {config.MAX_WORKERS})")
+    p.add_argument("--taxa-workers", type=int, default=config.TAXA_WORKERS,
+                   help="Taxa processed concurrently when >1 is listed "
+                        f"(default: {config.TAXA_WORKERS})")
     p.add_argument("--debug", action="store_true",
                    help="Show DEBUG detail on the console too (always in the log file)")
     p.add_argument("--quiet", action="store_true",
@@ -90,22 +97,24 @@ def main(argv=None) -> int:
         log.error("%s", exc)
         return 1
 
-    output_csv = args.out or config.TARGETS[target].output_csv
+    output_file = args.out or config.TARGETS[target].output_file
     log.info("loaded %d taxa from %s (target: %s)", len(taxa), args.taxa, target)
 
     n_rows, n_taxa_ok, n_failures = pipeline.run(
         taxa=taxa,
         target=target,
-        output_csv=output_csv,
+        output_file=output_file,
         failures_csv=config.FAILURES_CSV,
         cache_dir=args.cache_dir,
         limit=args.limit,
         force=args.force,
         show_progress=not (args.no_progress or args.quiet),
+        max_workers=args.max_workers,
+        taxa_workers=args.taxa_workers,
     )
 
     print(f"\nDone. {n_rows} datapoints from {n_taxa_ok} taxa, {n_failures} failed.")
-    print(f"Output: {output_csv}")
+    print(f"Output: {output_file}")
     print(f"Log file: {log_path}")
     if n_failures:
         print(f"Review failures in: {config.FAILURES_CSV}")

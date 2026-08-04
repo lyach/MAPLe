@@ -42,9 +42,19 @@ LOGS_DIR = ROOT / "logs"
 # API BEHAVIOR TUNABLES
 # --------------------------------------------------------------------------
 
-# Polite pause between paged API calls (seconds). The public v2 API is
+# Pause between paged API calls (seconds). The public v2 API is
 # unauthenticated; keep requests gentle to stay a good citizen.
 REQUEST_DELAY = 0.2
+
+# BacDive-IDs per '/v2/fetch/<ids>' call. Matches the API's paging size.
+FETCH_BATCH_SIZE = 100
+
+# Concurrent threads used to fetch batches within one taxon.
+MAX_WORKERS = 6
+
+# Concurrent taxa processed at once (each with its own BacdiveClient/session).
+# Only kicks in when >1 taxon is listed and --limit is not set.
+TAXA_WORKERS = 4
 
 # --------------------------------------------------------------------------
 # OUTPUT SCHEMAS (per target)
@@ -145,7 +155,7 @@ class TargetSpec:
     """
 
     name: str
-    output_csv: Path
+    output_file: Path
     fieldnames: list[str]
     categorical_features: list[str]
     id_col: str                         # preferred stable id for the unit key
@@ -161,7 +171,7 @@ class TargetSpec:
 TARGETS: dict[str, TargetSpec] = {
     "medium_growth": TargetSpec(
         name="medium_growth",
-        output_csv=EXTERNAL_DIR / "bacdive_growth.csv",
+        output_file=EXTERNAL_DIR / "bacdive_growth.parquet",
         fieldnames=_MEDIUM_GROWTH_FIELDNAMES,
         categorical_features=_STRAIN_CATEGORICALS,
         id_col="mediadive_id",
@@ -170,7 +180,7 @@ TARGETS: dict[str, TargetSpec] = {
     ),
     "metabolite_utilization": TargetSpec(
         name="metabolite_utilization",
-        output_csv=EXTERNAL_DIR / "bacdive_metabolite.csv",
+        output_file=EXTERNAL_DIR / "bacdive_metabolite.parquet",
         fieldnames=_METABOLITE_FIELDNAMES,
         categorical_features=[*_STRAIN_CATEGORICALS, "kind_of_utilization"],
         id_col="chebi_id",
@@ -182,7 +192,7 @@ TARGETS: dict[str, TargetSpec] = {
 
 DEFAULT_TARGET = "medium_growth"
 # Back-compat aliases
-OUTPUT_CSV = TARGETS["medium_growth"].output_csv
+OUTPUT_FILE = TARGETS["medium_growth"].output_file
 OUTPUT_FIELDNAMES = TARGETS["medium_growth"].fieldnames
 CATEGORICAL_FEATURES = TARGETS["medium_growth"].categorical_features
 
