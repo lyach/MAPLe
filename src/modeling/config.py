@@ -78,6 +78,7 @@ class CVConfig(BaseModel):
 class InterpretConfig(BaseModel):
     shap: bool = True
     group_importance: bool = True
+    shap_class: Literal["positive", "negative"] = "positive"
 
 
 class WandbConfig(BaseModel):

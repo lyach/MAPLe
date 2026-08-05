@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import matplotlib
 matplotlib.use("Agg")
@@ -11,6 +12,60 @@ import numpy as np
 import shap
 from loguru import logger
 from sklearn.base import BaseEstimator
+
+ShapClass = Literal["positive", "negative"]
+
+
+def _resolve_output_idx(
+    shap_class: ShapClass | int | None,
+    n_outputs: int,
+) -> int:
+    """Map ``shap_class`` / index to a concrete output axis index."""
+    if isinstance(shap_class, int):
+        if not 0 <= shap_class < n_outputs:
+            raise ValueError(
+                f"shap_class index {shap_class} out of range for {n_outputs} outputs"
+            )
+        return shap_class
+
+    if shap_class is None:
+        # Default: positive class for binary, else last output.
+        return 1 if n_outputs == 2 else n_outputs - 1
+
+    if shap_class == "positive":
+        return 1 if n_outputs == 2 else n_outputs - 1
+    if shap_class == "negative":
+        return 0
+
+    raise ValueError(f"Unknown shap_class: {shap_class!r}")
+
+
+def _select_output(
+    shap_values: shap.Explanation,
+    shap_class: ShapClass | int | None = "positive",
+) -> shap.Explanation:
+    """Collapse multi-output SHAP to a single output for beeswarm/bar plots.
+
+    Parameters
+    ----------
+    shap_class:
+        ``"positive"`` / ``"negative"`` for binary classifiers, or an explicit
+        class index. Ignored when SHAP is already 2-D (e.g. regression).
+    """
+    vals = getattr(shap_values, "values", None)
+    if vals is None or getattr(vals, "ndim", 0) != 3:
+        return shap_values
+
+    n_outputs = vals.shape[-1]
+    output_idx = _resolve_output_idx(shap_class, n_outputs)
+
+    logger.info(
+        "multi-output SHAP (shape {}); using {} (output index {})",
+        vals.shape,
+        shap_class,
+        output_idx,
+    )
+    return shap_values[:, :, output_idx]
 
 
 def compute_shap_values(
@@ -45,9 +100,11 @@ def plot_shap_summary(
     shap_values: shap.Explanation,
     output_dir: Path,
     max_display: int = 20,
+    shap_class: ShapClass | int | None = "positive",
 ) -> None:
     """Save beeswarm and bar SHAP summary plots."""
     output_dir.mkdir(parents=True, exist_ok=True)
+    shap_values = _select_output(shap_values, shap_class=shap_class)
 
     fig, ax = plt.subplots(figsize=(10, 8))
     shap.plots.beeswarm(shap_values, max_display=max_display, show=False)
@@ -69,6 +126,7 @@ def plot_shap_summary(
 def compute_group_importance(
     shap_values: shap.Explanation,
     group_index: dict[str, list[int]],
+    shap_class: ShapClass | int | None = "positive",
 ) -> dict[str, float]:
     """Aggregate mean |SHAP| by feature group (strain, media, condition, ...).
 
@@ -79,14 +137,15 @@ def compute_group_importance(
     group_index:
         Mapping from group name to list of feature indices, as returned
         by ``features.build_feature_group_index``.
+    shap_class:
+        Which class output to use for multi-output explanations.
 
     Returns
     -------
     Dict mapping group name to mean absolute SHAP value.
     """
+    shap_values = _select_output(shap_values, shap_class=shap_class)
     vals = np.abs(shap_values.values)
-    if vals.ndim == 3:
-        vals = vals[:, :, 1]
 
     importance: dict[str, float] = {}
     for group, indices in group_index.items():
@@ -129,6 +188,7 @@ def run_interpretation(
     group_index: dict[str, list[int]],
     output_dir: Path,
     do_group_importance: bool = True,
+    shap_class: ShapClass | int | None = "positive",
 ) -> dict[str, float]:
     """Full interpretability pipeline: SHAP values + plots + group importance.
 
@@ -138,11 +198,11 @@ def run_interpretation(
     sv = compute_shap_values(model, X, feature_names)
 
     fig_dir = output_dir / "figures"
-    plot_shap_summary(sv, fig_dir)
+    plot_shap_summary(sv, fig_dir, shap_class=shap_class)
 
     group_imp: dict[str, float] = {}
     if do_group_importance and group_index:
-        group_imp = compute_group_importance(sv, group_index)
+        group_imp = compute_group_importance(sv, group_index, shap_class=shap_class)
         plot_group_importance(group_imp, fig_dir)
         logger.info("group importance: {}", group_imp)
 

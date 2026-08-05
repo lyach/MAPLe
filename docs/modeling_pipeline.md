@@ -128,6 +128,7 @@ The table retains all columns from the curves CSV plus any merged metadata colum
 | `metrics`                    | list[str]        | `[auroc, f1, mcc]`                            | Metrics to compute                                |
 | `interpret.shap`             | bool             | `true`                                        | Run SHAP analysis after CV                        |
 | `interpret.group_importance` | bool             | `true`                                        | Compute strain/media/condition grouped importance |
+| `interpret.shap_class`       | str              | `"positive"`                                  | For binary classifiers: `"positive"` or `"negative"` class SHAP |
 | `seed`                       | int              | `42`                                          | Random seed                                       |
 | `output_dir`                 | str              | `"reports"`                                   | Base output directory                             |
 | `wandb.enabled`              | bool             | `false`                                       | Weights & Biases logging (placeholder)            |
@@ -150,6 +151,7 @@ metrics: [auroc, f1, mcc, balanced_accuracy]
 interpret:
   shap: true
   group_importance: true
+  shap_class: positive   # or negative; ignored for regression
 
 seed: 42
 output_dir: reports
@@ -323,6 +325,9 @@ After CV, the model is refit on all data and SHAP values are computed:
 | XGBoost, Random Forest     | `TreeExplainer`                           |
 | Logistic Regression, Ridge | `LinearExplainer`                         |
 | MLP, other                 | `KernelExplainer` (subsampled background) |
+
+
+For classifiers, TreeExplainer returns multi-output SHAP of shape `(n_samples, n_features, n_classes)`. Beeswarm/bar plots and group importance collapse this to a single output via `interpret.shap_class` (`"positive"` → class index 1, `"negative"` → index 0; ignored for regression).
 
 
 Outputs saved to `reports/<name>/figures/`:

@@ -1,7 +1,7 @@
 # Aerobic+Anaerobic + XGBoost
-name: growth_class_aero_anaero_xgb_random_pathways
+name: growth_class_aero_anaero_rf_random_pathways_pc25
 dataset: config/dataset/modeling_dataset_aero_anaero.yaml
-model: config/models/xgboost.yaml
+model: config/models/random_forest.yaml
 task: growth_class
 
 cv:
@@ -13,6 +13,7 @@ metrics: [auroc, pr_auc, f1, mcc, balanced_accuracy]
 interpret:
   shap: true
   group_importance: true
+  shap_class: positive
 
 seed: 42
 output_dir: reports

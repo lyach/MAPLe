@@ -170,6 +170,7 @@ def run_interpretability(
     run_interpretation(
         model, X, feature_names, group_index, output_dir,
         do_group_importance=exp_cfg.interpret.group_importance,
+        shap_class=exp_cfg.interpret.shap_class,
     )
 
 
