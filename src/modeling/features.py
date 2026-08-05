@@ -49,6 +49,10 @@ FEATURE_GROUPS: dict[str, str] = {
     "gc_content_pct": "strain",
     "num_contigs": "strain",
     "n50": "strain",
+    "genus": "strain",
+    "family": "strain",
+    "order": "strain",
+    "phylum": "strain",
 }
 
 

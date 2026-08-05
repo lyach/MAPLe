@@ -66,6 +66,7 @@ class ModelConfig(BaseModel):
 class CVConfig(BaseModel):
     strategy: list[str] | str = "loso"
     n_repeats: int = 1
+    group_on: str = "strain_name"
 
     @field_validator("strategy", mode="before")
     @classmethod

@@ -4,9 +4,9 @@ Strategies
 ----------
 - ``loso``  : Leave-One-Strain-Out
 - ``lomo``  : Leave-One-Media-Out
-- ``grouped`` : GroupKFold grouped by ``strain_name``
+- ``grouped`` : GroupKFold grouped by ``group_on`` column
 - ``stratified_grouped`` : StratifiedGroupKFold (stratified by target, grouped
-  by ``strain_name``)
+  by ``group_on`` column)
 - ``random`` : Shuffled KFold with no grouping (rows split randomly).
 """
 
@@ -36,6 +36,7 @@ def make_splits(
     y: np.ndarray | None = None,
     n_splits: int = 5,
     seed: int = 42,
+    group_on: str = "strain_name",
 ) -> Iterator[tuple[np.ndarray, np.ndarray]]:
     """Yield (train_idx, test_idx) arrays for the chosen CV strategy.
 
@@ -45,13 +46,16 @@ def make_splits(
         One of ``"loso"``, ``"lomo"``, ``"grouped"``,
         ``"stratified_grouped"``, ``"random"``.
     df:
-        Modeling DataFrame (needs ``strain_name`` and/or ``media_name``).
+        Modeling DataFrame (needs ``strain_name`` and/or ``media_name``,
+        or the column named by ``group_on`` for grouped strategies).
     y:
         Target array, required for ``stratified_grouped``.
     n_splits:
         Number of folds for ``grouped`` / ``stratified_grouped`` / ``random``.
     seed:
         Random seed for shuffled strategies (``random``). Ignored otherwise.
+    group_on:
+        Column used as groups for ``grouped`` / ``stratified_grouped``.
     """
     strategy = strategy.lower().strip()
 
@@ -70,19 +74,30 @@ def make_splits(
         yield from splitter.split(df, groups=groups)
 
     elif strategy == "grouped":
-        groups = _encode_groups(df["strain_name"])
+        if group_on not in df.columns:
+            raise ValueError(
+                f"grouped requires column '{group_on}' (cv.group_on) in DataFrame"
+            )
+        groups = _encode_groups(df[group_on])
         n_splits = min(n_splits, len(np.unique(groups)))
         splitter = GroupKFold(n_splits=n_splits)
-        logger.info("GroupKFold: {} folds (grouped by strain)", n_splits)
+        logger.info("GroupKFold: {} folds (grouped by {})", n_splits, group_on)
         yield from splitter.split(df, groups=groups)
 
     elif strategy == "stratified_grouped":
         if y is None:
             raise ValueError("stratified_grouped requires y (target array)")
-        groups = _encode_groups(df["strain_name"])
+        if group_on not in df.columns:
+            raise ValueError(
+                f"stratified_grouped requires column '{group_on}' "
+                "(cv.group_on) in DataFrame"
+            )
+        groups = _encode_groups(df[group_on])
         n_splits = min(n_splits, len(np.unique(groups)))
         splitter = StratifiedGroupKFold(n_splits=n_splits)
-        logger.info("StratifiedGroupKFold: {} folds", n_splits)
+        logger.info(
+            "StratifiedGroupKFold: {} folds (grouped by {})", n_splits, group_on
+        )
         yield from splitter.split(df, y, groups=groups)
 
     elif strategy == "random":

@@ -7,6 +7,7 @@ task: growth_class
 cv:
   strategy: [grouped]
   n_repeats: 1
+  group_on: "strain_name"
 
 metrics: [auroc, pr_auc, f1, mcc, balanced_accuracy]
 

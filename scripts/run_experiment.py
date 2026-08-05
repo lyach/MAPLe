@@ -86,7 +86,11 @@ def run_cv_loop(
 
         fold_num = 0
         for train_idx, test_idx in make_splits(
-            strategy, df, y=df[task].values, seed=exp_cfg.seed
+            strategy,
+            df,
+            y=df[task].values,
+            seed=exp_cfg.seed,
+            group_on=exp_cfg.cv.group_on,
         ):
             fold_num += 1
             fold_label = get_fold_group_label(strategy, df, test_idx)
