@@ -32,6 +32,10 @@ features:
     - "StandardScaler()"
   # media features
   media_name: "path:data/metadata/modeling/media_features.csv"
+  # metabolic pathways
+  metabolic_pathways: 
+    - "path:data/external/modular_pathway/kegg_pathway_completeness.csv"
+    #- pca_components: 25
   # condition features
   atmosphere: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
   temperature: "StandardScaler()"

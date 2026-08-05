@@ -61,6 +61,37 @@ _PREPROCESS_REGISTRY: dict[str, FunctionTransformer] = {
 }
 
 
+def _is_external_matrix_spec(spec: Any) -> bool:
+    """True when *spec* is a list whose first ``path:`` item points to an external matrix."""
+    if not isinstance(spec, list):
+        return False
+    return any(isinstance(item, str) and item.startswith("path:") for item in spec)
+
+
+def _parse_external_matrix_spec(
+    spec: list,
+) -> tuple[str, int | None, str]:
+    """Extract ``(csv_path, pca_components, merge_on)`` from a mixed list spec.
+    """
+    csv_path: str | None = None
+    pca_components: int | None = None
+    merge_on: str = "strain_name"
+
+    for item in spec:
+        if isinstance(item, str) and item.startswith("path:"):
+            csv_path = item[5:].strip()
+        elif isinstance(item, dict):
+            if "pca_components" in item:
+                pca_components = int(item["pca_components"])
+            if "merge_on" in item:
+                merge_on = item["merge_on"]
+
+    if csv_path is None:
+        raise ValueError(f"external matrix spec must contain a 'path:' entry, got {spec!r}")
+
+    return csv_path, pca_components, merge_on
+
+
 def _parse_transformer(spec: str) -> Any:
     """Instantiate an sklearn transformer from a config call string."""
     spec = spec.strip()
@@ -142,34 +173,75 @@ def merge_external_features(
     df = df.copy()
 
     for col, spec in cfg.features.items():
-        if not (isinstance(spec, str) and spec.startswith("path:")):
+        # --- simple path: spec (existing embeddings) ---
+        if isinstance(spec, str) and spec.startswith("path:"):
+            if col not in df.columns:
+                logger.warning("merge key '{}' not in DataFrame — skipping", col)
+                continue
+
+            feat_path = root / spec[5:].strip()
+            logger.info("merging external features from {} on key '{}'", feat_path, col)
+            feat_df = _load_embeddings(feat_path)
+            feat_key = feat_df.columns[0]
+            feat_cols = [c for c in feat_df.columns if c != feat_key]
+
+            already_present = [c for c in feat_cols if c in df.columns]
+            if already_present:
+                logger.debug("columns {} already in DataFrame — skipping merge", already_present)
+                continue
+
+            join_series = df[col].astype(str).str.strip().str.lower()
+            feat_indexed = feat_df.set_index(feat_key)
+            for fc in feat_cols:
+                df[fc] = join_series.map(feat_indexed[fc]).values
+
+            n_missing = df[feat_cols[0]].isna().sum()
+            if n_missing:
+                logger.warning(
+                    "{}/{} rows have no match in {} for key '{}'",
+                    n_missing, len(df), feat_path.name, col,
+                )
             continue
-        if col not in df.columns:
-            logger.warning("merge key '{}' not in DataFrame — skipping", col)
-            continue
 
-        feat_path = root / spec[5:].strip()
-        logger.info("merging external features from {} on key '{}'", feat_path, col)
-        feat_df = _load_embeddings(feat_path)
-        feat_key = feat_df.columns[0]
-        feat_cols = [c for c in feat_df.columns if c != feat_key]
+        # --- external matrix spec (pathway matrix + PCA) ---
+        if _is_external_matrix_spec(spec):
+            csv_path, _pca_components, merge_on = _parse_external_matrix_spec(spec)
+            feat_path = root / csv_path
 
-        already_present = [c for c in feat_cols if c in df.columns]
-        if already_present:
-            logger.debug("columns {} already in DataFrame — skipping merge", already_present)
-            continue
+            if merge_on not in df.columns:
+                logger.warning(
+                    "merge_on key '{}' not in DataFrame — skipping '{}'", merge_on, col,
+                )
+                continue
 
-        join_series = df[col].astype(str).str.strip().str.lower()
-        feat_indexed = feat_df.set_index(feat_key)
-        for fc in feat_cols:
-            df[fc] = join_series.map(feat_indexed[fc]).values
-
-        n_missing = df[feat_cols[0]].isna().sum()
-        if n_missing:
-            logger.warning(
-                "{}/{} rows have no match in {} for key '{}'",
-                n_missing, len(df), feat_path.name, col,
+            logger.info(
+                "merging external matrix from {} on key '{}' (feature '{}')",
+                feat_path, merge_on, col,
             )
+            feat_df = _load_embeddings(feat_path)
+            feat_key = feat_df.columns[0]
+            feat_cols = [c for c in feat_df.columns if c != feat_key]
+
+            already_present = [c for c in feat_cols if c in df.columns]
+            if already_present:
+                logger.debug("columns {} already in DataFrame — skipping merge", already_present)
+                continue
+
+            join_keys = df[merge_on].astype(str).str.strip().str.lower()
+            feat_indexed = feat_df.set_index(feat_key)[feat_cols]
+            merged_block = feat_indexed.reindex(join_keys.values).reset_index(drop=True)
+            merged_block.index = df.index
+
+            n_missing = merged_block[feat_cols[0]].isna().sum()
+            if n_missing:
+                logger.warning(
+                    "{}/{} rows have no match in {} for key '{}' — filling with 0.0",
+                    n_missing, len(df), feat_path.name, merge_on,
+                )
+                merged_block = merged_block.fillna(0.0)
+
+            df = pd.concat([df, merged_block], axis=1)
+            continue
 
     return df
 
@@ -210,10 +282,52 @@ def build_feature_pipeline(
     feature_group_map: dict[str, str] = {}
 
     for col, spec in cfg.features.items():
+        # --- external matrix spec (pathway CSV + optional PCA) ---
+        if _is_external_matrix_spec(spec):
+            csv_path, pca_components, _merge_on = _parse_external_matrix_spec(spec)
+            feat_path = root / csv_path
+            feat_df = _load_embeddings(feat_path)
+            feat_key = feat_df.columns[0]
+            feat_cols = [c for c in feat_df.columns if c != feat_key]
+
+            missing = [c for c in feat_cols if c not in df.columns]
+            if missing:
+                logger.error(
+                    "columns {} from {} not in DataFrame — "
+                    "call merge_external_features() first. Skipping '{}'.",
+                    missing, feat_path.name, col,
+                )
+                continue
+
+            if pca_components is not None:
+                from sklearn.decomposition import PCA
+
+                pipeline = Pipeline([
+                    ("scaler", StandardScaler()),
+                    ("pca", PCA(n_components=pca_components)),
+                ])
+                transformers.append((col, pipeline, feat_cols))
+                feature_columns.extend(feat_cols)
+
+                for i in range(pca_components):
+                    feature_group_map[f"pca{i}"] = col
+                logger.info(
+                    "feature '{}': {} columns -> PCA({}) per fold",
+                    col, len(feat_cols), pca_components,
+                )
+            else:
+                transformers.append((f"{col}_num", "passthrough", feat_cols))
+                feature_columns.extend(feat_cols)
+                for fc in feat_cols:
+                    feature_group_map[fc] = col
+
+            continue
+
         if col not in df.columns:
             logger.warning("feature column '{}' not in DataFrame — skipping", col)
             continue
 
+        # --- simple path: spec (precomputed embeddings) ---
         if isinstance(spec, str) and spec.startswith("path:"):
             feat_path = root / spec[5:].strip()
             feat_df = _load_embeddings(feat_path)

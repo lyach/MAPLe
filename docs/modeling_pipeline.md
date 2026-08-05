@@ -243,6 +243,7 @@ Feature encoding is defined in the dataset config's `features` dict and applied 
 | `"ordinal"`     | `OrdinalEncoder` | Integer encoding; unknown values → `-1`                           |
 | `"numeric"`     | `StandardScaler` | Z-score normalization                                             |
 | `"path:<file>"` | passthrough      | Precomputed embedding CSV (first column = key, rest = floats)     |
+| `["path:<file>", {pca_components: N}]` | `StandardScaler → PCA(N)` | External matrix with in-fold PCA reduction (see below) |
 
 
 Each raw column is mapped to a semantic group for interpretability:
@@ -255,6 +256,22 @@ Each raw column is mapped to a semantic group for interpretability:
 | `atmosphere`, `temperature` | `condition`                |
 | genome metadata columns     | `genome`                   |
 | embedding columns           | `strain_emb` / `media_emb` |
+| PCA-reduced matrix columns  | feature key name (e.g. `metabolic_pathways`) |
+
+
+#### External matrix with PCA
+
+For high-dimensional strain-level features (e.g. metabolic pathway completeness), a matrix CSV can be merged and reduced with PCA inside each CV fold to avoid leakage:
+
+```yaml
+features:
+  metabolic_pathways:
+    - "path:data/external/modular_pathway/kegg_pathway_completeness.csv"
+    - pca_components: 10          # optional; omit for raw passthrough
+    # - merge_on: strain_name     # optional; defaults to strain_name
+```
+
+The CSV must have an entity name as its first column (matched against `merge_on`) and numeric values in all subsequent columns. During CV, a `StandardScaler → PCA(n_components)` pipeline is fit on each training fold only, producing `pca0 … pcaN-1` features. Unmatched rows are filled with 0.0.
 
 
 **Notebook / EDA use only** — `featurize()` fits on all data and transforms in one call. Do not use its output for CV reporting:
@@ -420,7 +437,7 @@ To register a new model **type** (not just hyperparameters), add an entry to `_R
 
 ---
 
-## 13. Pluggable feature providers (not yet implemented)
+## 13. Pluggable feature providers
 
 These scripts produce inputs that slot into the modeling pipeline via config paths:
 
@@ -430,6 +447,7 @@ These scripts produce inputs that slot into the modeling pipeline via config pat
 | `get_strain_metadata.py` | `data/external/strains_metadata.csv` | `strain_metadata_file` in dataset config |
 | `get_evo_embeddings.py`  | genome embedding CSV                 | `path:<file>` in `features` dict         |
 | `get_ecfp_embeddings.py` | media fingerprint CSV                | `path:<file>` in `features` dict         |
+| KEGG pathway annotation  | `data/external/modular_pathway/kegg_pathway_completeness.csv` | `["path:<file>", {pca_components: N}]` in `features` dict |
 
 
 No changes to `src/modeling/` are needed to use their outputs — only config updates.

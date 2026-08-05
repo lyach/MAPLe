@@ -1,7 +1,7 @@
 # Aerobic+Anaerobic dataset
-name: maxod_aero_anaero_mlp_lomo
+name: maxod_aero_anaero_rf_lomo_pathways
 dataset: config/dataset/modeling_dataset_aero_anaero.yaml
-model: config/models/mlp.yaml
+model: config/models/random_forest.yaml
 task: max_od
 
 cv:

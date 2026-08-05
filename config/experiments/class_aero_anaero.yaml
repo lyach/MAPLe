@@ -1,5 +1,5 @@
 # Aerobic+Anaerobic + XGBoost
-name: growth_class_aero_anaero_xgb_random
+name: growth_class_aero_anaero_xgb_random_pathways
 dataset: config/dataset/modeling_dataset_aero_anaero.yaml
 model: config/models/xgboost.yaml
 task: growth_class
