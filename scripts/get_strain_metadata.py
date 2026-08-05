@@ -21,6 +21,7 @@ credentials, and hands off to the strain_metadata package. All logic lives in:
     strain_metadata/ncbi_client.py            all NCBI Entrez/FTP calls + strategy chain
     strain_metadata/sequence_stats.py          GC%/N50/hash from FASTA
     strain_metadata/validation.py               genus-range sanity checks
+    strain_metadata/taxonomy.py                  NCBI lineage (genus/family/order/phylum)
     strain_metadata/resolution_report.py         per-strain attempt tracking + summaries
     strain_metadata/pipeline.py                   orchestration
 

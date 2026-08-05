@@ -184,6 +184,8 @@ class NCBIAssemblyClient:
         # Biopython itself (not per-instance), so setting them here applies
         # to every Entrez call made afterwards, for the lifetime of the
         # process.
+        self.email = email
+        self.api_key = api_key
         Entrez.email = email
         if api_key:
             Entrez.api_key = api_key

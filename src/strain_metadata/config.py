@@ -72,8 +72,9 @@ DOWNLOAD_TIMEOUT_SECONDS = 120
 # OUTPUT SCHEMA
 # --------------------------------------------------------------------------
 
-# Column order for strains_metadata.csv. The last two columns are the
-# confidence/provenance flags added in the redesign:
+# Column order for strains_metadata.csv. Taxonomy ranks are filled from the
+# NCBI Taxonomy lineage for ncbi_taxon_id. The last two columns are the
+# confidence/provenance flags:
 #   resolution_method     -- which strategy matched this strain
 #   requires_verification -- "yes" if the match wasn't strain-confirmed, or
 #                            if a validation flag fired
@@ -83,6 +84,10 @@ OUTPUT_FIELDNAMES = [
     "ncbi_refseq",
     "ncbi_assembly_accession",
     "ncbi_taxon_id",
+    "genus",
+    "family",
+    "order",
+    "phylum",
     "assembly_level",
     "genome_size_bp",
     "gc_content_pct",

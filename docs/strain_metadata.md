@@ -16,7 +16,7 @@ python scripts/get_strain_metadata.py
 
 | Output | Path | Contents |
 |---|---|---|
-| Metadata table | `data/external/strains_metadata.csv` | One row per resolved strain (14 columns) |
+| Metadata table | `data/external/strains_metadata.csv` | One row per resolved strain (18 columns) |
 | Failure report | `data/external/failures.csv` | Diagnostics for any strain that could not be resolved |
 | FASTA files | `data/external/fasta/<accession>.fna` | Genome sequence, one per assembly |
 | GenBank files | `data/external/gbk/<accession>.gbk` | Annotated genome, one per assembly |
@@ -24,8 +24,9 @@ python scripts/get_strain_metadata.py
 
 ### Output CSV columns
 
-The standard schema (`strain`, `atcc_number`, `ncbi_refseq`, `ncbi_assembly_accession`, `ncbi_taxon_id`, `assembly_level`, `genome_size_bp`, `gc_content_pct`, `num_contigs`, `n50`, `sequence_hash`, `date_retrieved`) plus two confidence columns:
+The standard schema (`strain`, `atcc_number`, `ncbi_refseq`, `ncbi_assembly_accession`, `ncbi_taxon_id`, `genus`, `family`, `order`, `phylum`, `assembly_level`, `genome_size_bp`, `gc_content_pct`, `num_contigs`, `n50`, `sequence_hash`, `date_retrieved`) plus two confidence columns:
 
+- **`genus` / `family` / `order` / `phylum`** — NCBI Taxonomy lineage ranks for `ncbi_taxon_id`, filled in a batched lookup after assemblies are resolved. Blank if the taxon ID is missing or a rank is absent from the lineage.
 - **`resolution_method`** — how the strain was matched (e.g. *NCBI assembly search by ATCC number*, *NCBI BioSample → assembly cross-reference*, *organism name*, *forced accession*).
 - **`requires_verification`** — `yes` or `no`. Set to `yes` when the match was organism-level only, when a fallback hint was used, when the organism didn't cross-check, or when a genome statistic fell outside the expected range for the genus.
 
@@ -167,6 +168,7 @@ src/
     ├── ncbi_client.py                  NCBI Entrez/FTP calls + strategy chain
     ├── sequence_stats.py                GC% / N50 / hash from FASTA
     ├── validation.py                     genus-range sanity checks
+    ├── taxonomy.py                        NCBI lineage (genus/family/order/phylum)
     ├── resolution_report.py               per-strain tracking + summaries
     └── pipeline.py                          orchestration
 ```

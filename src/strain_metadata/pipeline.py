@@ -2,8 +2,8 @@
 pipeline.py
 ===========
 Orchestrates the full per-strain workflow and writes all outputs:
-  * strains_metadata.csv  -- successful rows, with resolution_method and
-                             requires_verification confidence columns
+  * strains_metadata.csv  -- successful rows, with taxonomy ranks
+                             (genus/family/order/phylum)
   * failures.csv          -- diagnostics for strains that failed every strategy
   * console + log summary  -- end-of-run resolution breakdown
 
@@ -34,6 +34,7 @@ from .resolution_report import (
     write_failures_csv,
 )
 from .sequence_stats import summarize_fasta
+from .taxonomy import LINEAGE_RANKS, fetch_lineage
 from .validation import validate_genome_stats
 
 log = logging.getLogger("pipeline")
@@ -115,6 +116,10 @@ def process_one_strain(
         "ncbi_refseq":             resolved.refseq_accession,
         "ncbi_assembly_accession": resolved.assembly_accession,
         "ncbi_taxon_id":           resolved.taxon_id if resolved.taxon_id is not None else "",
+        "genus":                   "",
+        "family":                  "",
+        "order":                   "",
+        "phylum":                  "",
         "assembly_level":          resolved.assembly_level,
         "genome_size_bp":          genome_size_bp,
         "gc_content_pct":          gc_content_pct,
@@ -127,6 +132,42 @@ def process_one_strain(
         "requires_verification":   "yes" if report.requires_verification else "no",
     }
     return row, report
+
+
+def _enrich_rows_with_lineage(
+    rows: list[dict],
+    email: str,
+    api_key: Optional[str] = None,
+) -> None:
+    """Fill genus/family/order/phylum on each row from NCBI Taxonomy (in place)."""
+    taxon_ids: list[int] = []
+    for row in rows:
+        raw = row.get("ncbi_taxon_id", "")
+        if raw == "" or raw is None:
+            continue
+        try:
+            taxon_ids.append(int(raw))
+        except (TypeError, ValueError):
+            log.warning("Invalid ncbi_taxon_id %r for strain %r -- skipping lineage",
+                        raw, row.get("strain"))
+
+    if not taxon_ids:
+        log.warning("No taxon IDs available -- genus/family/order/phylum left blank")
+        return
+
+    log.info("Looking up taxonomy lineage for %d unique taxon ID(s)", len(set(taxon_ids)))
+    lineage = fetch_lineage(taxon_ids, email=email, api_key=api_key)
+
+    for row in rows:
+        raw = row.get("ncbi_taxon_id", "")
+        if raw == "" or raw is None:
+            continue
+        try:
+            ranks = lineage.get(int(raw), {})
+        except (TypeError, ValueError):
+            continue
+        for rank in LINEAGE_RANKS:
+            row[rank] = ranks.get(rank, "")
 
 
 def run(
@@ -177,6 +218,13 @@ def run(
         reports.append(report)
         if row is not None:
             rows.append(row)
+
+    # --- taxonomy lookup (genus / family / order / phylum) ---
+    if rows:
+        try:
+            _enrich_rows_with_lineage(rows, email=ncbi_client.email, api_key=ncbi_client.api_key)
+        except Exception as exc:
+            log.error("Taxonomy lineage lookup failed (%s) -- writing blank rank columns", exc)
 
     # --- write successful rows ---
     output_csv.parent.mkdir(parents=True, exist_ok=True)
