@@ -1,6 +1,16 @@
-# MicrobeNet: A Framework for Modeling Microbial Genotype-Phenotype
+# MicrobeNet
 
-A microbial phenotyping project to generate reproducible, scalable, and standardized growth data across structured conditions (media, nutrients, stressors)
+**Predict microbial growth from genotype and media.**
+
+MicrobeNet is a machine learning framework for modeling the genotype–phenotype relationship in microbiology. Given a microbe and a cultivation medium, the model predicts growth outcomes.
+
+## Motivation
+
+Microbial diversity remains largely underutilized because phenotype data linking genotype to growth is scarce and inconsistent. Robust predictive models of organism–environment interactions would unlock applications in biomanufacturing, climate science, and agriculture. This project focuses on the modeling layer that makes those predictions possible. The core idea:
+
+```text
+(microbe features, media / condition features)  →  growth phenotype (growth/no growth)
+```
 
 ## Getting Started
 
@@ -17,88 +27,78 @@ A microbial phenotyping project to generate reproducible, scalable, and standard
    ```
 
 3. Create an isolated virtual environment:
-   
+
    **Using `uv` (recommended)**
-    ```bash
-    # Install uv (if first time)
-   curl -LsSf https://astral.sh/uv/install.sh | sh # Linux/macOS
+   ```bash
+   # Install uv (if first time)
+   curl -LsSf https://astral.sh/uv/install.sh | sh   # Linux/macOS
    # or
-   pip install uv # Windows
+   pip install uv   # Windows
 
    # Create environment
    uv venv --python 3.11 .venv
 
    # Activate environment
-   source .venv/bin/activate # Linux/macOS
-   # or 
-   .venv\Scripts\activate # Windows
+   source .venv/bin/activate   # Linux/macOS
+   # or
+   .venv\Scripts\activate      # Windows
 
    # Install dependencies
    uv sync
    ```
 
-## Dataset Pipeline
+## Components
 
-After the steps above are complete, you should see on your terminal something like:
+| Component | Role |
+|---|---|
+| **Dataset** | Load plate-reader growth curves, apply QC, and derive growth parameters (`src/dataset/`) |
+| **Strain metadata** | Resolve taxonomy and genome-linked strain identity (`src/strain_metadata/`) |
+| **Pathway features** | Build modular KEGG / KO pathway completeness features from genomes (`src/pathway_features/`) |
+| **Modeling** | Featurize microbe + media, train models, cross-validate, and interpret predictions (`src/modeling/`) |
+
+The modeling pipeline merges growth-curve metrics with strain and pathway features, then runs configurable experiments (classification or regression) via YAML configs under `config/`. See [docs/modeling_pipeline.md](docs/modeling_pipeline.md) and [docs/dataset_pipeline.md](docs/dataset_pipeline.md).
+
+### Quick start: modeling
 
 ```bash
-(.venv) [your_user MicrobeNet]$ 
+# 1. Build interim modeling dataset
+python scripts/create_modeling_dataset.py config/dataset/modeling_dataset_aero_anaero.yaml
+
+# 2. Train / evaluate an experiment
+python scripts/run_experiment.py config/experiments/class_aero_anaero.yaml
 ```
 
-Then you can proceed to the following steps:
-
-1. Prepare and upload your data files.
-   - Place the `data/` folder on this directory.
-   - Edit the csv with the experiment specs `aerobic_metadata.csv` (or `anaerobic_metadata.csv`). This is on the `data/metadata` folder *[(here)](data/metadata/)*. 
-   - Edit the csv with the plate layout `aerobic_metadata.csv` (or `anaerobic_metadata.csv`). This is on the `data/metadata` folder *[(here)](data/metadata/)*. 
-   - Place on the `data/metadata` folder raw platereader files. **Note:** The anaerobic (Biospa) still needs manual adjusting. *See example for [aerobic](data/raw/20260325_aerobic_25_raw.csv) and [anaerobic](data/raw/20260325_anaerobic_a_37_raw.csv)*.  
-2. Run the script for the Dataset Pipeline
-   ```bash
-   python scripts/run_dataset_pipeline.py aerobic
-   # or
-   python scripts/run_dataset_pipeline.py anaerobic
-   ```
-   The output will print:
-   ```
-   Saved long dataframe: ../MicrobeNet/data/processed/anaerobic_tidy.parquet  (447.4 KB)
-   Saved curves: ../MicrobeNet/data/processed/anaerobic_tidy_curves.csv  (36.2 KB)
-   ```
-3. Explore the data using the [EDA notebook](notebooks/01_eda.ipynb).
-Detailed documentation on the pipeline can be found [here](docs/dataset_pipeline.md).
-
-
+Results are written under `reports/<experiment_id>/` (metrics, predictions, SHAP summaries).
 
 ## Project Structure
 
 ```
+config/
+  dataset/                 ← Modeling dataset configs
+  experiments/             ← Experiment configs (task, CV, metrics)
+  models/                  ← Model hyperparameters (XGBoost, RF, MLP, linear)
+
 data/
-  metadata/
-    <exp_id>_metadata.csv      ←  Experiment metadata
-    <exp_id>_layout.csv        ←  Plate layout specs
-  raw/
-    <date>_<exp_id>_raw.csv    ←  Raw files from platereaders
+  metadata/                ← Experiment metadata and plate layouts
+  raw/                     ← Plate-reader CSVs
+  processed/               ← QC'd curves ready for analysis
+  interim/                 ← Merged modeling datasets
+  external/                ← Strain metadata and external features
 
 src/
-  /dataset
-      schema.py            ←  Data schemas of plates
-      plate.py             ←  Layout parsing
-      parsers/             ←  Equipment-parser mapping
-        base.py            ←  Base parser
-        sunrise.py         ←  Sunrise (aerobic) parser
-        biospa.py          ←  Biospa (anaerobic) parser
-      loader.py            ←  Data loading for modeling
-      qc.py                ←  Blank subtraction, QC flags
-      curves.py            ←  Growth parameters
-   /modeling 
-      features.py          ← Feature engineering for ML
-      models.py            ← Model training, CV, evaluation
+  dataset/                 ← Parsers, QC, growth-curve parameters
+  strain_metadata/         ← Taxonomy / genome metadata pipeline
+  pathway_features/        ← Modular pathway feature construction
+  modeling/                ← Features, models, CV, evaluation, interpretability
+  common/                  ← Shared utilities
 
-notebooks/
-  01_eda.ipynb             ← Exploratory data analysis
-  02_modeling.ipynb        ← Baseline modeling
+scripts/
+  run_dataset_pipeline.py
+  create_modeling_dataset.py
+  run_experiment.py
+  ...
 
-data/
-  raw/                     ← CSVs from platereaders
-  processed/               ← Data ready for modeling
-  metadata/                ← Metadata files, filled by user
+notebooks/                 ← EDA and modeling notebooks
+docs/                      ← Pipeline documentation
+reports/                   ← Experiment outputs
 ```

@@ -1,11 +1,11 @@
 # Aerobic+Anaerobic + XGBoost
-name: growth_class_aero_anaero_rf_random_pathways_pc25
+name: growth_class_aero_anaero_rf_grouped_pathways_pc25
 dataset: config/dataset/modeling_dataset_aero_anaero.yaml
 model: config/models/random_forest.yaml
 task: growth_class
 
 cv:
-  strategy: [random]
+  strategy: [grouped]
   n_repeats: 1
 
 metrics: [auroc, pr_auc, f1, mcc, balanced_accuracy]
