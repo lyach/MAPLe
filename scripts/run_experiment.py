@@ -101,7 +101,7 @@ def run_cv_loop(
 
             # Fit feature pipeline on train only (leakage-safe)
             ct, feature_cols, fgm = build_feature_pipeline(ds_cfg, df_train, root=ROOT)
-            logger.info(" features: {}", feature_cols)
+            logger.info(" features: {}...", feature_cols[:15])
             ct.fit(df_train)
             X_train = ct.transform(df_train)
             X_test = ct.transform(df_test)

@@ -343,6 +343,509 @@ def plot_metrics_comparison(
 
 
 # ---------------------------------------------------------------------------
+# Classification (imbalanced) diagnostic plots
+# ---------------------------------------------------------------------------
+
+
+def plot_roc_comparison(
+    dfs: list[pd.DataFrame | str | Path],
+    *,
+    y_true_col: str = "y_true",
+    y_prob_col: str = "y_prob",
+    titles: list[str] | None = None,
+    palette: str = "Set1",
+    figsize: tuple[float, float] = (6.5, 5.5),
+    fig_title: str | None = None,
+) -> Figure:
+    """Overlay ROC curves from one or more prediction sets.
+
+    One ROC curve per [``dfs``] entry, with the AUROC value shown in the legend.
+
+    Parameters
+    ----------
+    dfs:
+        List of DataFrames and/or CSV paths with columns for true labels
+        and predicted probabilities.
+    y_true_col, y_prob_col:
+        Column names for ground-truth binary labels and P(growth).
+    titles:
+        Legend labels; defaults to the CSV filename stem or ``"Run i"``.
+    palette:
+        Seaborn palette name.
+    figsize:
+        Overall figure size.
+    fig_title:
+        Optional suptitle.
+
+    Returns
+    -------
+    Figure
+    """
+    from sklearn.metrics import roc_auc_score, roc_curve
+
+    if not dfs:
+        raise ValueError("`dfs` must contain at least one DataFrame or path")
+
+    dataframes = [_as_dataframe(d) for d in dfs]
+
+    if titles is None:
+        titles = [
+            Path(d).stem if isinstance(d, (str, Path)) else f"Run {i + 1}"
+            for i, d in enumerate(dfs)
+        ]
+
+    colors = _color_cycle(len(dataframes), palette=palette)
+    fig, ax = plt.subplots(figsize=figsize)
+
+    for df, label, color in zip(dataframes, titles, colors):
+        y_true = df[y_true_col].values
+        y_prob = df[y_prob_col].values
+        if len(np.unique(y_true)) < 2:
+            continue
+        fpr, tpr, _ = roc_curve(y_true, y_prob)
+        auc_val = roc_auc_score(y_true, y_prob)
+        ax.plot(fpr, tpr, color=color, lw=1.8, label=f"{label} (AUROC={auc_val:.3f})")
+
+    ax.plot([0, 1], [0, 1], ls="--", lw=0.8, color="grey", alpha=0.6)
+    ax.set_xlabel("False Positive Rate", fontsize=10)
+    ax.set_ylabel("True Positive Rate", fontsize=10)
+    ax.set_xlim(-0.01, 1.01)
+    ax.set_ylim(-0.01, 1.01)
+    ax.legend(loc="lower right", fontsize=9, frameon=True)
+    ax.set_aspect("equal")
+    fig.tight_layout(rect=(0, 0, 1.0, 0.94 if fig_title else 1.0))
+    if fig_title:
+        fig.suptitle(fig_title, fontsize=12, fontweight="bold")
+    return fig
+
+
+def plot_pr_curve_comparison(
+    dfs: list[pd.DataFrame | str | Path],
+    *,
+    pos_label: int = 0,
+    y_true_col: str = "y_true",
+    y_prob_col: str = "y_prob",
+    titles: list[str] | None = None,
+    palette: str = "Set1",
+    figsize: tuple[float, float] = (6.5, 5.5),
+    fig_title: str | None = None,
+) -> Figure:
+    """Overlay Precision-Recall curves from one or more prediction sets.
+
+    Parameters
+    ----------
+    dfs:
+        List of DataFrames and/or CSV paths.
+    pos_label:
+        Which label to treat as "positive" for Precision/Recall.
+        Default ``0`` (no-growth / minority class).
+    y_true_col, y_prob_col:
+        Column names for ground-truth labels and P(growth).
+    titles:
+        Legend labels.
+    palette:
+        Seaborn palette name.
+    figsize:
+        Overall figure size.
+    fig_title:
+        Optional suptitle.
+
+    Returns
+    -------
+    Figure
+    """
+    from sklearn.metrics import average_precision_score, precision_recall_curve
+
+    if not dfs:
+        raise ValueError("`dfs` must contain at least one DataFrame or path")
+
+    dataframes = [_as_dataframe(d) for d in dfs]
+
+    if titles is None:
+        titles = [
+            Path(d).stem if isinstance(d, (str, Path)) else f"Run {i + 1}"
+            for i, d in enumerate(dfs)
+        ]
+
+    colors = _color_cycle(len(dataframes), palette=palette)
+    fig, ax = plt.subplots(figsize=figsize)
+
+    for df, label, color in zip(dataframes, titles, colors):
+        y_true = df[y_true_col].values
+        y_prob = df[y_prob_col].values
+        if len(np.unique(y_true)) < 2:
+            continue
+
+        if pos_label == 0:
+            y_binary = (y_true == 0).astype(int)
+            scores = 1.0 - y_prob
+        else:
+            y_binary = y_true
+            scores = y_prob
+
+        precision, recall, _ = precision_recall_curve(y_binary, scores)
+        ap = average_precision_score(y_binary, scores)
+        ax.plot(recall, precision, color=color, lw=1.8, label=f"{label} (AP={ap:.3f})")
+
+    prevalence = None
+    if dataframes:
+        pooled_true = np.concatenate([df[y_true_col].values for df in dataframes])
+        prevalence = (pooled_true == pos_label).mean()
+    if prevalence is not None:
+        ax.axhline(prevalence, ls="--", lw=0.8, color="grey", alpha=0.6, label=f"random ({prevalence:.3f})")
+
+    ax.set_xlabel("Recall", fontsize=10)
+    ax.set_ylabel("Precision", fontsize=10)
+    ax.set_xlim(-0.01, 1.01)
+    ax.set_ylim(-0.01, 1.05)
+    ax.legend(loc="upper right", fontsize=9, frameon=True)
+    fig.tight_layout(rect=(0, 0, 1.0, 0.94 if fig_title else 1.0))
+    if fig_title:
+        fig.suptitle(fig_title, fontsize=12, fontweight="bold")
+    return fig
+
+
+def plot_confusion_matrix(
+    dfs: list[pd.DataFrame | str | Path],
+    *,
+    threshold: float | list[float] | None = None,
+    y_true_col: str = "y_true",
+    y_prob_col: str = "y_prob",
+    y_pred_col: str = "y_pred",
+    titles: list[str] | None = None,
+    class_names: list[str] | None = None,
+    col_wrap: int = 3,
+    figsize: tuple[float, float] | None = None,
+    normalize: str | None = "true",
+    cmap: str = "Blues",
+    fig_title: str | None = None,
+) -> Figure:
+    """Heatmap confusion matrices for one or more prediction sets.
+
+    If ``threshold`` is provided and ``y_prob_col`` exists, hard labels are
+    derived as ``(y_prob >= threshold)``; otherwise uses ``y_pred_col``.
+
+    Parameters
+    ----------
+    dfs:
+        List of DataFrames and/or CSV paths.
+    threshold:
+        Decision threshold(s). A single float applies to all; a list
+        provides per-panel thresholds. ``None`` uses existing ``y_pred_col``.
+    y_true_col, y_prob_col, y_pred_col:
+        Column names.
+    titles:
+        Per-panel titles.
+    class_names:
+        Axis tick labels (e.g. ``["no-growth", "growth"]``).
+    col_wrap:
+        Max columns before wrapping.
+    figsize:
+        Overall figure size.
+    normalize:
+        ``"true"`` normalizes by row (true class), ``"pred"`` by column,
+        ``"all"`` by total, ``None`` for raw counts.
+    cmap:
+        Matplotlib colormap name.
+    fig_title:
+        Optional suptitle.
+
+    Returns
+    -------
+    Figure
+    """
+    from sklearn.metrics import confusion_matrix as _sklearn_cm
+
+    if not dfs:
+        raise ValueError("`dfs` must contain at least one DataFrame or path")
+
+    dataframes = [_as_dataframe(d) for d in dfs]
+    n = len(dataframes)
+
+    if titles is None:
+        titles = [
+            Path(d).stem if isinstance(d, (str, Path)) else f"Panel {i + 1}"
+            for i, d in enumerate(dfs)
+        ]
+    if class_names is None:
+        class_names = ["no-growth", "growth"]
+
+    thresholds: list[float | None]
+    if threshold is None:
+        thresholds = [None] * n
+    elif isinstance(threshold, (int, float)):
+        thresholds = [float(threshold)] * n
+    else:
+        thresholds = list(threshold)
+
+    fig, axes, n_rows, n_cols = _panel_subfigure(
+        n, col_wrap=col_wrap, figsize=figsize, panel_w=4.0, panel_h=3.8
+    )
+
+    for idx, (df, title, thr) in enumerate(zip(dataframes, titles, thresholds)):
+        ax = axes[idx // n_cols][idx % n_cols]
+
+        y_true = df[y_true_col].values
+        if thr is not None and y_prob_col in df.columns:
+            y_pred = (df[y_prob_col].values >= thr).astype(int)
+            title = f"{title} (thr={thr:.3f})"
+        else:
+            y_pred = df[y_pred_col].values
+
+        cm = _sklearn_cm(y_true, y_pred, labels=[0, 1])
+        if normalize == "true":
+            cm_display = cm.astype(float) / cm.sum(axis=1, keepdims=True)
+        elif normalize == "pred":
+            cm_display = cm.astype(float) / cm.sum(axis=0, keepdims=True)
+        elif normalize == "all":
+            cm_display = cm.astype(float) / cm.sum()
+        else:
+            cm_display = cm.astype(float)
+
+        im = ax.imshow(cm_display, interpolation="nearest", cmap=cmap, vmin=0)
+
+        for i in range(2):
+            for j in range(2):
+                val = cm_display[i, j]
+                raw = cm[i, j]
+                text = f"{val:.2f}\n({raw})" if normalize else f"{raw}"
+                ax.text(j, i, text, ha="center", va="center", fontsize=9,
+                        color="white" if val > cm_display.max() / 2 else "black")
+
+        ax.set_xticks([0, 1])
+        ax.set_yticks([0, 1])
+        ax.set_xticklabels(class_names, fontsize=9)
+        ax.set_yticklabels(class_names, fontsize=9)
+        ax.set_xlabel("Predicted", fontsize=9)
+        ax.set_ylabel("True", fontsize=9)
+        ax.set_title(title, fontsize=10)
+
+    _hide_unused_panel_axes(axes, n, n_rows, n_cols)
+    fig.tight_layout(rect=(0, 0, 1.0, 0.93 if fig_title else 1.0))
+    if fig_title:
+        fig.suptitle(fig_title, fontsize=12, fontweight="bold")
+    return fig
+
+
+def plot_per_group_metric(
+    dfs: list[pd.DataFrame | str | Path],
+    metric: str = "recall_nogrowth",
+    *,
+    group_col: str | None = None,
+    min_neg: int = 2,
+    top_n: int | None = 30,
+    sort_by: str = "metric",
+    titles: list[str] | None = None,
+    col_wrap: int = 2,
+    figsize: tuple[float, float] | None = None,
+    palette: str = "Set1",
+    fig_title: str | None = None,
+) -> Figure:
+    """Horizontal bar chart of a metric per group (strain/media).
+
+    Takes one or more ``metrics_by_*_withneg.csv`` tables (or DataFrames)
+    produced by the experiment pipeline.  Groups are filtered to those with
+    at least ``min_neg`` no-growth samples to avoid noisy single-sample bars.
+
+    Parameters
+    ----------
+    dfs:
+        List of per-group metric DataFrames or CSV paths.  The index (or
+        first column) is the group name; columns include the ``metric`` and
+        ``n_neg``.
+    metric:
+        Column name to plot (e.g. ``"recall_nogrowth"``, ``"mcc"``).
+    group_col:
+        Column containing group names.  If ``None``, uses the DataFrame
+        index.
+    min_neg:
+        Minimum ``n_neg`` for a group to appear.
+    top_n:
+        Show only the top N groups (by ``sort_by``); ``None`` shows all.
+    sort_by:
+        ``"metric"`` sorts descending by the metric value; ``"n_neg"``
+        sorts descending by sample count.
+    titles:
+        Per-panel titles.
+    col_wrap:
+        Max columns before wrapping.
+    figsize:
+        Overall figure size.
+    palette:
+        Seaborn palette name.
+    fig_title:
+        Optional suptitle.
+
+    Returns
+    -------
+    Figure
+    """
+    if not dfs:
+        raise ValueError("`dfs` must contain at least one DataFrame or path")
+
+    dataframes = [_as_dataframe(d) for d in dfs]
+
+    if titles is None:
+        titles = [
+            Path(d).stem if isinstance(d, (str, Path)) else f"Panel {i + 1}"
+            for i, d in enumerate(dfs)
+        ]
+
+    n = len(dataframes)
+    fig, axes, n_rows, n_cols = _panel_subfigure(
+        n, col_wrap=col_wrap, figsize=figsize, panel_w=6.0, panel_h=max(5.0, 0.35 * (top_n or 30))
+    )
+
+    colors = _color_cycle(n, palette=palette)
+
+    for idx, (df, title, color) in enumerate(zip(dataframes, titles, colors)):
+        ax = axes[idx // n_cols][idx % n_cols]
+
+        if group_col and group_col in df.columns:
+            df = df.set_index(group_col)
+
+        if "n_neg" in df.columns:
+            df = df[df["n_neg"] >= min_neg]
+
+        if metric not in df.columns:
+            ax.set_title(f"{title}\n('{metric}' not found)", fontsize=10)
+            continue
+
+        df = df.dropna(subset=[metric])
+
+        if sort_by == "n_neg" and "n_neg" in df.columns:
+            df = df.sort_values("n_neg", ascending=True)
+        else:
+            df = df.sort_values(metric, ascending=True)
+
+        if top_n is not None:
+            df = df.tail(top_n)
+
+        ax.barh(
+            range(len(df)), df[metric].values,
+            color=color, edgecolor="white", linewidth=0.4, height=0.75,
+        )
+        ax.set_yticks(range(len(df)))
+        ax.set_yticklabels(df.index, fontsize=8)
+        ax.set_xlabel(metric, fontsize=9)
+        ax.set_title(title, fontsize=10)
+        ax.axvline(0, color="grey", lw=0.5, alpha=0.5)
+
+        if "n_neg" in df.columns:
+            for i, (val, neg) in enumerate(zip(df[metric].values, df["n_neg"].values)):
+                ax.text(
+                    val + 0.01, i, f"n={int(neg)}", va="center", fontsize=7, color="0.4"
+                )
+
+    _hide_unused_panel_axes(axes, n, n_rows, n_cols)
+    fig.tight_layout(rect=(0, 0, 1.0, 0.94 if fig_title else 1.0))
+    if fig_title:
+        fig.suptitle(fig_title, fontsize=12, fontweight="bold")
+    return fig
+
+
+def plot_threshold_sweep(
+    dfs: list[pd.DataFrame | str | Path],
+    *,
+    metrics_to_plot: list[str] | None = None,
+    y_true_col: str = "y_true",
+    y_prob_col: str = "y_prob",
+    n_thresholds: int = 100,
+    titles: list[str] | None = None,
+    col_wrap: int = 2,
+    figsize: tuple[float, float] | None = None,
+    fig_title: str | None = None,
+) -> Figure:
+    """Plot classification metrics as a function of decision threshold.
+
+    For each prediction set, sweeps thresholds from 0 to 1 and plots how
+    MCC, balanced accuracy, recall (no-growth), and precision (no-growth)
+    vary. Useful for choosing an operating point.
+
+    Parameters
+    ----------
+    dfs:
+        List of DataFrames and/or CSV paths.
+    metrics_to_plot:
+        Which metrics to show as curves.  Defaults to
+        ``["mcc", "balanced_accuracy", "recall_nogrowth", "precision_nogrowth"]``.
+    y_true_col, y_prob_col:
+        Column names.
+    n_thresholds:
+        Number of evenly spaced thresholds to evaluate.
+    titles:
+        Per-panel titles.
+    col_wrap:
+        Max columns before wrapping.
+    figsize:
+        Overall figure size.
+    fig_title:
+        Optional suptitle.
+
+    Returns
+    -------
+    Figure
+    """
+    from sklearn.metrics import (
+        balanced_accuracy_score,
+        matthews_corrcoef,
+        precision_score,
+        recall_score,
+    )
+
+    if not dfs:
+        raise ValueError("`dfs` must contain at least one DataFrame or path")
+
+    if metrics_to_plot is None:
+        metrics_to_plot = ["mcc", "balanced_accuracy", "recall_nogrowth", "precision_nogrowth"]
+
+    _metric_fns = {
+        "mcc": lambda yt, yp: matthews_corrcoef(yt, yp),
+        "balanced_accuracy": lambda yt, yp: balanced_accuracy_score(yt, yp),
+        "recall_nogrowth": lambda yt, yp: recall_score(yt, yp, pos_label=0, zero_division=0),
+        "precision_nogrowth": lambda yt, yp: precision_score(yt, yp, pos_label=0, zero_division=0),
+    }
+
+    dataframes = [_as_dataframe(d) for d in dfs]
+    n = len(dataframes)
+
+    if titles is None:
+        titles = [
+            Path(d).stem if isinstance(d, (str, Path)) else f"Panel {i + 1}"
+            for i, d in enumerate(dfs)
+        ]
+
+    fig, axes, n_rows, n_cols = _panel_subfigure(n, col_wrap=col_wrap, figsize=figsize)
+    line_colors = _color_cycle(len(metrics_to_plot), palette="tab10")
+
+    for idx, (df, title) in enumerate(zip(dataframes, titles)):
+        ax = axes[idx // n_cols][idx % n_cols]
+        y_true = df[y_true_col].values
+        y_prob = df[y_prob_col].values
+
+        thresholds = np.linspace(0, 1, n_thresholds)
+        for m_name, color in zip(metrics_to_plot, line_colors):
+            fn = _metric_fns.get(m_name)
+            if fn is None:
+                continue
+            scores = [fn(y_true, (y_prob >= t).astype(int)) for t in thresholds]
+            ax.plot(thresholds, scores, label=m_name, color=color, lw=1.5)
+
+        ax.set_xlabel("threshold", fontsize=9)
+        ax.set_ylabel("score", fontsize=9)
+        ax.set_title(title, fontsize=10)
+        ax.set_xlim(0, 1)
+        ax.legend(fontsize=8, frameon=True, loc="best")
+        ax.axhline(0, color="grey", lw=0.5, alpha=0.5)
+
+    _hide_unused_panel_axes(axes, n, n_rows, n_cols)
+    fig.tight_layout(rect=(0, 0, 1.0, 0.94 if fig_title else 1.0))
+    if fig_title:
+        fig.suptitle(fig_title, fontsize=12, fontweight="bold")
+    return fig
+
+
+# ---------------------------------------------------------------------------
 # Pathway-matrix analysis plots (docs/plans/pathway_features.md "Analysis")
 # ---------------------------------------------------------------------------
 
