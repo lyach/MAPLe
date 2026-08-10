@@ -7,12 +7,17 @@ targets (see ``record_to_rows``):
 * ``medium_growth`` -- one row per ``(strain, culture medium)`` with a binary
   ``growth`` flag. This label is effectively positive-only in BacDive (see the
   PU-aware notes in ``bacdive/README.md``).
-* ``metabolite_utilization`` -- one row per
-  ``(strain, metabolite, assay kind)`` with a real ``+``/``-`` label.
+* ``metabolite_utilization`` -- one row per ``(strain, metabolite)``, restricted
+  to entries where ``kind of utilization tested == "growth"``, with a real
+  ``+``/``-`` label and the source publication's ``@ref`` id + full citation.
 
 Temperature, pH and oxygen tolerance are recorded in separate blocks keyed by
-publication ``@ref`` (not by medium/metabolite), so we summarise them at the
-*strain* level and attach the same value to every row for that strain.
+publication ``@ref`` (not by medium/metabolite). pH is summarised once at the
+*strain* level and attached to every row for that strain. Temperature does
+the same *unless* more than one distinct temperature is reported for the
+record, in which case each culture-medium entry is matched to the
+temperature entry(ies) sharing its ``@ref`` -- see ``_group_by_ref`` and
+``record_to_medium_rows``.
 """
 
 from __future__ import annotations
@@ -41,6 +46,14 @@ _UTILIZATION_MAP = {
 }
 
 _NUM_RE = re.compile(r"-?\d+(?:\.\d+)?")
+# A "min-max" range, e.g. "10-41" or "-2 - 4". Matched before the generic
+# _NUM_RE scan so the separating hyphen isn't mistaken for the second
+# number's sign (a bare findall on "10-41" yields [10, -41], not [10, 41]).
+_RANGE_RE = re.compile(r"(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)")
+
+# BacDive's "Genome sequences" entries carry an INSDC accession but no direct
+# URL, unlike culture-medium entries. Build the NCBI Datasets genome page.
+_NCBI_GENOME_URL = "https://www.ncbi.nlm.nih.gov/datasets/genome/{accession}/"
 
 
 def as_list(value: Any) -> list:
@@ -73,21 +86,52 @@ def _parse_number(text: Any) -> Optional[float]:
         return None
     if isinstance(text, (int, float)):
         return float(text)
-    nums = [float(m) for m in _NUM_RE.findall(str(text))]
+    s = str(text)
+    m = _RANGE_RE.search(s)
+    if m:
+        lo, hi = float(m.group(1)), float(m.group(2))
+        return (min(lo, hi) + max(lo, hi)) / 2.0
+    nums = [float(n) for n in _NUM_RE.findall(s)]
     if not nums:
         return None
     if len(nums) == 1:
         return nums[0]
-    # range or multiple values -> midpoint of min/max
+    # multiple standalone values -> midpoint of min/max
     return (min(nums) + max(nums)) / 2.0
+
+
+def _parse_temp_points(text: Any) -> list[float]:
+    """Parse a temperature field into one or more datapoints.
+
+    A single value yields one point. A "min-max" range (e.g. "10-41")
+    yields *three*: the min, the max, and their mean --
+    ``"10-41" -> [10.0, 41.0, 25.5]``.
+    """
+    if text is None:
+        return []
+    if isinstance(text, (int, float)):
+        return [float(text)]
+    s = str(text)
+    m = _RANGE_RE.search(s)
+    if m:
+        lo, hi = float(m.group(1)), float(m.group(2))
+        lo, hi = min(lo, hi), max(lo, hi)
+        return [lo, hi, (lo + hi) / 2.0]
+    nums = [float(n) for n in _NUM_RE.findall(s)]
+    if not nums:
+        return []
+    if len(nums) == 1:
+        return [nums[0]]
+    lo, hi = min(nums), max(nums)
+    return [lo, hi, (lo + hi) / 2.0]
 
 
 def _positive_median(entries: list[dict], value_key: str, flag_key: str) -> str:
     """Median of numeric ``value_key`` across entries flagged as growth.
 
     ``flag_key`` is the per-entry key holding "positive"/"negative"
-    (``growth`` for temperature, ``ability`` for pH). Falls back to all
-    entries when none are explicitly positive. Returns "" if nothing numeric.
+    (``ability`` for pH). Falls back to all entries when none are explicitly
+    positive. Returns "" if nothing numeric.
     """
     vals: list[float] = []
     fallback: list[float] = []
@@ -102,6 +146,50 @@ def _positive_median(entries: list[dict], value_key: str, flag_key: str) -> str:
     if not chosen:
         return ""
     return f"{statistics.median(chosen):g}"
+
+
+def _median_all(entries: list[dict], value_key: str) -> str:
+    """Median of numeric ``value_key`` across *all* entries, regardless of
+    any growth/ability flag. Ranges (e.g. "10-41") are expanded into three
+    points -- min, max, mean -- by ``_parse_temp_points`` before the median
+    is taken. Returns "" if nothing numeric.
+    """
+    vals = [num for e in entries for num in _parse_temp_points(e.get(value_key))]
+    if not vals:
+        return ""
+    return f"{statistics.median(vals):g}"
+
+
+def _group_by_ref(
+    entries: list[dict], value_key: str, flag_key: Optional[str] = None,
+) -> dict[str, list[tuple[float, Optional[int]]]]:
+    """Group numeric ``value_key`` values by the entry's publication ``@ref``.
+
+    Returns ``{ref: [(value, growth_label), ...]}`` (distinct pairs, in
+    first-seen order), dropping entries with no parseable number. A range
+    (e.g. "10-41") is expanded into three points -- min, max, mean -- via
+    ``_parse_temp_points``, each carrying that entry's growth label.
+    ``growth_label`` is the entry's own ``flag_key`` mapped through
+    ``_GROWTH_MAP`` (e.g. "negative" -> 0), or ``None`` if ``flag_key`` is
+    omitted or unrecognised -- a *negative*-flagged temperature reading means
+    growth was NOT observed at that temperature, which should override the
+    medium's own growth label when the two are matched by shared ``@ref``.
+    """
+    grouped: dict[str, list[tuple[float, Optional[int]]]] = {}
+    for e in entries:
+        points = _parse_temp_points(e.get(value_key))
+        if not points:
+            continue
+        ref = str(e.get("@ref", "")).strip()
+        label = None
+        if flag_key is not None:
+            label = _GROWTH_MAP.get(str(e.get(flag_key, "")).strip().lower())
+        vals = grouped.setdefault(ref, [])
+        for num in points:
+            pair = (num, label)
+            if pair not in vals:
+                vals.append(pair)
+    return grouped
 
 
 # --------------------------------------------------------------------------
@@ -184,6 +272,7 @@ def _sequence(record: dict) -> dict:
 
     return {
         "genome_accession": genome_accession,
+        "genome_link": _NCBI_GENOME_URL.format(accession=genome_accession) if genome_accession else "",
         "n16s_accession": n16s,
         "gc_content": _gc_content(record, seq),
     }
@@ -208,7 +297,7 @@ def _conditions(record: dict) -> dict:
     cg = record.get("Culture and growth conditions", {})
     if not isinstance(cg, dict):
         cg = {}
-    temp = _positive_median(as_list(cg.get("culture temp")), "temperature", "growth")
+    temp = _median_all(as_list(cg.get("culture temp")), "temperature")
     ph = _positive_median(as_list(cg.get("culture pH")), "pH", "ability")
     return {"temperature": temp, "ph": ph}
 
@@ -242,6 +331,20 @@ def record_to_medium_rows(record: dict) -> list[dict]:
 
     Only culture-medium entries with a mappable growth value are kept. Returns
     an empty list when the record has no usable culture-medium data.
+
+    Temperature: if the record reports more than one *distinct* culture
+    temperature, a single strain-wide value is no longer precise enough, so
+    each medium entry is matched against ``culture temp`` entries sharing its
+    ``@ref`` (both are keyed by publication reference). A medium whose ref
+    has no matching temperature falls back to ``base["temperature"]`` (the
+    strain-wide median) and keeps its own ``growth`` label; a medium whose
+    ref matches more than one distinct temperature is expanded into one row
+    per (medium, temperature) pair. A matched temperature entry's own
+    ``growth`` flag (positive/negative -- did growth occur *at that
+    temperature*) overrides the medium's growth label for that row, since it
+    is the more specific signal: e.g. a medium generally supports growth but
+    a matched temperature entry says "negative" -> that row's
+    ``growth_class`` is 0.
     """
     cg = record.get("Culture and growth conditions", {})
     if not isinstance(cg, dict):
@@ -251,6 +354,13 @@ def record_to_medium_rows(record: dict) -> list[dict]:
         return []
 
     base = strain_features(record)
+
+    temps_by_ref = _group_by_ref(
+        as_list(cg.get("culture temp")), "temperature", flag_key="growth",
+    )
+    distinct_temps = {v for vals in temps_by_ref.values() for v, _ in vals}
+    match_temp_by_ref = len(distinct_temps) > 1
+
     rows: list[dict] = []
 
     for medium in media:
@@ -260,28 +370,61 @@ def record_to_medium_rows(record: dict) -> list[dict]:
             continue  # e.g. "no data" / blank -> not a usable datapoint
 
         name = medium.get("name", "") or ""
+        ref = str(medium.get("@ref", ""))
         feats = media_features(
             name=name,
             link=medium.get("link"),
             composition=medium.get("composition"),
         )
 
-        row = dict(base)
-        row["media_name"] = name
-        row["growth_class"] = label
-        row["refs"] = str(medium.get("@ref", ""))
-        row.update(feats)
-        rows.append(row)
+        matched_temps = temps_by_ref.get(ref.strip()) if match_temp_by_ref else None
+        # (None, None) -> keep base["temperature"] and the medium's own label
+        temp_overrides = matched_temps or [(None, None)]
+
+        for temp_val, temp_label in temp_overrides:
+            row = dict(base)
+            row["media_name"] = name
+            row["medium_link"] = medium.get("link") or ""
+            row["growth_class"] = label if temp_label is None else temp_label
+            row["refs"] = ref
+            row.update(feats)
+            if temp_val is not None:
+                row["temperature"] = f"{temp_val:g}"
+            rows.append(row)
 
     return rows
 
 
-def record_to_metabolite_rows(record: dict) -> list[dict]:
-    """Flatten one BacDive record into (strain x metabolite x assay) rows.
+def _reference_lookup(record: dict) -> dict[str, dict]:
+    """Map ``@ref`` id (as a string) -> that publication's ``Reference`` entry."""
+    return {
+        str(ref["@id"]): ref
+        for ref in as_list(record.get("Reference"))
+        if ref.get("@id") is not None
+    }
 
-    Reads ``Physiology and metabolism -> metabolite utilization``; one row per
-    entry with a mappable ``utilization activity`` (``+``/``-``). Returns an
-    empty list when the record has no usable metabolite-utilization data.
+
+def _format_reference(ref: dict) -> str:
+    """Render a ``Reference`` entry as a single human-readable citation string."""
+    parts = [
+        str(ref.get("authors", "") or "").strip(),
+        str(ref.get("title", "") or "").strip(),
+        str(ref.get("journal", "") or "").strip(),
+        str(ref.get("doi/url", "") or "").strip(),
+    ]
+    return ". ".join(p for p in parts if p)
+
+
+def record_to_metabolite_rows(record: dict) -> list[dict]:
+    """Flatten one BacDive record into (strain x metabolite) rows.
+
+    Reads ``Physiology and metabolism -> metabolite utilization``, keeping
+    only entries whose ``kind of utilization tested`` is ``"growth"`` (as
+    opposed to e.g. "carbon source", "fermentation", "builds acid from") with
+    a mappable ``utilization activity`` (``+``/``-``). Each row also carries
+    the publication ``@ref`` id and the full citation text resolved from the
+    record's ``Reference`` block. Returns an empty list when the record has
+    no usable growth-utilization data.
     """
     phys = record.get("Physiology and metabolism", {})
     if not isinstance(phys, dict):
@@ -291,9 +434,14 @@ def record_to_metabolite_rows(record: dict) -> list[dict]:
         return []
 
     base = strain_features(record)
+    references = _reference_lookup(record)
     rows: list[dict] = []
 
     for entry in entries:
+        kind = str(entry.get("kind of utilization tested", "")).strip().lower()
+        if kind != "growth":
+            continue
+
         activity = str(entry.get("utilization activity", "")).strip()
         label = _UTILIZATION_MAP.get(activity)
         if label is None:
@@ -304,12 +452,14 @@ def record_to_metabolite_rows(record: dict) -> list[dict]:
             continue
 
         chebi = entry.get("Chebi-ID")
+        ref_id = str(entry.get("@ref", ""))
         row = dict(base)
         row["substrate_name"] = substrate
         row["chebi_id"] = "" if chebi is None else str(chebi)
         row["kind_of_utilization"] = entry.get("kind of utilization tested", "") or ""
         row["growth_class"] = label
-        row["refs"] = str(entry.get("@ref", ""))
+        row["refs"] = ref_id
+        row["reference"] = _format_reference(references.get(ref_id, {}))
         rows.append(row)
 
     return rows

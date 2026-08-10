@@ -74,6 +74,7 @@ _STRAIN_FEATURES = [
     "spore_formation",
     "gc_content",
     "genome_accession",
+    "genome_link",
     "n16s_accession",
     "temperature",
     "ph",
@@ -100,6 +101,7 @@ _MEDIUM_GROWTH_FIELDNAMES = [
     "strain_name",
     "media_name",
     "mediadive_id",
+    "medium_link",
     # target
     "growth_class",
     # strain features
@@ -131,6 +133,7 @@ _METABOLITE_FIELDNAMES = [
     *_STRAIN_FEATURES,
     # provenance
     "refs",
+    "reference",
 ]
 
 # Columns for the failures.csv diagnostic report.
@@ -176,6 +179,9 @@ TARGETS: dict[str, TargetSpec] = {
         categorical_features=_STRAIN_CATEGORICALS,
         id_col="mediadive_id",
         name_col="media_name",
+        # a medium can now yield more than one row (one per matched
+        # @ref temperature) -- keep those distinct through dedup.
+        extra_key_cols=["temperature"],
         positive_only=True,
     ),
     "metabolite_utilization": TargetSpec(
