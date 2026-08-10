@@ -89,6 +89,7 @@ class RateLimiter:
 class AccessionResult:
     accession: str
     resolved_accession: str = ""
+    assembly_level: str = ""        # e.g. Complete Genome | Chromosome | Scaffold | Contig
     genome_status: str = "failed"   # ok | skipped | unavailable | failed
     cds_status: str = "failed"      # ok | skipped | unavailable | failed
     genome_path: str = ""
@@ -133,22 +134,32 @@ def _http_get(url: str, headers: dict, rate_limiter: RateLimiter) -> bytes:
 
 def resolve_current_accession(
     accession: str, headers: dict, rate_limiter: RateLimiter
-) -> Optional[str]:
+) -> tuple[Optional[str], str]:
     """Look up the current versioned accession NCBI has on file for a
-    (possibly unversioned) accession. Returns None if NCBI has no record
-    at all for it (suppressed, replaced with no successor, or typo'd)."""
+    (possibly unversioned) accession, plus its reported assembly level
+    (Complete Genome / Chromosome / Scaffold / Contig). Returns
+    (None, "") if NCBI has no record at all for it (suppressed, replaced
+    with no successor, or typo'd).
+
+    This is a single lightweight JSON call (no sequence data), so it's
+    safe to make even for accessions whose FASTA files are already on
+    disk -- it's how we backfill assembly_level without re-downloading
+    anything."""
     url = f"{DATASETS_API_ROOT}/{urllib.parse.quote(accession)}/dataset_report"
     try:
         raw = _http_get(url, headers, rate_limiter)
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
-            return None
+            return None, ""
         raise
     data = json.loads(raw)
     reports = data.get("reports") or []
     if not reports:
-        return None
-    return reports[0].get("current_accession") or reports[0].get("accession") or accession
+        return None, ""
+    report = reports[0]
+    resolved = report.get("current_accession") or report.get("accession") or accession
+    assembly_level = (report.get("assembly_info") or {}).get("assembly_level", "")
+    return resolved, assembly_level
 
 
 def download_dataset_zip(
@@ -192,18 +203,22 @@ def process_accession(
     cds_path = acc_dir / f"{accession}_cds_from_genomic.fna"
     no_cds_marker = acc_dir / NO_CDS_MARKER
 
-    if not force and already_done(genome_path, cds_path, no_cds_marker):
-        result.genome_status = "skipped"
-        result.cds_status = "skipped"
-        result.genome_path = str(genome_path)
-        result.cds_path = str(cds_path) if cds_path.exists() else ""
-        return result
-
-    resolved = resolve_current_accession(accession, headers, rate_limiter)
+    # Always resolve, even for accessions we won't re-download -- it's one
+    # small JSON call and it's the only way to backfill assembly_level for
+    # files that already exist on disk.
+    resolved, assembly_level = resolve_current_accession(accession, headers, rate_limiter)
     if resolved is None:
         result.error = "NCBI has no assembly record for this accession"
         return result
     result.resolved_accession = resolved
+    result.assembly_level = assembly_level
+
+    if not force and already_done(genome_path, cds_path, no_cds_marker):
+        result.genome_status = "skipped"
+        result.cds_status = "skipped" if cds_path.exists() else "unavailable"
+        result.genome_path = str(genome_path)
+        result.cds_path = str(cds_path) if cds_path.exists() else ""
+        return result
 
     acc_dir.mkdir(parents=True, exist_ok=True)
 
@@ -275,6 +290,16 @@ def print_summary(results: list[AccessionResult], manifest_path: Path) -> None:
     total_missing = genome_failed
     print(f"Total genomes available (downloaded or cached): {total_available}/{total}")
     print(f"Total genomes NOT available: {total_missing}/{total}")
+
+    level_counts: dict[str, int] = {}
+    for r in results:
+        if r.assembly_level:
+            level_counts[r.assembly_level] = level_counts.get(r.assembly_level, 0) + 1
+    if level_counts:
+        print()
+        print("Assembly level breakdown:")
+        for level, count in sorted(level_counts.items(), key=lambda kv: -kv[1]):
+            print(f"  {level:<20}: {count}")
 
     failures = [r for r in results if r.genome_status == "failed"]
     if failures:
