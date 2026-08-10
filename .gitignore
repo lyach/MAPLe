@@ -7,6 +7,7 @@ __pycache__/
 local/
 reports/
 notebooks/
+!notebooks/05_bacdive_data_exploration.ipynb
 scripts/slurm/
 databases/
 tools/
