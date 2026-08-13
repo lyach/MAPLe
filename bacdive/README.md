@@ -93,7 +93,7 @@ python scripts/run_experiment.py config/experiments/class_bacdive_metabolite.yam
 | target | `growth_class` (1 = growth, 0 = no growth) |
 | strain features | `genus`, `family`, `order`, `phylum`, `gram_stain`, `cell_shape`, `motility`, `oxygen_tolerance`, `nutrition_type`, `spore_formation`, `gc_content`, `genome_accession`, `n16s_accession` |
 | condition (strain-level) | `temperature`, `ph` |
-| media features | `n_ingredients`, `has_yeast_extract`, `has_peptone`, `has_agar`, `has_blood_components`, `has_nacl`, `is_defined` |
+| media features | `n_ingredients`, `has_yeast_extract`, `has_peptone`, `has_agar`, `has_blood_components`, `has_nacl`, `complexity` |
 | provenance | `composition_raw`, `refs` |
 
 **`metabolite_utilization`** — one row per `(strain, metabolite, assay kind)`:

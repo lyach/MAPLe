@@ -34,7 +34,7 @@ features:
   has_agar: "MinMaxScaler()"
   has_blood_components: "MinMaxScaler()"
   has_nacl: "MinMaxScaler()"
-  is_defined: "MinMaxScaler()"
+  complexity: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
 
 # ================ TARGETS ================
 targets:

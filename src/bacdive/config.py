@@ -123,7 +123,7 @@ _MEDIUM_FEATURES = [
     "has_agar",
     "has_blood_components",
     "has_nacl",
-    "is_defined",
+    "complexity",
     "composition_raw",
     "refs",
     "reference",

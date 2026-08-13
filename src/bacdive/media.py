@@ -25,8 +25,8 @@ _MARKERS: dict[str, tuple[str, ...]] = {
     "has_nacl": ("nacl", "sodium chloride"),
 }
 
-# Complex (undefined) ingredients: their presence means the medium is *not*
-# chemically defined.
+# Complex (undefined) ingredients: their presence means the medium contains
+# at least one nutritionally undefined component (biological extract, hydrolysate, etc.).
 _COMPLEX_MARKERS: tuple[str, ...] = (
     "yeast extract",
     "peptone",
@@ -44,6 +44,67 @@ _COMPLEX_MARKERS: tuple[str, ...] = (
     "tryptic",
     "lysate",
     "digest",
+)
+
+# Chemically defined (pure-compound) ingredients: their presence is evidence
+# that at least some components are compositionally known.
+_DEFINED_MARKERS: tuple[str, ...] = (
+    # simple sugars
+    "glucose",
+    "sucrose",
+    "fructose",
+    "galactose",
+    "maltose",
+    "lactose",
+    "ribose",
+    "xylose",
+    "mannose",
+    # inorganic / mineral salts
+    "nacl",
+    "kcl",
+    "k2hpo4",
+    "kh2po4",
+    "na2hpo4",
+    "mgso4",
+    "cacl2",
+    "feso4",
+    "mncl2",
+    "znso4",
+    "mgcl2",
+    "nh4cl",
+    "k2so4",
+    "na2so4",
+    # nitrogen sources
+    "nh4",
+    "ammonium",
+    "nitrate",
+    "urea",
+    # vitamins
+    "thiamine",
+    "biotin",
+    "riboflavin",
+    "vitamin",
+    "niacin",
+    "pantothen",
+    "folic acid",
+    "cobalamin",
+    # nucleobases / nucleosides
+    "thymine",
+    "thymidine",
+    "adenine",
+    "guanine",
+    # organic acids
+    "pyruvate",
+    "citrate",
+    "acetate",
+    "fumarate",
+    "succinate",
+    # pure amino acids
+    "cysteine",
+    "glycine",
+    "glutamate",
+    "glutamine",
+    "alanine",
 )
 
 _MEDIADIVE_RE = re.compile(r"mediadive\.dsmz\.de/medium/(\d+)", re.IGNORECASE)
@@ -106,14 +167,21 @@ def media_features(name: str, link: str | None, composition: str | None) -> dict
         for col, tokens in _MARKERS.items()
     }
 
-    # is_defined: 1 only when we have composition text AND it contains no
-    # complex ingredient. Unknown (no composition) -> 0 (assume complex).
-    if comp_lower:
-        flags["is_defined"] = int(
-            not any(tok in comp_lower for tok in _COMPLEX_MARKERS)
-        )
+    # complexity: three-way classification of medium chemical definition.
+    #   defined     — composition present, no complex markers detected
+    #   semi_defined — composition present, both complex and defined markers present
+    #   undefined   — no composition, or complex markers with no defined markers
+    if not comp_lower:
+        flags["complexity"] = "undefined"
     else:
-        flags["is_defined"] = 0
+        has_complex = any(tok in comp_lower for tok in _COMPLEX_MARKERS)
+        has_defined = any(tok in comp_lower for tok in _DEFINED_MARKERS)
+        if has_complex and has_defined:
+            flags["complexity"] = "semi_defined"
+        elif has_complex:
+            flags["complexity"] = "undefined"
+        else:
+            flags["complexity"] = "defined"
 
     return {
         "mediadive_id": parse_mediadive_id(link),
