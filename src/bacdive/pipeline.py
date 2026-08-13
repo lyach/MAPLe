@@ -52,11 +52,13 @@ class _TaxonResult:
 def _unit_key(row: pd.Series, spec: TargetSpec) -> str:
     """Stable key for a row's de-dup unit: preferred id, else name, plus extras.
 
-    e.g. medium -> MediaDive id or media name; metabolite -> ChEBI id or
-    substrate name, combined with the assay kind.
+    e.g. medium -> media name (plus temperature, oxygen); metabolite -> ChEBI
+    id or substrate name, combined with the assay kind. When ``id_col`` and
+    ``name_col`` are the same (media_name), the name is lowercased so spelling
+    variants of the same string collapse.
     """
     ident = str(row.get(spec.id_col, "") or "").strip()
-    if ident:
+    if ident and spec.id_col != spec.name_col:
         key = f"id:{ident}"
     else:
         key = "nm:" + str(row.get(spec.name_col, "") or "").strip().lower()
@@ -66,7 +68,7 @@ def _unit_key(row: pd.Series, spec: TargetSpec) -> str:
 
 
 def _dedupe(df: pd.DataFrame, spec: TargetSpec) -> pd.DataFrame:
-    """Collapse duplicate (strain, unit) rows coming from multiple refs.
+    """Collapse duplicate (isolate, unit) rows coming from multiple refs.
 
     On a ``growth_class`` conflict the positive label wins (max); all other
     columns take the first non-null value. Conflicts are logged.
@@ -75,24 +77,24 @@ def _dedupe(df: pd.DataFrame, spec: TargetSpec) -> pd.DataFrame:
         return df
 
     df = df.copy()
-    df["_strain_key"] = df["strain_name"].astype(str).str.strip().str.lower()
+    df["_isolate_key"] = df[spec.isolate_col].astype(str).str.strip().str.lower()
     df["_unit_key"] = df.apply(lambda r: _unit_key(r, spec), axis=1)
 
-    grp = df.groupby(["_strain_key", "_unit_key"], sort=False)
+    grp = df.groupby(["_isolate_key", "_unit_key"], sort=False)
 
     n_conflicts = int((grp["growth_class"].nunique() > 1).sum())
     if n_conflicts:
         log.warning(
-            "%d (strain, unit) pairs had conflicting labels -- resolved to positive.",
+            "%d (isolate, unit) pairs had conflicting labels -- resolved to positive.",
             n_conflicts,
         )
 
     agg = {col: "first" for col in df.columns if col not in
-           {"growth_class", "_strain_key", "_unit_key"}}
+           {"growth_class", "_isolate_key", "_unit_key"}}
     agg["growth_class"] = "max"
 
     deduped = grp.agg(agg).reset_index(drop=True)
-    return deduped.drop(columns=["_strain_key", "_unit_key"], errors="ignore")
+    return deduped.drop(columns=["_isolate_key", "_unit_key"], errors="ignore")
 
 
 def _fetch_one_taxon(
@@ -290,6 +292,7 @@ def run_from_cache(
     failures_csv: Optional[Path] = None,
     limit: Optional[int] = None,
     show_progress: bool = True,
+    temperature_range_expansion: bool = False,
 ) -> tuple[int, int, int]:
     """Build a target table from cached JSON records only (no API calls).
 
@@ -318,6 +321,7 @@ def run_from_cache(
         ),
         id_col=base.id_col,
         name_col=base.name_col,
+        isolate_col=base.isolate_col,
         extra_key_cols=list(base.extra_key_cols),
         positive_only=base.positive_only,
     )
@@ -334,8 +338,10 @@ def run_from_cache(
         cache_files = cache_files[: max(0, limit)]
 
     log.info(
-        "cache-only build: target=%s, %d file(s) in %s -> %s",
+        "cache-only build: target=%s, %d file(s) in %s -> %s "
+        "(temperature_range_expansion=%s)",
         target, len(cache_files), cache_dir, output_file,
+        temperature_range_expansion,
     )
 
     rows: list[dict] = []
@@ -356,7 +362,12 @@ def run_from_cache(
             )
             continue
         n_records += 1
-        rows.extend(record_to_rows(record, target))
+        rows.extend(
+            record_to_rows(
+                record, target,
+                temperature_range_expansion=temperature_range_expansion,
+            )
+        )
 
     df = pd.DataFrame(rows)
     if not df.empty:
@@ -421,8 +432,12 @@ def _log_summary(
     if not df.empty:
         pos = int((df["growth_class"] == 1).sum())
         neg = int((df["growth_class"] == 0).sum())
+        lines.append(f"unique strains    : {df['strain_name'].nunique()}")
+        if spec.isolate_col in df.columns and spec.isolate_col != "strain_name":
+            lines.append(
+                f"unique {spec.isolate_col:<11}: {df[spec.isolate_col].nunique()}"
+            )
         lines += [
-            f"unique strains    : {df['strain_name'].nunique()}",
             f"unique {spec.unit_col:<11}: {df[spec.unit_col].nunique()}",
             f"growth_class      : {pos} positive / {neg} negative",
         ]

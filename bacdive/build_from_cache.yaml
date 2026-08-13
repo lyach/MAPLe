@@ -1,7 +1,4 @@
 # Rebuild a BacDive modeling table from local cache only (no API).
-#
-#   python scripts/build_bacdive_from_cache.py
-#   python scripts/build_bacdive_from_cache.py --config bacdive/build_from_cache.yaml
 
 target: medium_growth
 
@@ -17,6 +14,11 @@ strain_features:
   - nutrition_type
   - spore_formation
   - gc_content
+  - genome_accession
+  - genome_link
+  - n16s_accession
+  - temperature
+  - ph
 
 # Medium features
 medium_features:
@@ -29,5 +31,7 @@ medium_features:
   - complexity
   - composition_raw
   - refs
+
+temperature_range_expansion: false
 
 output_file: data/external/bacdive_growth_new.parquet

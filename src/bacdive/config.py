@@ -170,10 +170,11 @@ CACHE_FAILURE_FIELDNAMES = [
 class TargetSpec:
     """Everything the pipeline needs to build one target's output table.
 
-    ``id_col`` / ``name_col`` / ``extra_key_cols`` define the de-duplication
-    "unit": rows sharing the same ``(strain, unit)`` are collapsed, with the
-    positive ``growth_class`` winning on conflict. ``unit_col`` is the column
-    counted as "unique units" in the run summary.
+    ``isolate_col`` / ``id_col`` / ``name_col`` / ``extra_key_cols`` define the
+    de-duplication key: rows sharing the same
+    ``(isolate, unit, extra...)`` are collapsed, with the positive
+    ``growth_class`` winning on conflict. ``unit_col`` is the column counted
+    as "unique units" in the run summary.
     """
 
     name: str
@@ -182,6 +183,7 @@ class TargetSpec:
     categorical_features: list[str]
     id_col: str                         # preferred stable id for the unit key
     name_col: str                       # fallback name for the unit key
+    isolate_col: str = "strain_name"    # isolate identity in the dedup key
     extra_key_cols: list[str] = field(default_factory=list)
     positive_only: bool = False         # if True, warn about PU when negatives ~0
 
@@ -196,11 +198,11 @@ TARGETS: dict[str, TargetSpec] = {
         output_file=EXTERNAL_DIR / "bacdive_growth.parquet",
         fieldnames=_MEDIUM_GROWTH_FIELDNAMES,
         categorical_features=_STRAIN_CATEGORICALS,
-        id_col="mediadive_id",
+        # grain: one row per (bacdive_id, media_name, temperature, oxygen_tolerance)
+        isolate_col="bacdive_id",
+        id_col="media_name",
         name_col="media_name",
-        # a medium can now yield more than one row (one per matched
-        # @ref temperature) -- keep those distinct through dedup.
-        extra_key_cols=["temperature"],
+        extra_key_cols=["temperature", "oxygen_tolerance"],
         positive_only=True,
     ),
     "metabolite_utilization": TargetSpec(
@@ -291,6 +293,7 @@ class BuildFromCacheConfig:
     cache_dir: Path
     output_file: Path
     output_writer: str = "to_parquet"
+    temperature_range_expansion: bool = False
 
     def to_target_spec(self) -> TargetSpec:
         """``TargetSpec`` with the selected output columns."""
@@ -302,9 +305,23 @@ class BuildFromCacheConfig:
             categorical_features=list(self.categorical_features),
             id_col=base.id_col,
             name_col=base.name_col,
+            isolate_col=base.isolate_col,
             extra_key_cols=list(base.extra_key_cols),
             positive_only=base.positive_only,
         )
+
+
+def _as_bool(raw: object, key: str, default: bool = False) -> bool:
+    if raw is None:
+        return default
+    if isinstance(raw, bool):
+        return raw
+    s = str(raw).strip().lower()
+    if s in {"1", "true", "yes", "on"}:
+        return True
+    if s in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{key!r} must be a boolean, got {raw!r}")
 
 
 def _as_str_list(raw: object, key: str) -> list[str]:
@@ -350,6 +367,9 @@ def load_build_from_cache_config(path: Path | None = None) -> BuildFromCacheConf
     cache_dir / output_file:
         Optional path overrides (``out`` is accepted as an alias for
         ``output_file``).
+    temperature_range_expansion:
+        If true, a culture-temp range (``"30-37"``) emits three rows
+        (min, max, mean) instead of one midpoint. Default false.
     """
     path = path or BUILD_FROM_CACHE_YAML
     data = _load_yaml(path)
@@ -415,6 +435,11 @@ def load_build_from_cache_config(path: Path | None = None) -> BuildFromCacheConf
         output_file = ROOT / output_file
 
     writer = str(data.get("output_writer") or "to_parquet").strip()
+    expand = _as_bool(
+        data.get("temperature_range_expansion"),
+        "temperature_range_expansion",
+        default=False,
+    )
 
     return BuildFromCacheConfig(
         target=target,
@@ -423,4 +448,5 @@ def load_build_from_cache_config(path: Path | None = None) -> BuildFromCacheConf
         cache_dir=cache_dir,
         output_file=output_file,
         output_writer=writer,
+        temperature_range_expansion=expand,
     )

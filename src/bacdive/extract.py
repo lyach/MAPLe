@@ -4,20 +4,23 @@ extract.py
 Flatten a single nested BacDive record into modeling rows, for one of two
 targets (see ``record_to_rows``):
 
-* ``medium_growth`` -- one row per ``(strain, culture medium)`` with a binary
-  ``growth`` flag. This label is effectively positive-only in BacDive (see the
-  PU-aware notes in ``bacdive/README.md``).
+* ``medium_growth`` -- one row per ``(isolate, culture medium, temperature)``
+  with a binary ``growth`` flag. Dedup identity is
+  ``(bacdive_id, media_name, temperature, oxygen_tolerance)``.
 * ``metabolite_utilization`` -- one row per ``(strain, metabolite)``, restricted
   to entries where ``kind of utilization tested == "growth"``, with a real
   ``+``/``-`` label and the source publication's ``@ref`` id + full citation.
 
 Temperature, pH and oxygen tolerance are recorded in separate blocks keyed by
-publication ``@ref`` (not by medium/metabolite). pH is summarised once at the
-*strain* level and attached to every row for that strain. Temperature does
-the same *unless* more than one distinct temperature is reported for the
-record, in which case each culture-medium entry is matched to the
-temperature entry(ies) sharing its ``@ref`` -- see ``_group_by_ref`` and
-``record_to_medium_rows``.
+publication ``@ref`` (not by medium/metabolite). pH and oxygen are summarised
+once at the isolate level. Temperature does the same *unless* more than one
+distinct parsed temperature is reported, in which case each culture-medium
+entry is matched to the temperature entry(ies) sharing its ``@ref`` -- see
+``_group_by_ref`` and ``record_to_medium_rows``.
+
+By default a reported range (e.g. ``"30-37"``) is one observation (its
+midpoint). Set ``temperature_range_expansion=True`` to emit three points
+instead (min, max, mean).
 """
 
 from __future__ import annotations
@@ -101,11 +104,12 @@ def _parse_number(text: Any) -> Optional[float]:
 
 
 def _parse_temp_points(text: Any) -> list[float]:
-    """Parse a temperature field into one or more datapoints.
+    """Parse a temperature field into one or more numeric points.
 
     A single value yields one point. A "min-max" range (e.g. "10-41")
-    yields *three*: the min, the max, and their mean --
-    ``"10-41" -> [10.0, 41.0, 25.5]``.
+    yields three points (min, max, mean). Used for the isolate-level
+    median and, when ``temperature_range_expansion`` is on, for emitting
+    one modeling row per point.
     """
     if text is None:
         return []
@@ -161,14 +165,21 @@ def _median_all(entries: list[dict], value_key: str) -> str:
 
 
 def _group_by_ref(
-    entries: list[dict], value_key: str, flag_key: Optional[str] = None,
+    entries: list[dict],
+    value_key: str,
+    flag_key: Optional[str] = None,
+    *,
+    expand_ranges: bool = False,
 ) -> dict[str, list[tuple[float, Optional[int]]]]:
     """Group numeric ``value_key`` values by the entry's publication ``@ref``.
 
     Returns ``{ref: [(value, growth_label), ...]}`` (distinct pairs, in
-    first-seen order), dropping entries with no parseable number. A range
-    (e.g. "10-41") is expanded into three points -- min, max, mean -- via
-    ``_parse_temp_points``, each carrying that entry's growth label.
+    first-seen order), dropping entries with no parseable number.
+
+    Each source entry contributes one midpoint by default. If
+    ``expand_ranges`` is true, a range such as ``"10-41"`` becomes three
+    points (min, max, mean), each carrying that entry's growth label.
+
     ``growth_label`` is the entry's own ``flag_key`` mapped through
     ``_GROWTH_MAP`` (e.g. "negative" -> 0), or ``None`` if ``flag_key`` is
     omitted or unrecognised -- a *negative*-flagged temperature reading means
@@ -177,7 +188,11 @@ def _group_by_ref(
     """
     grouped: dict[str, list[tuple[float, Optional[int]]]] = {}
     for e in entries:
-        points = _parse_temp_points(e.get(value_key))
+        if expand_ranges:
+            points = _parse_temp_points(e.get(value_key))
+        else:
+            num = _parse_number(e.get(value_key))
+            points = [] if num is None else [num]
         if not points:
             continue
         ref = str(e.get("@ref", "")).strip()
@@ -326,25 +341,27 @@ def _bacdive_id(record: dict) -> str:
 # row assembly
 # --------------------------------------------------------------------------
 
-def record_to_medium_rows(record: dict) -> list[dict]:
-    """Flatten one BacDive record into (strain x culture medium) rows.
+def record_to_medium_rows(
+    record: dict, *, temperature_range_expansion: bool = False,
+) -> list[dict]:
+    """Flatten one BacDive record into (isolate x medium x temperature) rows.
 
     Only culture-medium entries with a mappable growth value are kept. Returns
     an empty list when the record has no usable culture-medium data.
 
-    Temperature: if the record reports more than one *distinct* culture
-    temperature, a single strain-wide value is no longer precise enough, so
+    Temperature: if the record reports more than one *distinct* parsed
+    temperature, a single isolate-wide value is no longer precise enough, so
     each medium entry is matched against ``culture temp`` entries sharing its
-    ``@ref`` (both are keyed by publication reference). A medium whose ref
-    has no matching temperature falls back to ``base["temperature"]`` (the
-    strain-wide median) and keeps its own ``growth`` label; a medium whose
-    ref matches more than one distinct temperature is expanded into one row
-    per (medium, temperature) pair. A matched temperature entry's own
-    ``growth`` flag (positive/negative -- did growth occur *at that
-    temperature*) overrides the medium's growth label for that row, since it
-    is the more specific signal: e.g. a medium generally supports growth but
-    a matched temperature entry says "negative" -> that row's
-    ``growth_class`` is 0.
+    ``@ref``. A medium whose ref has no matching temperature falls back to
+    ``base["temperature"]`` (the isolate-wide median) and keeps its own
+    ``growth`` label; a medium whose ref matches more than one temperature is
+    expanded into one row per (medium, temperature) pair. A matched
+    temperature entry's own ``growth`` flag overrides the medium's growth
+    label for that row.
+
+    ``temperature_range_expansion``: if false (default), a range such as
+    ``"30-37"`` is one midpoint. If true, it emits min, max, and mean as
+    three rows (and those extra points can themselves trigger @ref matching).
     """
     cg = record.get("Culture and growth conditions", {})
     if not isinstance(cg, dict):
@@ -356,7 +373,10 @@ def record_to_medium_rows(record: dict) -> list[dict]:
     base = strain_features(record)
 
     temps_by_ref = _group_by_ref(
-        as_list(cg.get("culture temp")), "temperature", flag_key="growth",
+        as_list(cg.get("culture temp")),
+        "temperature",
+        flag_key="growth",
+        expand_ranges=temperature_range_expansion,
     )
     distinct_temps = {v for vals in temps_by_ref.values() for v, _ in vals}
     match_temp_by_ref = len(distinct_temps) > 1
@@ -471,7 +491,12 @@ _EXTRACTORS = {
 }
 
 
-def record_to_rows(record: dict, target: str = "medium_growth") -> list[dict]:
+def record_to_rows(
+    record: dict,
+    target: str = "medium_growth",
+    *,
+    temperature_range_expansion: bool = False,
+) -> list[dict]:
     """Flatten one BacDive record into rows for the requested ``target``."""
     try:
         extractor = _EXTRACTORS[target]
@@ -479,4 +504,8 @@ def record_to_rows(record: dict, target: str = "medium_growth") -> list[dict]:
         raise ValueError(
             f"unknown target {target!r}; choose one of {sorted(_EXTRACTORS)}"
         ) from None
+    if target == "medium_growth":
+        return extractor(
+            record, temperature_range_expansion=temperature_range_expansion,
+        )
     return extractor(record)
