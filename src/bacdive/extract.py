@@ -225,7 +225,7 @@ def _taxonomy(record: dict) -> dict:
     # strip the HTML italics tags BacDive sometimes embeds in scientific names
     name = re.sub(r"</?I>", "", str(name)).strip()
     return {
-        "strain_name": name or _species_from_general(record),
+        "strain_name_raw": name or _species_from_general(record),
         "genus": tax.get("genus", ""),
         "family": tax.get("family", ""),
         "order": tax.get("order", ""),
@@ -318,7 +318,12 @@ def _conditions(record: dict) -> dict:
 
 
 def strain_features(record: dict) -> dict:
-    """Assemble all strain-level (per-record) feature columns."""
+    """Assemble all strain-level (per-record) feature columns.
+
+    ``strain_name_raw`` is BacDive's scientific name (species-level).
+    ``strain_name`` is the isolate-unique key ``{bacdive_id}_{strain_name_raw}``
+    used by the modeling pipeline for grouping / joins.
+    """
     features: dict[str, Any] = {}
     features.update(_taxonomy(record))
     features.update(_morphology(record))
@@ -326,6 +331,12 @@ def strain_features(record: dict) -> dict:
     features.update(_sequence(record))
     features.update(_conditions(record))
     features["bacdive_id"] = _bacdive_id(record)
+    raw = str(features.get("strain_name_raw", "") or "").strip()
+    bid = str(features.get("bacdive_id", "") or "").strip()
+    if bid and raw:
+        features["strain_name"] = f"{bid}_{raw}"
+    else:
+        features["strain_name"] = bid or raw
     return features
 
 

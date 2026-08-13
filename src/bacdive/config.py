@@ -100,6 +100,7 @@ _STRAIN_CATEGORICALS = [
 _MEDIUM_ID_COLS = [
     "bacdive_id",
     "strain_name",
+    "strain_name_raw",
     "media_name",
     "mediadive_id",
     "medium_link",
@@ -109,6 +110,7 @@ _MEDIUM_ID_COLS = [
 _METABOLITE_ID_COLS = [
     "bacdive_id",
     "strain_name",
+    "strain_name_raw",
     "substrate_name",
     "chebi_id",
     "kind_of_utilization",

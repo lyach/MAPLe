@@ -35,4 +35,4 @@ medium_features:
 
 temperature_range_expansion: true
 
-output_file: data/external/bacdive_growth_new_temp_expand.parquet
+output_file: data/external/bacdive_growth_expanded.parquet

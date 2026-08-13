@@ -1,5 +1,5 @@
 # BacDive growth classification + XGBoost
-name: growth_class_bacdive_xgb_sgrouped
+name: growth_class_bacdive_xgb_sgrouped_genus
 dataset: config/dataset/modeling_dataset_bacdive.yaml
 model: config/models/xgboost.yaml
 task: growth_class
