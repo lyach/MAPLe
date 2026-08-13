@@ -1,0 +1,33 @@
+# Rebuild a BacDive modeling table from local cache only (no API).
+#
+#   python scripts/build_bacdive_from_cache.py
+#   python scripts/build_bacdive_from_cache.py --config bacdive/build_from_cache.yaml
+
+target: medium_growth
+
+strain_features:
+  - genus
+  - family
+  - order
+  - phylum
+  - gram_stain
+  - cell_shape
+  - motility
+  - oxygen_tolerance
+  - nutrition_type
+  - spore_formation
+  - gc_content
+
+# Medium features
+medium_features:
+  - n_ingredients
+  - has_yeast_extract
+  - has_peptone
+  - has_agar
+  - has_blood_components
+  - has_nacl
+  - is_defined
+  - composition_raw
+  - refs
+
+output_file: data/external/bacdive_growth_new.parquet

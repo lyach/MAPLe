@@ -1,5 +1,5 @@
 # BacDive growth classification + XGBoost
-name: growth_class_bacdive_xgb
+name: growth_class_bacdive_xgb_sgrouped
 dataset: config/dataset/modeling_dataset_bacdive.yaml
 model: config/models/xgboost.yaml
 task: growth_class
@@ -7,8 +7,9 @@ task: growth_class
 cv:
   strategy: [stratified_grouped]
   n_repeats: 1
+  group_on: "genus"
 
-class_weight: balanced # Upweights the rare class (no-growth, 0) during training
+class_weight: balanced
 
 metrics: [auroc, pr_auc_nogrowth, recall_nogrowth, precision_nogrowth, mcc, balanced_accuracy]
 

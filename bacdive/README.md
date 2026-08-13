@@ -63,6 +63,14 @@ Common outputs (target-dependent CSV name):
 - `data/external/bacdive_cache/<id>.json` — raw per-record cache
 - `logs/run_<timestamp>.log` — full run log
 
+To rebuild a table from an existing cache (no API), edit
+[`bacdive/build_from_cache.yaml`](build_from_cache.yaml) and run:
+
+```bash
+python scripts/build_bacdive_from_cache.py
+python scripts/build_bacdive_from_cache.py --limit 100   # smoke test
+```
+
 3. Feed it into the modeling pipeline:
 
 ```bash

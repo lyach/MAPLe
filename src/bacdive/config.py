@@ -29,6 +29,8 @@ ROOT = Path(__file__).resolve().parents[2]
 # User-editable taxonomic scope (list of genera / species). Lives under the
 # top-level ``bacdive/`` directory so it is easy to find and edit.
 TAXA_YAML = ROOT / "bacdive" / "taxa.yaml"
+# Cache-only rebuild config (target + output feature subsets; no API).
+BUILD_FROM_CACHE_YAML = ROOT / "bacdive" / "build_from_cache.yaml"
 
 # --- outputs (data/external/) ---
 EXTERNAL_DIR = ROOT / "data" / "external"
@@ -94,9 +96,8 @@ _STRAIN_CATEGORICALS = [
     "spore_formation",
 ]
 
-# --- medium_growth: one row = (strain, culture medium) ---
-_MEDIUM_GROWTH_FIELDNAMES = [
-    # identifiers
+# Always-kept identifiers
+_MEDIUM_ID_COLS = [
     "bacdive_id",
     "strain_name",
     "media_name",
@@ -104,9 +105,18 @@ _MEDIUM_GROWTH_FIELDNAMES = [
     "medium_link",
     # target
     "growth_class",
-    # strain features
-    *_STRAIN_FEATURES,
-    # media features (parsed from composition text)
+]
+_METABOLITE_ID_COLS = [
+    "bacdive_id",
+    "strain_name",
+    "substrate_name",
+    "chebi_id",
+    "kind_of_utilization",
+    "growth_class",
+]
+
+# Optional medium columns
+_MEDIUM_FEATURES = [
     "n_ingredients",
     "has_yeast_extract",
     "has_peptone",
@@ -114,31 +124,38 @@ _MEDIUM_GROWTH_FIELDNAMES = [
     "has_blood_components",
     "has_nacl",
     "is_defined",
-    # provenance
     "composition_raw",
     "refs",
 ]
 
+# Optional metabolite columns
+_METABOLITE_FEATURES = [
+    "refs",
+]
+
+# --- medium_growth: one row = (strain, culture medium) ---
+_MEDIUM_GROWTH_FIELDNAMES = [
+    *_MEDIUM_ID_COLS,
+    *_STRAIN_FEATURES,
+    *_MEDIUM_FEATURES,
+]
+
 # --- metabolite_utilization: one row = (strain, metabolite, assay kind) ---
 _METABOLITE_FIELDNAMES = [
-    # identifiers
-    "bacdive_id",
-    "strain_name",
-    "substrate_name",
-    "chebi_id",
-    "kind_of_utilization",
-    # target (named growth_class so it plugs into the classification task)
-    "growth_class",
-    # strain features
+    *_METABOLITE_ID_COLS,
     *_STRAIN_FEATURES,
-    # provenance
-    "refs",
-    "reference",
+    *_METABOLITE_FEATURES,
 ]
 
 # Columns for the failures.csv diagnostic report.
 FAILURE_FIELDNAMES = [
     "taxon",
+    "reason",
+]
+
+# Cache-read failures (build_from_cache.py).
+CACHE_FAILURE_FIELDNAMES = [
+    "cache_file",
     "reason",
 ]
 
@@ -256,3 +273,152 @@ def load_target(path: Path | None = None) -> str:
             f"unknown target {target!r}; choose one of {sorted(TARGETS)}"
         )
     return target
+
+
+# --------------------------------------------------------------------------
+# build_from_cache.yaml loader
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class BuildFromCacheConfig:
+    """Resolved cache-only rebuild settings from ``build_from_cache.yaml``."""
+
+    target: str
+    fieldnames: list[str]
+    categorical_features: list[str]
+    cache_dir: Path
+    output_file: Path
+    output_writer: str = "to_parquet"
+
+    def to_target_spec(self) -> TargetSpec:
+        """``TargetSpec`` with the selected output columns."""
+        base = TARGETS[self.target]
+        return TargetSpec(
+            name=base.name,
+            output_file=self.output_file,
+            fieldnames=list(self.fieldnames),
+            categorical_features=list(self.categorical_features),
+            id_col=base.id_col,
+            name_col=base.name_col,
+            extra_key_cols=list(base.extra_key_cols),
+            positive_only=base.positive_only,
+        )
+
+
+def _as_str_list(raw: object, key: str) -> list[str]:
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ValueError(f"{key!r} must be a list of strings")
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        name = str(item).strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        out.append(name)
+    return out
+
+
+def _validate_subset(selected: list[str], allowed: list[str], key: str) -> list[str]:
+    allowed_set = set(allowed)
+    unknown = [c for c in selected if c not in allowed_set]
+    if unknown:
+        raise ValueError(
+            f"{key} has unknown column(s) {unknown}; "
+            f"allowed: {allowed}"
+        )
+    return selected
+
+
+def load_build_from_cache_config(path: Path | None = None) -> BuildFromCacheConfig:
+    """Load ``build_from_cache.yaml`` and resolve the output column schema.
+
+    Expected keys
+    -------------
+    target:
+        ``medium_growth`` or ``metabolite_utilization``.
+    strain_features:
+        Subset of ``_STRAIN_FEATURES`` to keep. Omitting the key keeps all.
+    medium_features:
+        Subset of ``_MEDIUM_FEATURES`` (medium_growth only). Omitting keeps all.
+    metabolite_features:
+        Subset of ``_METABOLITE_FEATURES`` (metabolite only). Omitting keeps all.
+    cache_dir / output_file:
+        Optional path overrides (``out`` is accepted as an alias for
+        ``output_file``).
+    """
+    path = path or BUILD_FROM_CACHE_YAML
+    data = _load_yaml(path)
+    if not isinstance(data, dict):
+        raise ValueError(f"{path} must be a YAML mapping")
+
+    target = str(data.get("target") or DEFAULT_TARGET).strip()
+    if target not in TARGETS:
+        raise ValueError(
+            f"unknown target {target!r}; choose one of {sorted(TARGETS)}"
+        )
+
+    if "strain_features" in data:
+        strain_feats = _validate_subset(
+            _as_str_list(data.get("strain_features"), "strain_features"),
+            _STRAIN_FEATURES,
+            "strain_features",
+        )
+    else:
+        strain_feats = list(_STRAIN_FEATURES)
+
+    if target == "medium_growth":
+        if "medium_features" in data:
+            unit_feats = _validate_subset(
+                _as_str_list(data.get("medium_features"), "medium_features"),
+                _MEDIUM_FEATURES,
+                "medium_features",
+            )
+        elif "medium_growth_features" in data:
+            # alias used in early drafts of build_from_cache.yaml
+            unit_feats = _validate_subset(
+                _as_str_list(
+                    data.get("medium_growth_features"), "medium_growth_features"
+                ),
+                _MEDIUM_FEATURES,
+                "medium_growth_features",
+            )
+        else:
+            unit_feats = list(_MEDIUM_FEATURES)
+        fieldnames = [*_MEDIUM_ID_COLS, *strain_feats, *unit_feats]
+    else:
+        if "metabolite_features" in data:
+            unit_feats = _validate_subset(
+                _as_str_list(data.get("metabolite_features"), "metabolite_features"),
+                _METABOLITE_FEATURES,
+                "metabolite_features",
+            )
+        else:
+            unit_feats = list(_METABOLITE_FEATURES)
+        fieldnames = [*_METABOLITE_ID_COLS, *strain_feats, *unit_feats]
+
+    categoricals = [c for c in fieldnames if c in _STRAIN_CATEGORICALS]
+    if "kind_of_utilization" in fieldnames:
+        categoricals.append("kind_of_utilization")
+
+    cache_dir = Path(data["cache_dir"]) if data.get("cache_dir") else CACHE_DIR
+    if not cache_dir.is_absolute():
+        cache_dir = ROOT / cache_dir
+
+    out_raw = data.get("output_file") or data.get("out")
+    output_file = Path(out_raw) if out_raw else TARGETS[target].output_file
+    if not output_file.is_absolute():
+        output_file = ROOT / output_file
+
+    writer = str(data.get("output_writer") or "to_parquet").strip()
+
+    return BuildFromCacheConfig(
+        target=target,
+        fieldnames=fieldnames,
+        categorical_features=categoricals,
+        cache_dir=cache_dir,
+        output_file=output_file,
+        output_writer=writer,
+    )

@@ -15,12 +15,16 @@ When more than one taxon is listed (and ``limit`` is not set), taxa are also
 processed concurrently (``taxa_workers``): each worker gets its own
 HTTP session.
 
+``run_from_cache`` skips steps 1-2 and rebuilds the table from
+``data/external/bacdive_cache/*.json`` only (no API).
+
 Takes plain arguments so it can be driven from the CLI, a notebook, or a test.
 """
 
 from __future__ import annotations
 
 import concurrent.futures as cf
+import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -30,7 +34,6 @@ import pandas as pd
 from tqdm import tqdm
 
 from src.bacdive import config
-from src.bacdive.client import BacDiveFetcher
 from src.bacdive.config import TargetSpec
 from src.bacdive.extract import record_to_rows
 
@@ -105,6 +108,9 @@ def _fetch_one_taxon(
     n_records_so_far: int = 0,
 ) -> _TaxonResult:
     """Fetch + flatten every record for one taxon. Owns its own fetcher/session."""
+    # Imported lazily so cache-only builds do not require the bacdive PyPI client.
+    from src.bacdive.client import BacDiveFetcher
+
     fetcher = BacDiveFetcher(
         cache_dir=cache_dir,
         request_delay=request_delay,
@@ -274,6 +280,112 @@ def run(
     return len(df), n_taxa_ok, len(failures)
 
 
+def run_from_cache(
+    target: str = config.DEFAULT_TARGET,
+    fieldnames: Optional[list[str]] = None,
+    categorical_features: Optional[list[str]] = None,
+    output_file: Optional[Path] = None,
+    output_writer: str = "to_parquet",
+    cache_dir: Path = config.CACHE_DIR,
+    failures_csv: Optional[Path] = None,
+    limit: Optional[int] = None,
+    show_progress: bool = True,
+) -> tuple[int, int, int]:
+    """Build a target table from cached JSON records only (no API calls).
+
+    Walks ``cache_dir/*.json``, flattens each record with ``record_to_rows``,
+    de-duplicates, and writes the selected columns.
+
+    ``fieldnames`` / ``categorical_features`` default to the full target schema
+    in ``config.TARGETS``. Pass a subset (as resolved from
+    ``build_from_cache.yaml``) to drop unused columns from the output.
+
+    Returns ``(n_rows, n_records_ok, n_failures)``.
+    """
+    if target not in config.TARGETS:
+        raise ValueError(
+            f"unknown target {target!r}; choose one of {sorted(config.TARGETS)}"
+        )
+    base = config.TARGETS[target]
+    spec = TargetSpec(
+        name=base.name,
+        output_file=output_file or base.output_file,
+        fieldnames=list(fieldnames or base.fieldnames),
+        categorical_features=list(
+            categorical_features
+            if categorical_features is not None
+            else base.categorical_features
+        ),
+        id_col=base.id_col,
+        name_col=base.name_col,
+        extra_key_cols=list(base.extra_key_cols),
+        positive_only=base.positive_only,
+    )
+    output_file = spec.output_file
+    failures_csv = failures_csv or (
+        config.EXTERNAL_DIR / "bacdive_cache_failures.csv"
+    )
+
+    if not cache_dir.is_dir():
+        raise FileNotFoundError(f"cache dir not found: {cache_dir}")
+
+    cache_files = sorted(cache_dir.glob("*.json"))
+    if limit is not None:
+        cache_files = cache_files[: max(0, limit)]
+
+    log.info(
+        "cache-only build: target=%s, %d file(s) in %s -> %s",
+        target, len(cache_files), cache_dir, output_file,
+    )
+
+    rows: list[dict] = []
+    failures: list[dict] = []
+    n_records = 0
+
+    for path in tqdm(
+        cache_files, desc="Cache", unit="rec", disable=not show_progress,
+    ):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            failures.append({"cache_file": path.name, "reason": str(exc)})
+            continue
+        if not isinstance(record, dict):
+            failures.append(
+                {"cache_file": path.name, "reason": "record is not a JSON object"}
+            )
+            continue
+        n_records += 1
+        rows.extend(record_to_rows(record, target))
+
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df = _dedupe(df, spec)
+        for col in spec.fieldnames:
+            if col not in df.columns:
+                df[col] = ""
+        df = df[spec.fieldnames]
+        for col in spec.categorical_features:
+            if col in df.columns:
+                df[col] = df[col].replace("", "unknown").fillna("unknown")
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    getattr(df, output_writer)(output_file, index=False)
+    log.info("wrote %d row(s) -> %s", len(df), output_file)
+
+    failures_csv.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(failures, columns=config.CACHE_FAILURE_FIELDNAMES).to_csv(
+        failures_csv, index=False
+    )
+    if failures:
+        log.info("wrote %d cache failure(s) -> %s", len(failures), failures_csv)
+
+    _log_summary(
+        df, spec, n_records, n_records, failures, source="cache",
+    )
+    return len(df), n_records, len(failures)
+
+
 def _write_failures(failures: list[dict], failures_csv: Path) -> None:
     failures_csv.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(failures, columns=config.FAILURE_FIELDNAMES).to_csv(
@@ -289,13 +401,20 @@ def _log_summary(
     n_records: int,
     n_taxa_ok: int,
     failures: list[dict],
+    source: str = "api",
 ) -> None:
+    if source == "cache":
+        ok_line = f"cache files ok    : {n_taxa_ok}"
+        fail_line = f"cache files bad   : {len(failures)}"
+    else:
+        ok_line = f"taxa with hits    : {n_taxa_ok}"
+        fail_line = f"taxa failed       : {len(failures)}"
     lines = [
         "=== BacDive pipeline summary ===",
         f"target            : {spec.name}",
         f"records processed : {n_records}",
-        f"taxa with hits    : {n_taxa_ok}",
-        f"taxa failed       : {len(failures)}",
+        ok_line,
+        fail_line,
         f"datapoints (rows) : {len(df)}",
     ]
     pos = neg = 0
