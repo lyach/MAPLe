@@ -126,11 +126,13 @@ _MEDIUM_FEATURES = [
     "is_defined",
     "composition_raw",
     "refs",
+    "reference",
 ]
 
 # Optional metabolite columns
 _METABOLITE_FEATURES = [
     "refs",
+    "reference",
 ]
 
 # --- medium_growth: one row = (strain, culture medium) ---
