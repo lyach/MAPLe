@@ -21,7 +21,12 @@ data/*
 uv.lock
 
 # logs
-logs/ 
+logs/
+
+# local-only working files (kept out of the repo deliberately)
+docs/genome_accession_gap_analysis.md
+scripts/hpc/run_bacdive_full_genus_scan.sbatch
+scripts/hpc/run_bacdive_build_from_cache.sbatch
 
 # credentials
 .ncbi_credentials.json
