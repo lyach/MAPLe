@@ -15,8 +15,17 @@ strain_features:
   - spore_formation
   - gc_content
   - genome_accession
+  # registry genome_accession came from: insdc | bvbrc | img
+  - genome_accession_source
   - genome_link
   - n16s_accession
+  # strain identity -- handles for resolving a genome outside BacDive
+  - strain_designation
+  - is_type_strain
+  - dsm_number
+  - culture_collection_ids
+  - ncbi_taxid
+  - ncbi_taxid_level
   - temperature
   - ph
 

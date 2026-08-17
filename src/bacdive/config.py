@@ -76,8 +76,19 @@ _STRAIN_FEATURES = [
     "spore_formation",
     "gc_content",
     "genome_accession",
+    # Registry genome_accession came from: insdc | bvbrc | img.
+    # genome_accession is no longer INSDC-only, so consumers that feed it to
+    # NCBI (scripts/download_bacdive_genomes.py) must filter on this.
+    "genome_accession_source",
     "genome_link",
     "n16s_accession",
+    # Strain identity -- handles for resolving a genome outside BacDive
+    "strain_designation",
+    "is_type_strain",
+    "dsm_number",
+    "culture_collection_ids",
+    "ncbi_taxid",
+    "ncbi_taxid_level",
     "temperature",
     "ph",
 ]
@@ -101,9 +112,14 @@ _MEDIUM_ID_COLS = [
     "bacdive_id",
     "strain_name",
     "strain_name_raw",
+    # media_name is the canonical medium identity (dedup + lomo grouping key);
+    # media_name_full keeps BacDive's original, more descriptive spelling.
     "media_name",
+    "media_name_full",
     "mediadive_id",
     "medium_link",
+    "cip_medium_number",
+    "cip_medium_link",
     # target
     "growth_class",
 ]

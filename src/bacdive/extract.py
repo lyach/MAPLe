@@ -54,9 +54,24 @@ _NUM_RE = re.compile(r"-?\d+(?:\.\d+)?")
 # number's sign (a bare findall on "10-41" yields [10, -41], not [10, 41]).
 _RANGE_RE = re.compile(r"(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)")
 
-# BacDive's "Genome sequences" entries carry an INSDC accession but no direct
-# URL, unlike culture-medium entries. Build the NCBI Datasets genome page.
+# BacDive's "Genome sequences" entries carry an accession but no direct URL,
+# unlike culture-medium entries. Build the browse page for whichever registry
+# the accession came from.
 _NCBI_GENOME_URL = "https://www.ncbi.nlm.nih.gov/datasets/genome/{accession}/"
+_BVBRC_GENOME_URL = "https://www.bv-brc.org/view/Genome/{accession}"
+_IMG_GENOME_URL = (
+    "https://img.jgi.doe.gov/cgi-bin/m/main.cgi"
+    "?section=TaxonDetail&page=taxonDetail&taxon_oid={accession}"
+)
+
+# Accession registries on a "Genome sequences" entry, best first. BacDive fills
+# these inconsistently: an entry may carry any subset, so the same entry can
+# yield an INSDC accession for one strain and only an IMG id for another.
+_GENOME_ACCESSION_FIELDS = (
+    ("insdc", "INSDC accession", _NCBI_GENOME_URL),
+    ("bvbrc", "BV-BRC accession", _BVBRC_GENOME_URL),
+    ("img", "IMG accession", _IMG_GENOME_URL),
+)
 
 
 def as_list(value: Any) -> list:
@@ -240,6 +255,108 @@ def _species_from_general(record: dict) -> str:
     return ""
 
 
+# Culture-collection accession, e.g. "DSM 1313", "CIP 103.894", "ATCC 700813".
+_COLLECTION_RE = re.compile(
+    r"\b(DSM|DSMZ|ATCC|CIP|LMG|NCTC|JCM|KCTC|NBRC|CCUG|CECT|IAM|VKM|BCRC"
+    r"|NRRL|CGMCC|NCIMB|KACC)\b[ ._-]?(\d[\d.]*)",
+    re.I,
+)
+
+
+def _strain_identity(record: dict) -> dict:
+    """Strain-level identifiers usable to resolve a genome outside BacDive.
+
+    None of these are derivable from the species name, and every one of them
+    is a handle the genome-gap audit found we were discarding:
+
+    * ``strain_designation`` / ``is_type_strain`` -- pins the isolate, and type
+      strains match NCBI's ``relation_to_type_material``.
+    * ``dsm_number`` / ``culture_collection_ids`` -- the deposit accessions to
+      match against NCBI's ``assembly_summary`` files.
+    * ``ncbi_taxid`` / ``ncbi_taxid_level`` -- the level matters: a
+      species-level taxid identifies a *set* of assemblies, not this strain's.
+    """
+    tax = record.get("Name and taxonomic classification", {})
+    if isinstance(tax, list):
+        tax = tax[0] if tax else {}
+    if not isinstance(tax, dict):
+        tax = {}
+    general = record.get("General", {})
+    if not isinstance(general, dict):
+        general = {}
+
+    taxid, taxid_level = "", ""
+    entry = general.get("NCBI tax id")
+    entries = as_list(entry)
+    if entries:
+        # prefer a strain-level assignment over the species-level default
+        best = next(
+            (e for e in entries
+             if str(e.get("Matching level", "")).strip().lower() == "strain"),
+            entries[0],
+        )
+        taxid = str(best.get("NCBI tax id", "") or "").strip()
+        taxid_level = str(best.get("Matching level", "") or "").strip()
+
+    dsm = str(general.get("DSM-Number", "") or "").strip()
+
+    # Collection ids are scattered across strain history, external links and
+    # free text, so scan the record rather than guessing at a field name.
+    collection_ids = sorted({
+        f"{m.group(1).upper()} {m.group(2)}"
+        for m in _COLLECTION_RE.finditer(_json_text(record))
+    })
+    if dsm and not any(c.startswith("DSM ") for c in collection_ids):
+        collection_ids.insert(0, f"DSM {dsm}")
+
+    type_strain = str(tax.get("type strain", "") or "").strip().lower()
+
+    return {
+        "strain_designation": str(tax.get("strain designation", "") or "").strip(),
+        "is_type_strain": {"yes": "1", "no": "0"}.get(type_strain, ""),
+        "dsm_number": dsm,
+        "culture_collection_ids": ";".join(collection_ids),
+        "ncbi_taxid": taxid,
+        "ncbi_taxid_level": taxid_level,
+    }
+
+
+def _json_text(record: dict) -> str:
+    """Whole record as one string, for scanning free-text fields."""
+    import json
+
+    try:
+        return json.dumps(record, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return str(record)
+
+
+# A CIP catalogue medium, recorded either as the cross-reference entry
+# ("CIP Medium 6", carries the Pasteur link) or as the experimental entry
+# ("MEDIUM 6 - Columbia agar with 10 % horse blood", carries the recipe).
+_CIP_MEDIUM_RE = re.compile(r"^\s*(CIP\s+)?MEDIUM\s*(\d+)", re.I)
+_CIP_LINK_RE = re.compile(r"crbip=(\d+)", re.I)
+
+
+def _cip_medium_number(name: str) -> str:
+    """CIP catalogue number for a medium name, or "" if it isn't a CIP medium.
+
+    Both spellings map to the same number: BacDive splits one CIP medium into
+    two entries, the cross-reference holding the catalogue URL and the
+    experimental entry holding the composition. A number identifies the recipe
+    globally -- across 66 numbers seen in the cache, none maps to two different
+    recipes -- so it is safe as the medium's identity.
+    """
+    match = _CIP_MEDIUM_RE.match(str(name or ""))
+    return match.group(2) if match else ""
+
+
+def _is_cip_crossref(name: str) -> bool:
+    """True for the "CIP Medium 6" spelling (the catalogue cross-reference)."""
+    match = _CIP_MEDIUM_RE.match(str(name or ""))
+    return bool(match and match.group(1))
+
+
 def _morphology(record: dict) -> dict:
     cell = _first(record.get("Morphology", {}).get("cell morphology")
                   if isinstance(record.get("Morphology"), dict) else None)
@@ -270,15 +387,9 @@ def _sequence(record: dict) -> dict:
     if not isinstance(seq, dict):
         seq = {}
 
-    # best genome assembly by BacDive score
-    genomes = as_list(seq.get("Genome sequences"))
-    genome_accession = ""
-    if genomes:
-        best = max(
-            genomes,
-            key=lambda g: _parse_number(g.get("score")) or -1.0,
-        )
-        genome_accession = best.get("INSDC accession", "") or ""
+    genome_accession, genome_source, genome_link = _best_genome_accession(
+        as_list(seq.get("Genome sequences"))
+    )
 
     n16s = ""
     seqs_16s = as_list(seq.get("16S sequences"))
@@ -287,10 +398,51 @@ def _sequence(record: dict) -> dict:
 
     return {
         "genome_accession": genome_accession,
-        "genome_link": _NCBI_GENOME_URL.format(accession=genome_accession) if genome_accession else "",
+        "genome_accession_source": genome_source,
+        "genome_link": genome_link,
         "n16s_accession": n16s,
         "gc_content": _gc_content(record, seq),
     }
+
+
+def _best_genome_accession(genomes: list[dict]) -> tuple[str, str, str]:
+    """Best accession across a strain's genome entries, INSDC first.
+
+    Registries are tried in ``_GENOME_ACCESSION_FIELDS`` order and score only
+    breaks ties *within* a registry: the highest-scoring INSDC accession wins
+    if any entry has one, and only when no entry anywhere carries an INSDC
+    accession do BV-BRC and then IMG get a turn.
+
+    Ranking strictly by score instead would be misleading. BacDive's
+    top-scoring entry frequently carries only a BV-BRC/IMG id while a
+    lower-scoring sibling holds a perfectly good ``GCA_`` accession -- true for
+    430 of the 533 strains this function was blanking. Preferring score there
+    yields an id that ``scripts/download_bacdive_genomes.py`` cannot fetch,
+    and neither alternative is a usable substitute: IMG sits behind a bot
+    challenge, and BV-BRC ids resolve to an NCBI assembly for only a small
+    minority of the strains that have nothing else.
+
+    Previously this took ``max(...)`` by score and then read ``INSDC
+    accession`` off that one entry, returning "" whenever that entry had none.
+
+    Entries with no parseable score sort last, rather than being scored -1.0 --
+    a value a legitimate ``score: 0`` also collapsed to, demoting it below
+    entries carrying no score at all.
+
+    Returns ``(accession, source, url)``; all "" when nothing is available.
+    """
+    def rank(entry: dict) -> tuple[int, float]:
+        num = _parse_number(entry.get("score"))
+        # (0, -score) sorts ahead of (1, 0.0) -> scored entries beat unscored
+        return (0, -num) if num is not None else (1, 0.0)
+
+    ranked = sorted(genomes, key=rank)
+    for source, field, url_template in _GENOME_ACCESSION_FIELDS:
+        for entry in ranked:
+            accession = str(entry.get(field, "") or "").strip()
+            if accession:
+                return accession, source, url_template.format(accession=accession)
+    return "", "", ""
 
 
 def _gc_content(record: dict, seq: dict) -> str:
@@ -326,6 +478,7 @@ def strain_features(record: dict) -> dict:
     """
     features: dict[str, Any] = {}
     features.update(_taxonomy(record))
+    features.update(_strain_identity(record))
     features.update(_morphology(record))
     features.update(_physiology(record))
     features.update(_sequence(record))
@@ -373,6 +526,18 @@ def record_to_medium_rows(
     ``temperature_range_expansion``: if false (default), a range such as
     ``"30-37"`` is one midpoint. If true, it emits min, max, and mean as
     three rows (and those extra points can themselves trigger @ref matching).
+
+    CIP media: BacDive records one CIP medium as two entries -- a
+    cross-reference ("CIP Medium 6") holding the catalogue URL, and an
+    experimental entry ("MEDIUM 6 - ...") holding the recipe and the
+    temperature. Both are folded onto the canonical name ``CIP Medium <n>``
+    and share the recipe, so they collapse to one row per
+    ``(medium, temperature)``. A cross-reference that contributes no
+    independent measurement -- no temperature of its own that the experimental
+    entry doesn't already report -- is dropped rather than emitted with the
+    isolate-wide median, which would invent a datapoint. A CIP medium with no
+    experimental entry at all is kept (it is the only record of that medium)
+    but with an *empty* temperature unless its own ref supplies one.
     """
     cg = record.get("Culture and growth conditions", {})
     if not isinstance(cg, dict):
@@ -392,6 +557,8 @@ def record_to_medium_rows(
     distinct_temps = {v for vals in temps_by_ref.values() for v, _ in vals}
     match_temp_by_ref = len(distinct_temps) > 1
 
+    cip = _resolve_cip_media(media, temps_by_ref, match_temp_by_ref)
+
     rows: list[dict] = []
 
     for medium in media:
@@ -402,10 +569,23 @@ def record_to_medium_rows(
 
         name = medium.get("name", "") or ""
         ref = str(medium.get("@ref", ""))
+        link = medium.get("link")
+        composition = medium.get("composition")
+
+        cip_number = _cip_medium_number(name)
+        cip_info = cip.get(cip_number) if cip_number else None
+        if cip_info is not None:
+            if id(medium) in cip_info["drop"]:
+                continue  # cross-reference adding no independent measurement
+            # fold both spellings onto one identity, sharing recipe and URL
+            name = cip_info["canonical_name"]
+            composition = composition or cip_info["composition"]
+            link = link or cip_info["link"]
+
         feats = media_features(
             name=name,
-            link=medium.get("link"),
-            composition=medium.get("composition"),
+            link=link,
+            composition=composition,
         )
 
         matched_temps = temps_by_ref.get(ref.strip()) if match_temp_by_ref else None
@@ -415,15 +595,102 @@ def record_to_medium_rows(
         for temp_val, temp_label in temp_overrides:
             row = dict(base)
             row["media_name"] = name
-            row["medium_link"] = medium.get("link") or ""
+            row["media_name_full"] = medium.get("name", "") or ""
+            row["medium_link"] = link or ""
             row["growth_class"] = label if temp_label is None else temp_label
             row["refs"] = ref
             row.update(feats)
+            # always set, so non-CIP rows carry "" like every other blank
+            # column rather than a None that only appears for some rows
+            row["cip_medium_number"] = cip_number if cip_info else ""
+            row["cip_medium_link"] = cip_info["link"] if cip_info else ""
             if temp_val is not None:
                 row["temperature"] = f"{temp_val:g}"
+            elif cip_info is not None and not cip_info["temperature_measured"]:
+                # This CIP medium has no temperature reported against any of
+                # its refs. The isolate-wide median was never measured for it,
+                # so leave it empty rather than fabricate an observation.
+                row["temperature"] = ""
             rows.append(row)
 
     return rows
+
+
+def _resolve_cip_media(
+    media: list[dict],
+    temps_by_ref: dict[str, list],
+    match_temp_by_ref: bool,
+) -> dict[str, dict]:
+    """Group CIP medium entries by catalogue number and decide what to keep.
+
+    For each number this returns the shared recipe and catalogue URL (pooled
+    across the cross-reference and experimental spellings), whether *any* of
+    its entries has a measured temperature, and the ``id()``s of entries to
+    drop.
+
+    An entry is dropped when it is a cross-reference ("CIP Medium 6") that
+    contributes no independent measurement: either it has no temperature of
+    its own, or every temperature it reports is already reported by a sibling
+    entry for the same medium. Keeping it would duplicate a row, or -- worse,
+    when it has no temperature -- mint one at the isolate-wide median, a value
+    never measured against that reference.
+
+    Entries that do report their own distinct temperatures are kept: the CIP
+    catalogue tests growth across a range (e.g. 10, 33.5, 55 C) and those
+    no-growth points are real, and are the dataset's main source of negatives.
+    """
+    by_number: dict[str, dict] = {}
+
+    for medium in media:
+        number = _cip_medium_number(medium.get("name", "") or "")
+        if not number:
+            continue
+        info = by_number.setdefault(number, {
+            "canonical_name": f"CIP Medium {number}",
+            "composition": "",
+            "link": "",
+            "temperature_measured": False,
+            "drop": set(),
+            "entries": [],
+        })
+        info["entries"].append(medium)
+        if not info["composition"] and (medium.get("composition") or "").strip():
+            info["composition"] = medium["composition"]
+        link = str(medium.get("link", "") or "").strip()
+        if not info["link"] and _CIP_LINK_RE.search(link):
+            info["link"] = link
+
+    for number, info in by_number.items():
+        # temperatures each entry reports against its own @ref
+        own: dict[int, set] = {}
+        for medium in info["entries"]:
+            ref = str(medium.get("@ref", "")).strip()
+            values = temps_by_ref.get(ref) if match_temp_by_ref else None
+            own[id(medium)] = {v for v, _ in (values or [])}
+        # When every reported temperature is the same value, the isolate-wide
+        # figure *is* that measured value -- there is nothing to fabricate, so
+        # it applies to this medium like any other. Only when temperatures
+        # differ between refs can the isolate-wide median be a number no one
+        # measured for this medium, and only then is blanking warranted.
+        info["temperature_measured"] = not match_temp_by_ref or any(own.values())
+
+        if len(info["entries"]) < 2:
+            continue  # sole record of this medium -> always kept
+
+        # temperatures contributed by the experimental ("MEDIUM n") entries
+        experimental = {
+            v
+            for medium in info["entries"]
+            if not _is_cip_crossref(medium.get("name", "") or "")
+            for v in own[id(medium)]
+        }
+        for medium in info["entries"]:
+            if not _is_cip_crossref(medium.get("name", "") or ""):
+                continue
+            if not own[id(medium)] - experimental:
+                info["drop"].add(id(medium))
+
+    return by_number
 
 
 def _reference_lookup(record: dict) -> dict[str, dict]:
