@@ -16,7 +16,7 @@ import os
 import pandas as pd
 
 OUT_DIR = "data/external"
-SAVE_COMBO1_NAME = "bacdive_growth_120k.parquet"
+SAVE_COMBO1_NAME = "bacdive_growth_150k.parquet"
 SAVE_COMBO2_NAME = "bacdive_growth_98k.parquet"
 
 def analyze_parquet(file_path: str, save: bool = False, out_dir: str | None = None):

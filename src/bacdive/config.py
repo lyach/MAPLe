@@ -295,7 +295,7 @@ class BuildFromCacheConfig:
     cache_dir: Path
     output_file: Path
     output_writer: str = "to_parquet"
-    temperature_range_expansion: bool = False
+    temperature_range_expansion: bool = True
 
     def to_target_spec(self) -> TargetSpec:
         """``TargetSpec`` with the selected output columns."""

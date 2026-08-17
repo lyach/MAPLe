@@ -32,6 +32,6 @@ medium_features:
   - composition_raw
   - refs
 
-temperature_range_expansion: false
+temperature_range_expansion: True
 
 output_file: data/external/bacdive_growth.parquet
