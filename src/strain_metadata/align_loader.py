@@ -97,7 +97,7 @@ def load_align_strains(path: Path) -> list[StrainInput]:
     if not path.exists():
         raise FileNotFoundError(
             f"Could not find input file: {path}\n"
-            f"Expected the strain list at data/metadata/align_strains.csv "
+            f"Expected the strain list at data/metadata/ncbi/align_strains.csv "
             f"relative to the project root."
         )
 
@@ -159,7 +159,7 @@ def load_align_strains(path: Path) -> list[StrainInput]:
 
 
 # Column-header candidates for the (optional) manual override file. Unlike
-# align_strains.csv, this is a file *we* control the format of, so a plain
+# ncbi/align_strains.csv, this is a file *we* control the format of, so a plain
 # DictReader is fine here -- no duplicate-blank-header problem to work
 # around.
 _OVERRIDE_RAW_CANDIDATES = ["raw_name", "raw", "align_strains_name"]

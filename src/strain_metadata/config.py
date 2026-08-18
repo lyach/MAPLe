@@ -26,14 +26,14 @@ log = logging.getLogger("config")
 ROOT = Path(__file__).resolve().parents[2]
 
 # --- inputs (data/metadata/) ---
-INPUT_CSV          = ROOT / "data" / "metadata" / "align_strains.csv"
-NAME_OVERRIDES_CSV = ROOT / "data" / "metadata" / "strain_name_overrides.csv"
+INPUT_CSV          = ROOT / "data" / "metadata" / "ncbi" / "align_strains.csv"
+NAME_OVERRIDES_CSV = ROOT / "data" / "metadata" / "ncbi" / "strain_name_overrides.csv"
 
 # Two-tier manual override system (see overrides.py):
 #   FORCED   -- pinned accessions that always win, bypassing all search
 #   FALLBACK -- last-resort hints, tried only after all search strategies fail
-FORCED_ACCESSIONS_CSV = ROOT / "data" / "metadata" / "forced_accessions.csv"
-FALLBACK_HINTS_CSV    = ROOT / "data" / "metadata" / "fallback_hints.csv"
+FORCED_ACCESSIONS_CSV = ROOT / "data" / "metadata" / "ncbi" / "forced_accessions.csv"
+FALLBACK_HINTS_CSV    = ROOT / "data" / "metadata" / "ncbi" / "fallback_hints.csv"
 
 # --- outputs (data/external/) ---
 EXTERNAL_DIR = ROOT / "data" / "external"

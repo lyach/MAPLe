@@ -2,7 +2,7 @@
 
 ## Overview
 
-This script builds the strain metadata table for the MicrobeNet dataset. For each strain in `data/metadata/align_strains.csv` it resolves the matching NCBI genome assembly, downloads the FASTA and GenBank files, computes derived sequence statistics, validates them, and writes everything to `data/external/strains_metadata.csv`.
+This script builds the strain metadata table for the MicrobeNet dataset. For each strain in `data/metadata/ncbi/align_strains.csv` it resolves the matching NCBI genome assembly, downloads the FASTA and GenBank files, computes derived sequence statistics, validates them, and writes everything to `data/external/strains_metadata.csv`.
 
 It is designed to run as a one-liner and to flag any strain whose match is uncertain rather than silently trusting it.
 

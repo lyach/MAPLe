@@ -22,7 +22,7 @@ from src.dataset.curves import extract_growth_curves
 # Aerobic experiments
 DEFAULTS_AEROBIC = dict(
     metadata=ROOT / "data" / "metadata" / "aerobic_metadata.csv",
-    layout=ROOT / "data" / "metadata" / "aerobic_layout.csv",
+    layout=ROOT / "data" / "metadata" / "plates" / "aerobic_layout.csv",
     raw_dir=ROOT / "data" / "raw",
     output=ROOT / "data" / "processed" / "aerobic_tidy.parquet",
 )
@@ -30,7 +30,7 @@ DEFAULTS_AEROBIC = dict(
 # Anaerobic experiments
 DEFAULTS_ANAEROBIC = dict(
     metadata=ROOT / "data" / "metadata" / "anaerobic_metadata.csv",
-    layout=ROOT / "data" / "metadata" / "anaerobic_layout.csv",
+    layout=ROOT / "data" / "metadata" / "plates" / "anaerobic_layout.csv",
     raw_dir=ROOT / "data" / "raw",
     output=ROOT / "data" / "processed" / "anaerobic_tidy.parquet",
 )

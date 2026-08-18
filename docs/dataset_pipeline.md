@@ -100,7 +100,7 @@ You can also run it by specifying new files as:
 ```bash
 python scripts/run_dataset_pipeline.py \
   --metadata data/metadata/experiment_metadata.csv \
-  --layout   data/metadata/experiment_layout.csv \
+  --layout   data/metadata/plates/experiment_layout.csv \
   --raw-dir  data/raw
 ```
 
