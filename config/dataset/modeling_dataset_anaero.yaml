@@ -1,19 +1,8 @@
 # Modeling dataset config — anaerobic experiments
+# Used by run_experiment.py (featurization + targets).
 
-# ================ FILES ================
-curves_file: "data/processed/anaerobic_tidy_curves.csv"
-strain_metadata_file: "data/external/strains_metadata.csv"
-output_name: "anaero_modeling_dataset.csv"
-
-# ================ MERGE ================
-merge:
-  left: "strain_name"
-  right: "strain"
-
-# ================ GRANULARITY ================
-# per_well = keep replicates (more samples, use group-aware CV)
-# averaged = one row per strain-media-condition (replicate mean)
-grain: "per_well"
+# ================ FILE ================
+modeling_dataset_path: "data/interim/anaero_modeling_dataset.csv"
 
 # ================ FEATURIZATION ================
 # Each value is an sklearn transformer call string.

@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 
 # ---------------------------------------------------------------------------
-# Dataset config
+# Curves dataset config (create_modeling_dataset.py)
 # ---------------------------------------------------------------------------
 
 class MergeConfig(BaseModel):
@@ -20,7 +20,7 @@ class MergeConfig(BaseModel):
     right: str = "strain"
 
 
-class DatasetConfig(BaseModel):
+class CurvesDatasetConfig(BaseModel):
     """Config for ``create_modeling_dataset.py``."""
 
     model_config = ConfigDict(extra="forbid")
@@ -41,6 +41,17 @@ class DatasetConfig(BaseModel):
     grain: Literal["per_well", "averaged"] = "per_well"
     merge: MergeConfig = MergeConfig()
 
+
+# ---------------------------------------------------------------------------
+# Modeling dataset config (run_experiment.py)
+# ---------------------------------------------------------------------------
+
+class DatasetConfig(BaseModel):
+    """Config for experiment featurization: path + features + targets."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    modeling_dataset_path: str
     features: dict[str, Any] = {}
     targets: list[str] = ["growth_class", "max_od", "growth_rate"]
 
@@ -138,6 +149,10 @@ def load_yaml(path: str | Path) -> dict[str, Any]:
 
 def load_dataset_config(path: str | Path) -> DatasetConfig:
     return DatasetConfig(**load_yaml(path))
+
+
+def load_curves_dataset_config(path: str | Path) -> CurvesDatasetConfig:
+    return CurvesDatasetConfig(**load_yaml(path))
 
 
 def load_model_config(path: str | Path) -> ModelConfig:

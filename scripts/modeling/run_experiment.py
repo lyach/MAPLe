@@ -47,6 +47,7 @@ from src.modeling.interpret import run_interpretation
 from src.modeling.io import read_table
 from src.modeling.models import build_model, gpu_available
 from src.modeling.splits import (
+    assert_split_source_length,
     held_out_label,
     iter_saved_splits,
     load_split_map,
@@ -337,10 +338,18 @@ def main() -> None:
         yaml.dump(config_snapshot, f, default_flow_style=False, sort_keys=False)
 
     # Load data
-    interim_path = ROOT / "data" / "interim" / ds_cfg.output_name
-    logger.info("loading modeling dataset: {}", interim_path)
-    df = read_table(interim_path)
+    data_path = Path(ds_cfg.modeling_dataset_path)
+    if not data_path.is_absolute():
+        data_path = ROOT / data_path
+    logger.info("loading modeling dataset: {}", data_path)
+    df = read_table(data_path)
     logger.info("dataset shape: {} rows x {} cols", *df.shape)
+
+    if exp_cfg.cv.splits_file is not None:
+        splits_path = Path(exp_cfg.cv.splits_file)
+        if not splits_path.is_absolute():
+            splits_path = ROOT / splits_path
+        assert_split_source_length(len(df), splits_path, data_path)
 
     df = _filter_for_task(df, exp_cfg.task)
 

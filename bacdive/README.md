@@ -27,9 +27,11 @@ trainable/evaluable negatives.
 | `bacdive/taxa.yaml` | User-editable taxonomic scope + target |
 | `src/bacdive/` | Engine package (imported as `src.bacdive`) |
 | `scripts/get_bacdive_dataset.py` | CLI entry point |
-| `config/dataset/modeling_dataset_bacdive.yaml` | Dataset config (medium_growth) |
+| `config/dataset/curves_dataset_bacdive.yaml` | Curves config (medium_growth, optional interim build) |
+| `config/dataset/modeling_dataset_bacdive.yaml` | Modeling dataset config (medium_growth) |
 | `config/experiments/class_bacdive.yaml` | Experiment config (medium_growth) |
-| `config/dataset/modeling_dataset_bacdive_metabolite.yaml` | Dataset config (metabolite_utilization) |
+| `config/dataset/curves_dataset_bacdive_metabolite.yaml` | Curves config (metabolite_utilization, optional interim build) |
+| `config/dataset/modeling_dataset_bacdive_metabolite.yaml` | Modeling dataset config (metabolite_utilization) |
 | `config/experiments/class_bacdive_metabolite.yaml` | Experiment config (metabolite_utilization) |
 
 > The engine lives under `src/bacdive/` (not a top-level `bacdive/` package) so
@@ -74,13 +76,15 @@ python scripts/build_bacdive_from_cache.py --limit 100   # smoke test
 3. Feed it into the modeling pipeline:
 
 ```bash
-# medium_growth
-python scripts/create_modeling_dataset.py config/dataset/modeling_dataset_bacdive.yaml
-python scripts/run_experiment.py config/experiments/class_bacdive.yaml
+# medium_growth — experiment reads data/external/bacdive_growth_150k.parquet
+python scripts/modeling/run_experiment.py config/experiments/class_bacdive.yaml
 
 # metabolite_utilization
-python scripts/create_modeling_dataset.py config/dataset/modeling_dataset_bacdive_metabolite.yaml
-python scripts/run_experiment.py config/experiments/class_bacdive_metabolite.yaml
+python scripts/modeling/run_experiment.py config/experiments/class_bacdive_metabolite.yaml
+
+# optional: write an interim copy via the curves config
+python scripts/modeling/create_modeling_dataset.py config/dataset/curves_dataset_bacdive.yaml
+python scripts/modeling/create_modeling_dataset.py config/dataset/curves_dataset_bacdive_metabolite.yaml
 ```
 
 ## Output schemas

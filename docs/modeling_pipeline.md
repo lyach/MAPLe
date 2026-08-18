@@ -8,7 +8,7 @@ This pipeline processes growth-curve parameters and strain metadata into machine
 - **Maximum $\text{OD}_{600}$ Regression**
 - **Growth-Rate Regression**
 
-Execution is split into two primary CLI steps, driven by three configuration files (`dataset`, `model`, and `experiment` YAMLs). For interactive workflows, all core steps can also be imported directly from `src/modeling/`.
+Execution is split into two primary CLI steps, driven by four configuration files (`curves`, `dataset`, `model`, and `experiment` YAMLs). For interactive workflows, all core steps can also be imported directly from `src/modeling/`.
 
 ### Pipeline
 
@@ -16,12 +16,12 @@ Execution is split into two primary CLI steps, driven by three configuration fil
 
 curves.csv ──────┐
                  ├──► [ create_modeling_dataset.py ] ──► data/interim/modeled_dataset.csv
-metadata.csv ────┘                                                      │
+metadata.csv ────┘     (config/dataset/curves_dataset_*.yaml)
                                                                         │
-processed dataset ──► [ create_splits.py ] ──► data/modeling/splits_<stem>/
+processed / interim table ──► [ create_splits.py ] ──► data/modeling/splits_<stem>/
        ▲ (optional, reusable CV splits)              <split_on>_<stem>.csv
 config/                                                    │            │
-├── dataset/                                               │ (optional) │
+├── dataset/   modeling_dataset_*.yaml (path + features)   │ (optional) │
 ├── models/      ──────────────────────────────────────────────► [ run_experiment.py ]
 ├── experiments/                                                        │
 └── splits/                                                             ▼
@@ -36,11 +36,11 @@ config/                                                    │            │
 
 ### Pipeline Steps
 
-1. `create_modeling_dataset.py`: 
-Merges growth-curve metrics with strain metadata, handles replicate averaging/filtering based on configuration, and exports a unified interim dataset.
+1. `create_modeling_dataset.py`:
+Merges growth-curve metrics with strain metadata, handles replicate averaging/filtering based on a **curves** config, and exports a unified table (typically under `data/interim/`).
 
-2. `run_experiment.py`: 
-Ingests the interim dataset and YAML configs to handle feature engineering, model training, cross-validation, and SHAP interpretability analysis.
+2. `run_experiment.py`:
+Ingests the table at `modeling_dataset_path` and YAML configs to handle feature engineering, model training, cross-validation, and SHAP interpretability analysis.
 
 ## 1. Prerequisites
 
@@ -49,20 +49,21 @@ Before running the modeling pipeline, you need:
 
 | Input               | Source                                                                          | Required |
 | ------------------- | ------------------------------------------------------------------------------- | -------- |
-| Curves table         | `data/processed/*_tidy_curves.csv` or `.parquet` from [dataset pipeline](dataset_pipeline.md) / external sources | Yes      |
+| Curves table         | `data/processed/*_tidy_curves.csv` or `.parquet` from [dataset pipeline](dataset_pipeline.md) / external sources | Yes (for step 1) |
 | Strain metadata table | `data/external/strains_metadata.csv` (via `get_strain_metadata.py`)                                             | No       |
-| Dataset config      | `config/dataset/modeling_dataset_*.yaml`                                        | Yes      |
+| Curves config       | `config/dataset/curves_dataset_*.yaml`                                          | Yes (for step 1) |
+| Modeling dataset config | `config/dataset/modeling_dataset_*.yaml`                                    | Yes      |
 | Model config        | `config/models/*.yaml`                                                          | Yes      |
 | Experiment config   | `config/experiments/*.yaml`                                                     | Yes      |
 
 
-The interim modeling dataset must be created **before** running an experiment. `run_experiment.py` reads from `data/interim/<output_name>` as specified in the dataset config.
+`run_experiment.py` reads the table at `modeling_dataset_path` in the modeling dataset config. That path may be an interim file produced by `create_modeling_dataset.py`, or an already-processed external table (e.g. BacDive parquet). When using precomputed splits, this path must be the **same table** (same row count) that `create_splits.py` was run on.
 
 ---
 
 ## 2. Create the modeling dataset
 
-### 2a. Dataset config — `config/dataset/modeling_dataset_*.yaml`
+### 2a. Curves config — `config/dataset/curves_dataset_*.yaml`
 
 
 | Field                  | Type                         | Description                                                                                                                |
@@ -73,14 +74,12 @@ The interim modeling dataset must be created **before** running an experiment. `
 | `grain`                | `"per_well"` or `"averaged"` | Datapoint (row) granularity (see [2c](#2c-merge-and-grain-srcmodelingdatasetpy))                                           |
 | `merge.left`           | str                          | Join key in the curves table                                                                                               |
 | `merge.right`          | str                          | Join key in the metadata table                                                                                             |
-| `features`             | dict                         | Features to include and their encoding spec (used by `run_experiment.py`; see [6](#6-featurization-srcmodelingfeaturespy)) |
-| `targets`              | list[str]                    | Available prediction targets                                                                                               |
 
 
 ### 2b. Run the script
 
 ```bash
-python scripts/create_modeling_dataset.py config/dataset/modeling_dataset_aero_anaero.yaml
+python scripts/modeling/create_modeling_dataset.py config/dataset/curves_dataset_aero_anaero.yaml
 ```
 
 ### 2c. Merge and grain
@@ -112,6 +111,31 @@ The output is a CSV or Parquet file at `data/interim/<output_name>` (format foll
 
 The table retains all columns from the curves CSV plus any merged metadata columns.
 
+### 2e. Modeling dataset config — `config/dataset/modeling_dataset_*.yaml`
+
+This is the config `run_experiment.py` loads via `experiment.dataset`. It does **not** describe how the table was built; it only names the table and the features/targets for modeling.
+
+
+| Field                    | Type      | Description                                                                                       |
+| ------------------------ | --------- | ------------------------------------------------------------------------------------------------- |
+| `modeling_dataset_path`  | str       | CSV/Parquet path to load (interim output of step 1, or an already-processed external table)       |
+| `features`               | dict      | Features to include and their encoding spec (see [6](#6-featurization-srcmodelingfeaturespy))     |
+| `targets`                | list[str] | Available prediction targets                                                                      |
+
+
+Example (BacDive, pointing at the same table used to create splits):
+
+```yaml
+modeling_dataset_path: data/external/bacdive_growth_150k.parquet
+
+features:
+  genus: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
+  complexity: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
+
+targets:
+  - growth_class
+```
+
 ---
 
 ## 3. Run an experiment
@@ -122,7 +146,7 @@ The table retains all columns from the curves CSV plus any merged metadata colum
 | Field                        | Type             | Example                                       | Description                                       |
 | ---------------------------- | ---------------- | --------------------------------------------- | ------------------------------------------------- |
 | `name`                       | str              | `"aerobic_xgboost_growth_class"`              | Experiment name; used as output subdirectory      |
-| `dataset`                    | str              | `"config/dataset/modeling_dataset_aero.yaml"` | Path to dataset config                            |
+| `dataset`                    | str              | `"config/dataset/modeling_dataset_aero.yaml"` | Path to **modeling** dataset config (`modeling_dataset_path` + features + targets) |
 | `model`                      | str              | `"config/models/xgboost.yaml"`                | Path to model config                              |
 | `task`                       | str              | `"growth_class"`                              | Prediction target                                 |
 | `cv.strategy`                | str or list[str] | `[loso, lomo]`                                | CV strategy                                       |
@@ -190,18 +214,19 @@ The `dummy` type (most-frequent / mean) is available in code but has no config f
 ### 3c. Run the script
 
 ```bash
-python scripts/run_experiment.py config/experiments/aerobic_xgboost.yaml
+python scripts/modeling/run_experiment.py config/experiments/class_aero.yaml
 ```
 
 The script:
 
-1. Loads and resolves the experiment, dataset, and model configs.
-2. Reads the interim CSV/Parquet from `data/interim/<output_name>`.
-3. Filters rows for the task (e.g. `growth_rate` keeps only `growth_class == 1`).
-4. Runs CV: for each fold, fits the feature pipeline on train, transforms train/test, fits the model, predicts, and evaluates.
-5. Aggregates metrics across folds (mean ± std per strategy).
-6. Refits on all data and runs SHAP interpretability (if enabled).
-7. Saves everything to `reports/<name>/`.
+1. Loads and resolves the experiment, modeling-dataset, and model configs.
+2. Reads the CSV/Parquet at `modeling_dataset_path`.
+3. If `cv.splits_file` is set, checks that this table has the same row count as the split-source table recorded in the companion `*_stats.json`.
+4. Filters rows for the task (e.g. `growth_rate` keeps only `growth_class == 1`).
+5. Runs CV: for each fold, fits the feature pipeline on train, transforms train/test, fits the model, predicts, and evaluates.
+6. Aggregates metrics across folds (mean ± std per strategy).
+7. Refits on all data and runs SHAP interpretability (if enabled).
+8. Saves everything to `reports/<name>/`.
 
 ### 3d. Class imbalance handling (reweighting)
 
@@ -310,7 +335,7 @@ cv:
   split_on: genus
 ```
 
-When `cv.splits_file` is set, `run_experiment.py` loads the map and derives folds by matching `split_on` values instead of calling `make_splits`. The requested strategies must exist in the map, and every `split_on` value in the modeling dataset must be present in the map (otherwise the run errors, preventing silent mismatch/leakage). Per-fold metrics and predictions gain a `repeat` column.
+When `cv.splits_file` is set, `run_experiment.py` loads the map and derives folds by matching `split_on` values instead of calling `make_splits`. Before CV it compares `len(modeling_dataset)` to `dataset_shape[0]` in the companion `*_stats.json` (the row count of the table `create_splits.py` was run on). A mismatch raises — this catches pointing `modeling_dataset_path` at `data/interim/<output_name>` after `create_modeling_dataset.py` filtered rows, while splits were built from the original processed table. The requested strategies must exist in the map, and every `split_on` value in the modeling dataset must be present in the map (otherwise the run errors, preventing silent mismatch/leakage). Per-fold metrics and predictions gain a `repeat` column.
 
 #### LOSO / LOMO warning
 
@@ -463,7 +488,7 @@ All modules live under `src/modeling/` and are importable from notebooks:
 
 | Module         | Key functions                                                                              | Role                                                  |
 | -------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
-| `config.py`    | `load_dataset_config`, `load_model_config`, `load_experiment_config`, `resolve_experiment` | Pydantic config models + YAML loading                 |
+| `config.py`    | `load_curves_dataset_config`, `load_dataset_config`, `load_model_config`, `load_experiment_config`, `resolve_experiment` | Pydantic config models + YAML loading |
 | `dataset.py`   | `build_modeling_dataset`                                                                   | Merge curves + metadata, optional replicate averaging |
 | `io.py`        | `read_table`, `write_table`                                                                | CSV/Parquet load and save by file extension           |
 | `features.py`  | `build_feature_pipeline`, `featurize`, `warn_loso_onehot`                                  | Leakage-safe sklearn `ColumnTransformer`              |
@@ -479,7 +504,7 @@ All modules live under `src/modeling/` and are importable from notebooks:
 
 | Script                               | Usage                          |
 | ------------------------------------ | ------------------------------ |
-| `scripts/modeling/create_modeling_dataset.py` | Step 1: build interim CSV/Parquet |
+| `scripts/modeling/create_modeling_dataset.py` | Step 1: build interim CSV/Parquet from a `curves_dataset_*.yaml` |
 | `scripts/modeling/create_splits.py`  | Optional: precompute reusable CV splits (see [5a](#5a-precomputed-reusable-splits-create_splitspy)) |
 | `scripts/modeling/run_experiment.py` | Step 2: CV + evaluation + SHAP |
 
@@ -498,7 +523,7 @@ All modules live under `src/modeling/` and are importable from notebooks:
 ## 11. Adding new features
 
 1. Add the column to the curves CSV or strain metadata CSV (no code change for metadata columns merged in step 1).
-2. Add an entry to the `features` dict in the dataset config:
+2. Add an entry to the `features` dict in the **modeling** dataset config (`config/dataset/modeling_dataset_*.yaml`):
 
 ```yaml
 features:
@@ -508,7 +533,7 @@ features:
   strain_name: "path:data/external/evo2_embeddings.csv"  # precomputed
 ```
 
-1. Re-run `create_modeling_dataset.py` (if new columns come from metadata) and `run_experiment.py`.
+1. Re-run `create_modeling_dataset.py` with the curves config (if new columns come from metadata) and `run_experiment.py`.
 
 For precomputed embeddings, the CSV must have the entity name as the first column and numeric embedding dimensions as subsequent columns.
 
@@ -545,7 +570,7 @@ These scripts produce inputs that slot into the modeling pipeline via config pat
 
 | Script                   | Output                               | Config hook                              |
 | ------------------------ | ------------------------------------ | ---------------------------------------- |
-| `get_strain_metadata.py` | `data/external/strains_metadata.csv` | `strain_metadata_file` in dataset config |
+| `get_strain_metadata.py` | `data/external/strains_metadata.csv` | `strain_metadata_file` in the **curves** dataset config |
 | `get_evo_embeddings.py`  | genome embedding CSV                 | `path:<file>` in `features` dict         |
 | `get_ecfp_embeddings.py` | media fingerprint CSV                | `path:<file>` in `features` dict         |
 | KEGG pathway annotation  | `data/external/modular_pathway/kegg_pathway_completeness.csv` | `["path:<file>", {pca_components: N}]` in `features` dict |

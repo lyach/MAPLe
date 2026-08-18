@@ -62,10 +62,10 @@ The modeling pipeline merges growth-curve metrics with strain and pathway featur
 
 ```bash
 # 1. Build interim modeling dataset
-python scripts/create_modeling_dataset.py config/dataset/modeling_dataset_aero_anaero.yaml
+python scripts/modeling/create_modeling_dataset.py config/dataset/curves_dataset_aero_anaero.yaml
 
 # 2. Train / evaluate an experiment
-python scripts/run_experiment.py config/experiments/class_aero_anaero.yaml
+python scripts/modeling/run_experiment.py config/experiments/class_aero_anaero.yaml
 ```
 
 Results are written under `reports/<experiment_id>/` (metrics, predictions, SHAP summaries).
@@ -74,7 +74,7 @@ Results are written under `reports/<experiment_id>/` (metrics, predictions, SHAP
 
 ```
 config/
-  dataset/                 ← Modeling dataset configs
+  dataset/                 ← Curves + modeling dataset configs
   experiments/             ← Experiment configs (task, CV, metrics)
   models/                  ← Model hyperparameters (XGBoost, RF, MLP, linear)
 

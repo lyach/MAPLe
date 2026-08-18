@@ -1,17 +1,8 @@
 # Modeling dataset config — BacDive metabolite utilization (strain x substrate)
+# Used by run_experiment.py (featurization + targets).
 
-# ================ FILES ================
-curves_file: "data/external/bacdive_metabolite.parquet"
-strain_metadata_file: null
-output_name: "bacdive_metabolite_modeling_dataset.parquet"
-
-# ================ MERGE ================
-merge:
-  left: "strain_name"
-  right: "strain"
-
-# ================ GRANULARITY ================
-grain: "per_well"
+# ================ FILE ================
+modeling_dataset_path: "data/external/bacdive_metabolite.parquet"
 
 # ================ FEATURIZATION ================
 features:

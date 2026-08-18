@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Iterator
 
@@ -193,6 +194,53 @@ def save_split_map(split_map: pd.DataFrame, path: str | Path) -> None:
 
 def load_split_map(path: str | Path) -> pd.DataFrame:
     return read_table(path)
+
+
+def split_stats_path(splits_file: str | Path) -> Path:
+    """Return the ``*_stats.json`` sibling of a saved split map."""
+    path = Path(splits_file)
+    return path.with_name(f"{path.stem}_stats.json")
+
+
+def load_split_stats(splits_file: str | Path) -> dict:
+    """Load the stats JSON written next to a saved split map."""
+    path = split_stats_path(splits_file)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"split stats not found: {path}. Re-run create_splits.py so the "
+            "map is written with a companion *_stats.json."
+        )
+    with open(path) as f:
+        return json.load(f)
+
+
+def assert_split_source_length(
+    n_rows: int,
+    splits_file: str | Path,
+    modeling_dataset_path: str | Path | None = None,
+) -> None:
+    """Require the modeling table and the split-source table to have the same row count.
+
+    Compares ``n_rows`` against ``dataset_shape[0]`` in the split stats JSON.
+    """
+    stats = load_split_stats(splits_file)
+    expected = stats.get("dataset_shape", [None])[0]
+    if expected is None:
+        raise ValueError(
+            f"split stats {split_stats_path(splits_file)} has no dataset_shape[0]"
+        )
+    if int(n_rows) != int(expected):
+        src = stats.get("dataset_path", "<unknown>")
+        modeling = modeling_dataset_path or "<modeling_dataset_path>"
+        raise ValueError(
+            f"modeling dataset has {n_rows} rows ({modeling}) but the "
+            f"precomputed splits were built from a table with {expected} rows "
+            f"({src}). Point modeling_dataset_path at the same file used to "
+            "create the splits, or regenerate the splits from the current table."
+        )
+    logger.info(
+        "split source length matches modeling dataset: {} rows", n_rows
+    )
 
 
 # ---------------------------------------------------------------------------

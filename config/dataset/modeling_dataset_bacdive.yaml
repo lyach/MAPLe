@@ -1,20 +1,8 @@
 # Modeling dataset config — BacDive growth (strain x medium)
+# Used by run_experiment.py (featurization + targets).
 
-# ================ FILES ================
-curves_file: "data/external/bacdive_growth_150k.parquet"
-strain_metadata_file: null
-output_name: "bacdive_150k_modeling_dataset.parquet"
-
-# ================ MERGE ================
-# No external metadata merge; keys left at defaults for compatibility.
-merge:
-  left: "strain_name"
-  right: "strain"
-
-# ================ GRANULARITY ================
-# per_well keeps every (strain, medium) datapoint; group-aware CV (loso/lomo)
-# handles the fact that a strain/medium appears in multiple rows.
-grain: "per_well"
+# ================ FILE ================
+modeling_dataset_path: "data/external/bacdive_growth_150k.parquet"
 
 # ================ FEATURIZATION ================
 features:

@@ -1,7 +1,7 @@
 """Create a modeling-ready dataset from curves tables + strain metadata.
 
 Usage:
-    python scripts/modeling/create_modeling_dataset.py config/dataset/modeling_dataset_aero.yaml
+    python scripts/modeling/create_modeling_dataset.py config/dataset/curves_dataset_aero.yaml
 """
 
 import argparse
@@ -23,7 +23,7 @@ def _find_root(start: Path) -> Path:
 ROOT = _find_root(Path(__file__).resolve())
 sys.path.insert(0, str(ROOT))
 
-from src.modeling.config import load_dataset_config
+from src.modeling.config import load_curves_dataset_config
 from src.modeling.dataset import build_modeling_dataset
 from src.modeling.io import write_table
 
@@ -49,7 +49,7 @@ def setup_logging(level: str = "INFO", log_file: Path | None = None) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("config", type=Path, help="Path to dataset YAML config.")
+    parser.add_argument("config", type=Path, help="Path to curves-dataset YAML config.")
     parser.add_argument(
         "--log-level",
         default="INFO",
@@ -57,7 +57,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    cfg = load_dataset_config(args.config)
+    cfg = load_curves_dataset_config(args.config)
 
     output_dir = ROOT / "data" / "interim"
     output_path = output_dir / cfg.output_name

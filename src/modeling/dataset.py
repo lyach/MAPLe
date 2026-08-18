@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 from loguru import logger
 
-from src.modeling.config import DatasetConfig
+from src.modeling.config import CurvesDatasetConfig
 from src.modeling.io import read_table
 
 # Columns that identify a unique condition for replicate averaging
@@ -25,7 +25,7 @@ def _normalize_key(s: pd.Series) -> pd.Series:
     return s.astype(str).str.strip().str.lower()
 
 
-def _resolve_curves_paths(cfg: DatasetConfig, root: Path) -> list[Path]:
+def _resolve_curves_paths(cfg: CurvesDatasetConfig, root: Path) -> list[Path]:
     """Return absolute paths for one or more curves CSV/Parquet files."""
     paths = cfg.curves_file if isinstance(cfg.curves_file, list) else [cfg.curves_file]
     return [root / p for p in paths]
@@ -48,7 +48,7 @@ def _load_curves(curves_paths: list[Path]) -> pd.DataFrame:
 
 
 def build_modeling_dataset(
-    cfg: DatasetConfig,
+    cfg: CurvesDatasetConfig,
     root: Path | None = None,
 ) -> pd.DataFrame:
     """Load curves + optional strain metadata, merge, and optionally average replicates.
@@ -56,7 +56,7 @@ def build_modeling_dataset(
     Parameters
     ----------
     cfg:
-        Parsed ``DatasetConfig`` from the dataset YAML.
+        Parsed ``CurvesDatasetConfig`` from the curves-dataset YAML.
     root:
         Project root used to resolve relative paths in *cfg*.
         Defaults to the current working directory.
