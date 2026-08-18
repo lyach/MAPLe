@@ -2,7 +2,7 @@
 # Used by run_experiment.py (featurization + targets).
 
 # ================ FILE ================
-modeling_dataset_path: "data/external/bacdive_growth_150k.parquet"
+modeling_dataset_path: "data/external/bacdive_growth_98k.parquet"
 
 # ================ FEATURIZATION ================
 features:

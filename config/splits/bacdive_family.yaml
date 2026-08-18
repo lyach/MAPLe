@@ -1,6 +1,6 @@
 # BacDive medium-growth genus splits
 
-dataset_path: data/external/bacdive_growth_150k.parquet
+dataset_path: data/external/bacdive_growth_98k.parquet
 split_on_column: family
 target: growth_class
 
