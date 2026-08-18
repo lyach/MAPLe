@@ -67,6 +67,8 @@ class CVConfig(BaseModel):
     strategy: list[str] | str = "loso"
     n_repeats: int = 1
     group_on: str = "strain_name"
+    splits_file: str | None = None
+    split_on: str | None = None
 
     @field_validator("strategy", mode="before")
     @classmethod
@@ -107,6 +109,24 @@ class ExperimentConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Split config
+# ---------------------------------------------------------------------------
+
+class SplitConfig(BaseModel):
+    """Config for ``create_splits.py`` (precompute reusable CV splits)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    dataset_path: str
+    split_on_column: str
+    target: str
+    cv: CVConfig = CVConfig()
+    n_splits: int = 5
+    seed: int = 42
+    output_format: Literal["csv", "parquet"] = "csv"
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -126,6 +146,10 @@ def load_model_config(path: str | Path) -> ModelConfig:
 
 def load_experiment_config(path: str | Path) -> ExperimentConfig:
     return ExperimentConfig(**load_yaml(path))
+
+
+def load_split_config(path: str | Path) -> SplitConfig:
+    return SplitConfig(**load_yaml(path))
 
 
 def resolve_experiment(path: str | Path, root: Path | None = None):

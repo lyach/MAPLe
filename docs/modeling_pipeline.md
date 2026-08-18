@@ -18,11 +18,13 @@ curves.csv ──────┐
                  ├──► [ create_modeling_dataset.py ] ──► data/interim/modeled_dataset.csv
 metadata.csv ────┘                                                      │
                                                                         │
-config/                                                                 ▼
-├── dataset/     ──────────────────────────────────────────► [ run_experiment.py ]
-├── models/
-└── experiments/                                                        │
-                                                                        ▼
+processed dataset ──► [ create_splits.py ] ──► data/modeling/splits_<stem>/
+       ▲ (optional, reusable CV splits)              <split_on>_<stem>.csv
+config/                                                    │            │
+├── dataset/                                               │ (optional) │
+├── models/      ──────────────────────────────────────────────► [ run_experiment.py ]
+├── experiments/                                                        │
+└── splits/                                                             ▼
                                                           reports/<experiment_id>/
                                                           ├── metrics.json
                                                           ├── predictions.csv
@@ -125,6 +127,8 @@ The table retains all columns from the curves CSV plus any merged metadata colum
 | `task`                       | str              | `"growth_class"`                              | Prediction target                                 |
 | `cv.strategy`                | str or list[str] | `[loso, lomo]`                                | CV strategy                                       |
 | `cv.n_repeats`               | int              | `1`                                           | Number of CV repeats                              |
+| `cv.splits_file`             | str (optional)   | `"data/modeling/splits_bacdive_growth_150k/genus_bacdive_growth_150k.csv"` | Consume precomputed splits (see [5a](#5a-precomputed-reusable-splits-create_splitspy)) |
+| `cv.split_on`                | str (optional)   | `"genus"`                                     | Group column the saved split map is keyed on (required with `cv.splits_file`) |
 | `class_weight`               | str or dict      | `"balanced"`                                  | Per-sample class reweighting (see [3d](#3d-class-imbalance-handling-reweighting)) |
 | `metrics`                    | list[str]        | `[auroc, f1, mcc]`                            | Metrics to compute                                |
 | `interpret.shap`             | bool             | `true`                                        | Run SHAP analysis after CV                        |
@@ -240,6 +244,73 @@ To run a different task, change `task` in the experiment config and re-run. The 
 
 
 Multiple strategies can be specified as a list in the experiment config; each is evaluated independently.
+
+### 5a. Precomputed, reusable splits (`create_splits.py`)
+
+By default `run_experiment.py` generates splits inline. For reproducibility and reuse across experiments/models, splits can instead be **precomputed once** and saved to disk with `scripts/modeling/create_splits.py`, then referenced from any experiment config.
+
+Splits are stored as a compact **group -> fold map**: one row per `split_on_column` value (e.g. one row per unique genus) with `strategy`, `repeat`, and `fold` columns. Because `GroupKFold` / `StratifiedGroupKFold` never split a group across folds, this map fully determines the CV assignment while staying tiny and robust to row filtering/reordering at experiment time (rows are matched to their fold by group value, not by position). This makes the saved splits safe to reuse even after task filtering (e.g. `growth_rate`) or external-feature merges reorder or drop rows.
+
+Only group-consistent strategies can be stored this way: `grouped` and `stratified_grouped` (keyed on `split_on_column`), plus `loso` / `lomo` when `split_on_column` is `strain_name` / `media_name`. `random` KFold is per-row and is rejected.
+
+#### Split config — `config/splits/*.yaml`
+
+| Field             | Type             | Description                                                        |
+| ----------------- | ---------------- | ------------------------------------------------------------------ |
+| `dataset_path`    | str              | Processed dataset (CSV/Parquet) the splits are built from          |
+| `split_on_column` | str              | Column whose values define the CV groups (map key, e.g. `genus`)   |
+| `target`          | str              | Target column (used for `stratified_grouped` and distribution stats) |
+| `cv.strategy`     | str or list[str] | Group-consistent CV strategy/strategies                            |
+| `cv.n_repeats`    | int              | Number of CV repeats (repeats > 1 shuffle groups per repeat)       |
+| `n_splits`        | int              | Number of folds for `grouped` / `stratified_grouped` (default 5)   |
+| `seed`            | int              | Random seed (default 42)                                           |
+| `output_format`   | `"csv"` or `"parquet"` | Map file format (default `csv`; the map is small)            |
+
+Example (`config/splits/bacdive_genus.yaml`):
+
+```yaml
+dataset_path: data/external/bacdive_growth_150k.parquet
+split_on_column: genus
+target: growth_class
+
+cv:
+  strategy: [stratified_grouped]
+  n_repeats: 1
+
+n_splits: 5
+seed: 42
+output_format: csv
+```
+
+#### Run the script
+
+```bash
+python scripts/modeling/create_splits.py config/splits/bacdive_genus.yaml
+```
+
+Outputs are written to `data/modeling/splits_<dataset_stem>/`:
+
+```
+data/modeling/splits_bacdive_growth_150k/
+  genus_bacdive_growth_150k.csv         ← group->fold map [strategy, repeat, fold, genus]
+  genus_bacdive_growth_150k.log         ← full process log + per-fold distribution stats
+  genus_bacdive_growth_150k_stats.json  ← machine-readable distribution stats
+```
+
+The log and stats JSON report, per `(strategy, repeat, fold)`: train/test row counts, train/test group counts, and the target distribution on train vs test (class counts + fractions for classification; mean/std/min/max for regression). A leakage assertion guarantees train/test group sets are disjoint.
+
+#### Consume saved splits in an experiment
+
+Reference the map and its group column from the experiment config's `cv` block:
+
+```yaml
+cv:
+  strategy: [stratified_grouped]
+  splits_file: data/modeling/splits_bacdive_growth_150k/genus_bacdive_growth_150k.csv
+  split_on: genus
+```
+
+When `cv.splits_file` is set, `run_experiment.py` loads the map and derives folds by matching `split_on` values instead of calling `make_splits`. The requested strategies must exist in the map, and every `split_on` value in the modeling dataset must be present in the map (otherwise the run errors, preventing silent mismatch/leakage). Per-fold metrics and predictions gain a `repeat` column.
 
 #### LOSO / LOMO warning
 
@@ -370,9 +441,9 @@ Each run writes to `reports/<experiment_name>/`:
 reports/aerobic_xgboost_growth_class/
   config.yaml              ← snapshot of all three configs + timestamp
   experiment.log           ← full run log
-  fold_metrics.csv         ← per-fold metrics (strategy, fold, fold_label, threshold, metrics)
+  fold_metrics.csv         ← per-fold metrics (strategy, repeat, fold, fold_label, threshold, metrics)
   metrics.json             ← aggregate mean ± std per CV strategy + pooled OOF summary
-  predictions.csv          ← y_true, y_pred, y_prob, strategy, fold, strain, media
+  predictions.csv          ← y_true, y_pred, y_prob, strategy, repeat, fold, strain, media
   metrics_by_strain_name.csv          ← includes n, n_pos, n_neg
   metrics_by_strain_name_withneg.csv  ← filtered to groups with n_neg > 0
   metrics_by_media_name.csv
@@ -398,6 +469,7 @@ All modules live under `src/modeling/` and are importable from notebooks:
 | `features.py`  | `build_feature_pipeline`, `featurize`, `warn_loso_onehot`                                  | Leakage-safe sklearn `ColumnTransformer`              |
 | `models.py`    | `build_model`                                                                              | Model registry (linear, RF, XGBoost, MLP, dummy)      |
 | `cv.py`        | `make_splits`, `get_fold_group_label`                                                      | LOSO, LOMO, grouped, stratified-grouped splitters     |
+| `splits.py`    | `build_group_fold_map`, `fold_distribution_stats`, `save_split_map`, `load_split_map`, `iter_saved_splits` | Precompute / save / consume reusable group->fold splits |
 | `evaluate.py`  | `evaluate_fold`, `aggregate_metrics`, `per_group_metrics`                                  | Classification and regression metrics                 |
 | `interpret.py` | `compute_shap_values`, `run_interpretation`                                                | SHAP + grouped feature importance plots               |
 
@@ -407,8 +479,9 @@ All modules live under `src/modeling/` and are importable from notebooks:
 
 | Script                               | Usage                          |
 | ------------------------------------ | ------------------------------ |
-| `scripts/create_modeling_dataset.py` | Step 1: build interim CSV/Parquet |
-| `scripts/run_experiment.py`          | Step 2: CV + evaluation + SHAP |
+| `scripts/modeling/create_modeling_dataset.py` | Step 1: build interim CSV/Parquet |
+| `scripts/modeling/create_splits.py`  | Optional: precompute reusable CV splits (see [5a](#5a-precomputed-reusable-splits-create_splitspy)) |
+| `scripts/modeling/run_experiment.py` | Step 2: CV + evaluation + SHAP |
 
 
 **Notebooks:**

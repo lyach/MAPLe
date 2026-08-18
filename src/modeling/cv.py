@@ -30,6 +30,21 @@ def _encode_groups(series: pd.Series) -> np.ndarray:
     return series.astype("category").cat.codes.values
 
 
+def _make_grouped_splitter(cls, n_splits: int, shuffle: bool, seed: int):
+    """Instantiate a (Stratified)GroupKFold."""
+    if not shuffle:
+        return cls(n_splits=n_splits)
+    try:
+        return cls(n_splits=n_splits, shuffle=True, random_state=seed)
+    except TypeError:
+        logger.warning(
+            "{} does not support shuffle/random_state in this sklearn version; "
+            "repeats will be identical.",
+            cls.__name__,
+        )
+        return cls(n_splits=n_splits)
+
+
 def make_splits(
     strategy: str,
     df: pd.DataFrame,
@@ -37,6 +52,7 @@ def make_splits(
     n_splits: int = 5,
     seed: int = 42,
     group_on: str = "strain_name",
+    shuffle: bool = False,
 ) -> Iterator[tuple[np.ndarray, np.ndarray]]:
     """Yield (train_idx, test_idx) arrays for the chosen CV strategy.
 
@@ -53,9 +69,14 @@ def make_splits(
     n_splits:
         Number of folds for ``grouped`` / ``stratified_grouped`` / ``random``.
     seed:
-        Random seed for shuffled strategies (``random``). Ignored otherwise.
+        Random seed for shuffled strategies (``random``, and ``grouped`` /
+        ``stratified_grouped`` when ``shuffle=True``). Ignored otherwise.
     group_on:
         Column used as groups for ``grouped`` / ``stratified_grouped``.
+    shuffle:
+        Shuffle groups before splitting for ``grouped`` / ``stratified_grouped``.
+        Defaults to ``False`` (deterministic, matches historical behavior); set
+        ``True`` with a per-repeat ``seed`` to make CV repeats differ.
     """
     strategy = strategy.lower().strip()
 
@@ -94,7 +115,9 @@ def make_splits(
             )
         groups = _encode_groups(df[group_on])
         n_splits = min(n_splits, len(np.unique(groups)))
-        splitter = StratifiedGroupKFold(n_splits=n_splits)
+        splitter = _make_grouped_splitter(
+            StratifiedGroupKFold, n_splits, shuffle, seed
+        )
         logger.info(
             "StratifiedGroupKFold: {} folds (grouped by {})", n_splits, group_on
         )

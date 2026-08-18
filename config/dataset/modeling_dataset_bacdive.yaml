@@ -1,9 +1,9 @@
 # Modeling dataset config — BacDive growth (strain x medium)
 
 # ================ FILES ================
-curves_file: "data/external/bacdive_growth.parquet"
+curves_file: "data/external/bacdive_growth_150k.parquet"
 strain_metadata_file: null
-output_name: "bacdive_modeling_dataset.parquet"
+output_name: "bacdive_150k_modeling_dataset.parquet"
 
 # ================ MERGE ================
 # No external metadata merge; keys left at defaults for compatibility.

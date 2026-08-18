@@ -185,7 +185,7 @@ def aggregate_metrics(
 
     keys = [
         k for k, v in fold_metrics[0].items()
-        if _is_numeric_metric(v) and k not in {"fold", "n_train", "n_test"}
+        if _is_numeric_metric(v) and k not in {"fold", "repeat", "n_train", "n_test"}
     ]
     agg: dict[str, dict[str, float]] = {}
 

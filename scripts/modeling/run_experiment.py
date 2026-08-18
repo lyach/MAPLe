@@ -1,7 +1,7 @@
 """Run a modeling experiment end-to-end: CV, evaluation, interpretability.
 
 Usage:
-    python scripts/run_experiment.py config/experiments/maxod_aero_anaero.yaml
+    python scripts/modeling/run_experiment.py config/experiments/class_bacdive.yaml
 """
 
 import argparse
@@ -16,18 +16,27 @@ import yaml
 from loguru import logger
 from sklearn.utils.class_weight import compute_sample_weight
 
-ROOT = Path(__file__).resolve().parents[1]
+
+def _find_root(start: Path) -> Path:
+    """Ascend from ``start`` to the directory containing ``pyproject.toml``."""
+    for parent in [start, *start.parents]:
+        if (parent / "pyproject.toml").exists():
+            return parent
+    return start.parents[2]
+
+
+ROOT = _find_root(Path(__file__).resolve())
 sys.path.insert(0, str(ROOT))
 
-from src.modeling.config import resolve_experiment  # noqa: E402
-from src.modeling.cv import get_fold_group_label, make_splits  # noqa: E402
-from src.modeling.evaluate import (  # noqa: E402
+from src.modeling.config import resolve_experiment
+from src.modeling.cv import get_fold_group_label, make_splits
+from src.modeling.evaluate import (
     aggregate_metrics,
     evaluate_fold,
     per_group_metrics,
     tune_threshold,
 )
-from src.modeling.features import (  # noqa: E402
+from src.modeling.features import (
     build_feature_group_index,
     build_feature_pipeline,
     get_feature_names,
@@ -37,6 +46,11 @@ from src.modeling.features import (  # noqa: E402
 from src.modeling.interpret import run_interpretation
 from src.modeling.io import read_table
 from src.modeling.models import build_model, gpu_available
+from src.modeling.splits import (
+    held_out_label,
+    iter_saved_splits,
+    load_split_map,
+)
 
 
 def setup_logging(level: str = "INFO", log_file: Path | None = None) -> None:
@@ -110,20 +124,51 @@ def run_cv_loop(
     all_fold_metrics: list[dict] = []
     all_predictions: list[pd.DataFrame] = []
 
+    # Optionally use precomputed splits
+    split_map = None
+    split_on = exp_cfg.cv.split_on
+    if exp_cfg.cv.splits_file is not None:
+        splits_path = Path(exp_cfg.cv.splits_file)
+        if not splits_path.is_absolute():
+            splits_path = ROOT / splits_path
+        if split_on is None:
+            raise ValueError("cv.split_on is required when cv.splits_file is set")
+        split_map = load_split_map(splits_path)
+        logger.info(
+            "using precomputed splits: {} (split_on={})", splits_path, split_on
+        )
+
     for strategy in exp_cfg.cv.strategy:
         warn_loso_onehot(ds_cfg, strategy)
 
+        if split_map is not None:
+            fold_source = (
+                (repeat, train_idx, test_idx,
+                 held_out_label(df, test_idx, split_on))
+                for repeat, _, train_idx, test_idx in iter_saved_splits(
+                    df, split_map, split_on, strategy
+                )
+            )
+        else:
+            fold_source = (
+                (0, train_idx, test_idx,
+                 get_fold_group_label(strategy, df, test_idx))
+                for train_idx, test_idx in make_splits(
+                    strategy,
+                    df,
+                    y=df[task].values,
+                    seed=exp_cfg.seed,
+                    group_on=exp_cfg.cv.group_on,
+                )
+            )
+
         fold_num = 0
-        for train_idx, test_idx in make_splits(
-            strategy,
-            df,
-            y=df[task].values,
-            seed=exp_cfg.seed,
-            group_on=exp_cfg.cv.group_on,
-        ):
+        for repeat, train_idx, test_idx, fold_label in fold_source:
             fold_num += 1
-            fold_label = get_fold_group_label(strategy, df, test_idx)
-            logger.info("--- {}: fold {} (held-out: {}) ---", strategy, fold_num, fold_label)
+            logger.info(
+                "--- {}: fold {} (repeat {}, held-out: {}) ---",
+                strategy, fold_num, repeat, fold_label,
+            )
 
             df_train = df.iloc[train_idx]
             df_test = df.iloc[test_idx]
@@ -158,6 +203,7 @@ def run_cv_loop(
             # Evaluate
             metrics = evaluate_fold(y_test, y_pred, y_prob, task, exp_cfg.metrics or None)
             metrics["strategy"] = strategy
+            metrics["repeat"] = repeat
             metrics["fold"] = fold_num
             metrics["fold_label"] = fold_label
             metrics["threshold"] = threshold
@@ -172,6 +218,7 @@ def run_cv_loop(
                 "y_true": y_test,
                 "y_pred": y_pred,
                 "strategy": strategy,
+                "repeat": repeat,
                 "fold": fold_num,
                 "fold_label": fold_label,
             })

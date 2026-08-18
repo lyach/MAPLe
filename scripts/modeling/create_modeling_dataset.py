@@ -1,7 +1,7 @@
 """Create a modeling-ready dataset from curves tables + strain metadata.
 
 Usage:
-    python scripts/create_modeling_dataset.py config/dataset/modeling_dataset_aero.yaml
+    python scripts/modeling/create_modeling_dataset.py config/dataset/modeling_dataset_aero.yaml
 """
 
 import argparse
@@ -11,7 +11,16 @@ from pathlib import Path
 
 from loguru import logger
 
-ROOT = Path(__file__).resolve().parents[1]
+
+def _find_root(start: Path) -> Path:
+    """Ascend from ``start`` to the directory containing ``pyproject.toml``."""
+    for parent in [start, *start.parents]:
+        if (parent / "pyproject.toml").exists():
+            return parent
+    return start.parents[2]
+
+
+ROOT = _find_root(Path(__file__).resolve())
 sys.path.insert(0, str(ROOT))
 
 from src.modeling.config import load_dataset_config

@@ -1,13 +1,13 @@
 # BacDive growth classification + XGBoost
-name: growth_class_bacdive_xgb_sgrouped_genus
+name: growth_class_bacdive150k_xgb_sgrouped_family
 dataset: config/dataset/modeling_dataset_bacdive.yaml
 model: config/models/xgboost.yaml
 task: growth_class
 
 cv:
   strategy: [stratified_grouped]
-  n_repeats: 1
-  group_on: "genus"
+  splits_file: data/modeling/splits_bacdive_growth_150k/family_bacdive_growth_150k.csv
+  split_on: family
 
 class_weight: balanced
 
