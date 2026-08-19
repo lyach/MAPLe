@@ -56,9 +56,9 @@ def build_group_fold_map(
 
     for strategy in strategies:
         strategy = strategy.lower().strip()
-        if strategy == "random":
+        if strategy in {"random", "stratified"}:
             raise ValueError(
-                "'random' KFold assigns individual rows and cannot be stored as "
+                f"'{strategy}' assigns individual rows and cannot be stored as "
                 "a group->fold map; use grouped or stratified_grouped."
             )
         for repeat in range(n_repeats):

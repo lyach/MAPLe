@@ -266,6 +266,7 @@ To run a different task, change `task` in the experiment config and re-run. The 
 | `grouped`            | `GroupKFold`           | `strain_name` | configurable (default 5) | Replicates stay together        |
 | `stratified_grouped` | `StratifiedGroupKFold` | `strain_name` | configurable (default 5) | Stratified + grouped            |
 | `random`             | `KFold` (shuffled)     | *(none)*      | configurable (default 5) | Interpolation / leakage baseline |
+| `stratified`         | `StratifiedKFold`      | *(none)*      | configurable (default 5) | Class-balanced interpolation baseline |
 
 
 Multiple strategies can be specified as a list in the experiment config; each is evaluated independently.
@@ -276,7 +277,7 @@ By default `run_experiment.py` generates splits inline. For reproducibility and 
 
 Splits are stored as a compact **group -> fold map**: one row per `split_on_column` value (e.g. one row per unique genus) with `strategy`, `repeat`, and `fold` columns. Because `GroupKFold` / `StratifiedGroupKFold` never split a group across folds, this map fully determines the CV assignment while staying tiny and robust to row filtering/reordering at experiment time (rows are matched to their fold by group value, not by position). This makes the saved splits safe to reuse even after task filtering (e.g. `growth_rate`) or external-feature merges reorder or drop rows.
 
-Only group-consistent strategies can be stored this way: `grouped` and `stratified_grouped` (keyed on `split_on_column`), plus `loso` / `lomo` when `split_on_column` is `strain_name` / `media_name`. `random` KFold is per-row and is rejected.
+Only group-consistent strategies can be stored this way: `grouped` and `stratified_grouped` (keyed on `split_on_column`), plus `loso` / `lomo` when `split_on_column` is `strain_name` / `media_name`. Per-row strategies (`random`, `stratified`) are rejected.
 
 #### Split config — `config/splits/*.yaml`
 
@@ -493,7 +494,7 @@ All modules live under `src/modeling/` and are importable from notebooks:
 | `io.py`        | `read_table`, `write_table`                                                                | CSV/Parquet load and save by file extension           |
 | `features.py`  | `build_feature_pipeline`, `featurize`, `warn_loso_onehot`                                  | Leakage-safe sklearn `ColumnTransformer`              |
 | `models.py`    | `build_model`                                                                              | Model registry (linear, RF, XGBoost, MLP, dummy)      |
-| `cv.py`        | `make_splits`, `get_fold_group_label`                                                      | LOSO, LOMO, grouped, stratified-grouped splitters     |
+| `cv.py`        | `make_splits`, `get_fold_group_label`                                                      | LOSO, LOMO, grouped, stratified-grouped, random, stratified splitters |
 | `splits.py`    | `build_group_fold_map`, `fold_distribution_stats`, `save_split_map`, `load_split_map`, `iter_saved_splits` | Precompute / save / consume reusable group->fold splits |
 | `evaluate.py`  | `evaluate_fold`, `aggregate_metrics`, `per_group_metrics`                                  | Classification and regression metrics                 |
 | `interpret.py` | `compute_shap_values`, `run_interpretation`                                                | SHAP + grouped feature importance plots               |

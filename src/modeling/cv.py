@@ -8,6 +8,7 @@ Strategies
 - ``stratified_grouped`` : StratifiedGroupKFold (stratified by target, grouped
   by ``group_on`` column)
 - ``random`` : Shuffled KFold with no grouping (rows split randomly).
+- ``stratified`` : Shuffled StratifiedKFold (class-balanced folds, no grouping).
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from sklearn.model_selection import (
     KFold,
     LeaveOneGroupOut,
     StratifiedGroupKFold,
+    StratifiedKFold,
 )
 
 
@@ -60,17 +62,19 @@ def make_splits(
     ----------
     strategy:
         One of ``"loso"``, ``"lomo"``, ``"grouped"``,
-        ``"stratified_grouped"``, ``"random"``.
+        ``"stratified_grouped"``, ``"random"``, ``"stratified"``.
     df:
         Modeling DataFrame (needs ``strain_name`` and/or ``media_name``,
         or the column named by ``group_on`` for grouped strategies).
     y:
-        Target array, required for ``stratified_grouped``.
+        Target array, required for ``stratified_grouped`` and ``stratified``.
     n_splits:
-        Number of folds for ``grouped`` / ``stratified_grouped`` / ``random``.
+        Number of folds for ``grouped`` / ``stratified_grouped`` / ``random`` /
+        ``stratified``.
     seed:
-        Random seed for shuffled strategies (``random``, and ``grouped`` /
-        ``stratified_grouped`` when ``shuffle=True``). Ignored otherwise.
+        Random seed for shuffled strategies (``random``, ``stratified``, and
+        ``grouped`` / ``stratified_grouped`` when ``shuffle=True``). Ignored
+        otherwise.
     group_on:
         Column used as groups for ``grouped`` / ``stratified_grouped``.
     shuffle:
@@ -132,10 +136,24 @@ def make_splits(
         )
         yield from splitter.split(df)
 
+    elif strategy == "stratified":
+        if y is None:
+            raise ValueError("stratified requires y (target array)")
+        n_splits = min(n_splits, len(df))
+        splitter = StratifiedKFold(
+            n_splits=n_splits, shuffle=True, random_state=seed
+        )
+        logger.info(
+            "StratifiedKFold: {} folds, shuffle=True, seed={}",
+            n_splits, seed,
+        )
+        yield from splitter.split(df, y)
+
     else:
         raise ValueError(
             f"Unknown CV strategy '{strategy}'. "
-            "Choose from: loso, lomo, grouped, stratified_grouped, random"
+            "Choose from: loso, lomo, grouped, stratified_grouped, "
+            "random, stratified"
         )
 
 
