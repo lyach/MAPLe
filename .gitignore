@@ -27,6 +27,10 @@ logs/
 docs/genome_accession_gap_analysis.md
 scripts/hpc/run_bacdive_full_genus_scan.sbatch
 scripts/hpc/run_bacdive_build_from_cache.sbatch
+scripts/hpc/run_bacdive_strain_genome_matches.sbatch
+scripts/hpc/run_bacdive_recovered_genomes.sbatch
+scripts/hpc/run_bacdive_all_genomes.sbatch
+scripts/hpc/run_bacdive_genome_map.sbatch
 
 # credentials
 .ncbi_credentials.json
