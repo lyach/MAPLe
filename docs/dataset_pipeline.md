@@ -252,7 +252,7 @@ log(OD)
 The threshold for `growth_class` is computed per experiment from the blank wells:
 
 ```
-threshold = 3 × std(blank od600_raw)
+threshold = 2 × std(blank od600_raw)
 ```
 
 `od600_raw` (pre-blank-subtraction) is used so the spread reflects raw instrument noise. After blank subtraction, a well is classified as **growing** (`growth_class = 1`) if `max_od > threshold`, and **not growing** (`growth_class = 0`) otherwise.

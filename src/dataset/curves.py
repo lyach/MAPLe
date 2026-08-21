@@ -219,8 +219,7 @@ def extract_params(
 def compute_growth_threshold(df: pd.DataFrame) -> pd.Series:
     """Per-experiment growth/no-growth threshold = 2 × std(blank OD600).
 
-    Threshold is applied on blank-subtracted OD (the mean component
-    cancels), so the spread reflects raw instrument noise.
+    Threshold is applied on blank-subtracted OD.
 
     Returns a Series indexed by ``exp_id``.
     """

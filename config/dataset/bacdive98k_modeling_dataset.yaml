@@ -15,6 +15,7 @@ features:
   motility: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
   oxygen_tolerance: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
   spore_formation: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
+  temperature: "StandardScaler()"
   # media features (parsed from composition — transfer across unseen media)
   n_ingredients: "StandardScaler()"
   has_yeast_extract: "MinMaxScaler()"
