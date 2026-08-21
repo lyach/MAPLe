@@ -31,6 +31,7 @@ import argparse
 import io
 import json
 import logging
+import re
 import sys
 import threading
 import time
@@ -46,13 +47,13 @@ from typing import Optional
 import pandas as pd
 from tqdm import tqdm
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.strain_metadata.logging_setup import setup_logging
 
 log = logging.getLogger("download_bacdive_genomes")
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INPUT = ROOT / "data" / "external" / "bacdive_growth.parquet"
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "external" / "bacdive_genomes"
 DEFAULT_MANIFEST = ROOT / "data" / "external" / "bacdive_genome_manifest.csv"
@@ -97,13 +98,38 @@ class AccessionResult:
     error: str = ""
 
 
-def load_accessions(parquet_path: Path) -> list[str]:
-    df = pd.read_parquet(parquet_path, columns=["genome_accession"])
-    accessions = (
-        df["genome_accession"].dropna().astype(str).str.strip()
-    )
-    accessions = sorted(set(a for a in accessions if a))
-    return accessions
+ACCESSION_RE = re.compile(r"^GC[AF]_\d+(\.\d+)?$")
+
+
+def load_accessions(input_path: Path, column: Optional[str] = None) -> list[str]:
+    """Unique NCBI assembly accessions from a parquet or CSV input.
+
+    A ``.parquet`` is read as the BacDive dataset (``genome_accession``); a
+    ``.csv`` is read as a resolver manifest such as
+    ``genome_strain_matches.csv`` (``accession`` by default). Either way,
+    anything that is not a ``GCA_``/``GCF_`` accession is dropped -- the
+    Datasets API only understands those, and ``genome_accession`` may now hold
+    an IMG or BV-BRC id (see ``genome_accession_source``).
+    """
+    if input_path.suffix == ".parquet":
+        column = column or "genome_accession"
+        df = pd.read_parquet(input_path, columns=[column])
+    else:
+        column = column or "accession"
+        df = pd.read_csv(input_path, usecols=[column], dtype=str)
+
+    values = df[column].dropna().astype(str).str.strip()
+    values = values[values != ""]
+    accessions = sorted(set(values))
+    usable = [a for a in accessions if ACCESSION_RE.match(a)]
+    dropped = len(accessions) - len(usable)
+    if dropped:
+        log.warning(
+            "Dropped %d non-NCBI accession(s) from %s -- not GCA_/GCF_ "
+            "(IMG and BV-BRC ids cannot be fetched from the Datasets API)",
+            dropped, input_path.name,
+        )
+    return usable
 
 
 def _http_get(url: str, headers: dict, rate_limiter: RateLimiter) -> bytes:
@@ -318,7 +344,11 @@ def print_summary(results: list[AccessionResult], manifest_path: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT,
-                         help="Path to bacdive_growth.parquet")
+                         help="Path to bacdive_growth.parquet, or a resolver "
+                              "manifest CSV such as genome_strain_matches.csv")
+    parser.add_argument("--accession-col", default=None,
+                         help="Column holding the accession (default: "
+                              "genome_accession for parquet, accession for CSV)")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR,
                          help="Directory to write per-accession genome/CDS FASTA files")
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST,
@@ -346,7 +376,7 @@ def main() -> int:
         headers["api-key"] = api_key
     rate_limiter = RateLimiter(min_interval=0.12 if api_key else 0.35)
 
-    accessions = load_accessions(args.input)
+    accessions = load_accessions(args.input, args.accession_col)
     log.info("Loaded %d unique genome_accession value(s) from %s", len(accessions), args.input)
     if args.limit:
         accessions = accessions[: args.limit]
