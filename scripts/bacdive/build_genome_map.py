@@ -30,7 +30,7 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_PARQUET = ROOT / "data" / "external" / "bacdive_growth.parquet"
+DEFAULT_PARQUET = ROOT / "data" / "external" / "bacdive_growth_api_107k.parquet"
 DEFAULT_MATCHES = ROOT / "data" / "external" / "genome_strain_matches.csv"
 DEFAULT_GENOMES = ROOT / "data" / "external" / "bacdive_genomes"
 DEFAULT_OUTPUT = ROOT / "data" / "external" / "bacdive_genome_map.csv"

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Downloads genome + CDS FASTA files from NCBI for every unique
-``genome_accession`` in data/external/bacdive_growth.parquet.
+``genome_accession`` in data/external/bacdive_growth_api_107k.parquet.
 
 For each accession (e.g. "GCA_900699165") this:
   1. Resolves it to NCBI's current *versioned* accession (e.g.
@@ -54,7 +54,7 @@ from src.strain_metadata.logging_setup import setup_logging
 log = logging.getLogger("download_bacdive_genomes")
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_INPUT = ROOT / "data" / "external" / "bacdive_growth.parquet"
+DEFAULT_INPUT = ROOT / "data" / "external" / "bacdive_growth_api_107k.parquet"
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "external" / "bacdive_genomes"
 DEFAULT_MANIFEST = ROOT / "data" / "external" / "bacdive_genome_manifest.csv"
 
@@ -344,8 +344,9 @@ def print_summary(results: list[AccessionResult], manifest_path: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT,
-                         help="Path to bacdive_growth.parquet, or a resolver "
-                              "manifest CSV such as genome_strain_matches.csv")
+                         help="Path to the BacDive growth parquet, or a "
+                              "resolver manifest CSV such as "
+                              "genome_strain_matches.csv")
     parser.add_argument("--accession-col", default=None,
                          help="Column holding the accession (default: "
                               "genome_accession for parquet, accession for CSV)")
