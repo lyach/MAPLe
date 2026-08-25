@@ -1,0 +1,37 @@
+# Rebuild a BacDive modeling table from local cache only (no API).
+
+target: metabolite_utilization
+
+# Strain info (features selected under dataset config)
+strain_features:
+  - genus
+  - family
+  - order
+  - phylum
+  - gram_stain
+  - cell_shape
+  - motility
+  - oxygen_tolerance
+  - nutrition_type
+  - spore_formation
+  - gc_content
+  - genome_accession
+  - genome_accession_source
+  - genome_link
+  - n16s_accession
+  - strain_designation
+  - is_type_strain
+  - dsm_number
+  - culture_collection_ids
+  - ncbi_taxid
+  - ncbi_taxid_level
+  - temperature
+  - ph
+
+# Metabolite info
+metabolite_features:
+  - refs
+
+temperature_range_expansion: True
+
+output_file: data/external/bacdive_metabolite_temp_expand.parquet
