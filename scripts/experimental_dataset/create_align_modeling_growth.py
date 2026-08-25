@@ -11,7 +11,7 @@ Pipeline:
   5. Left-merge strain metadata and media features.
 
 Usage:
-    python scripts/experimental_dataset/filter_noisy_curves.py
+    python scripts/experimental_dataset/create_align_modeling_growth.py
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ INPUT = ROOT / "data" / "processed" / "aero_anaero_tidy_curves.csv"
 FLAGS = ROOT / "data" / "metadata" / "align_dataset" / "align_growth_curve_curation.csv"
 STRAIN_META = ROOT / "data" / "metadata" / "align_dataset" / "align_strains_metadata.csv"
 MEDIA_META = ROOT / "data" / "metadata" / "modeling" / "media_features.csv"
-OUTPUT = ROOT / "data" / "processed" / "aero_anaero_tidy_curves_filtered.csv"
+OUTPUT = ROOT / "data" / "processed" / "align_modeling_growth.csv"
 
 # curation key → tidy CSV column
 FIELD_MAP = {
