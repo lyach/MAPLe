@@ -2,6 +2,7 @@
 
 target: medium_growth
 
+# Strain info (features selected under dataset config)
 strain_features:
   - genus
   - family
@@ -15,11 +16,9 @@ strain_features:
   - spore_formation
   - gc_content
   - genome_accession
-  # registry genome_accession came from: insdc | bvbrc | img
   - genome_accession_source
   - genome_link
   - n16s_accession
-  # strain identity -- handles for resolving a genome outside BacDive
   - strain_designation
   - is_type_strain
   - dsm_number
@@ -29,7 +28,7 @@ strain_features:
   - temperature
   - ph
 
-# Medium features
+# Medium info (features selected under dataset config)
 medium_features:
   - n_ingredients
   - has_yeast_extract
@@ -41,6 +40,6 @@ medium_features:
   - composition_raw
   - refs
 
-temperature_range_expansion: True
+temperature_range_expansion: False
 
-output_file: data/external/bacdive_growth.parquet
+output_file: data/external/bacdive_growth_107k.parquet

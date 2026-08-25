@@ -506,7 +506,7 @@ def _bacdive_id(record: dict) -> str:
 # --------------------------------------------------------------------------
 
 def record_to_medium_rows(
-    record: dict, *, temperature_range_expansion: bool = False,
+    record: dict, *, temperature_range_expansion: bool = True,
 ) -> list[dict]:
     """Flatten one BacDive record into (isolate x medium x temperature) rows.
 
@@ -523,9 +523,9 @@ def record_to_medium_rows(
     temperature entry's own ``growth`` flag overrides the medium's growth
     label for that row.
 
-    ``temperature_range_expansion``: if false (default), a range such as
-    ``"30-37"`` is one midpoint. If true, it emits min, max, and mean as
+    ``temperature_range_expansion``: If true (default), it emits min, max, and mean as
     three rows (and those extra points can themselves trigger @ref matching).
+    if false, a range such as ``"30-37"`` is one midpoint.
 
     CIP media: BacDive records one CIP medium as two entries -- a
     cross-reference ("CIP Medium 6") holding the catalogue URL, and an

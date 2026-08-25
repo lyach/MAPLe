@@ -10,10 +10,10 @@ Reads target + output feature subsets from ``bacdive/build_from_cache.yaml``
 ``get_bacdive_dataset.py``; only the fetch step is skipped.
 
 USAGE:
-    python scripts/build_bacdive_from_cache.py
-    python scripts/build_bacdive_from_cache.py --config bacdive/build_from_cache.yaml
-    python scripts/build_bacdive_from_cache.py --target metabolite_utilization
-    python scripts/build_bacdive_from_cache.py --limit 100
+    python scripts/bacdive/build_bacdive_from_cache.py
+    python scripts/bacdive/build_bacdive_from_cache.py --config bacdive/build_from_cache.yaml
+    python scripts/bacdive/build_bacdive_from_cache.py --target metabolite_utilization
+    python scripts/bacdive/build_bacdive_from_cache.py --limit 100
 """
 
 from __future__ import annotations
@@ -23,7 +23,17 @@ import logging
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+def _find_root(start: Path) -> Path:
+    """Ascend from ``start`` to the directory containing ``pyproject.toml``."""
+    for parent in [start, *start.parents]:
+        if (parent / "pyproject.toml").exists():
+            return parent
+    return start.parents[2]
+
+
+ROOT = _find_root(Path(__file__).resolve())
+sys.path.insert(0, str(ROOT))
 
 from src.bacdive import config, pipeline
 from src.strain_metadata.logging_setup import setup_logging
