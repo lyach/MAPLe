@@ -1,0 +1,1213 @@
+date,exp_id,strain,media,temp,atmosphere,growth,confidence
+20260325,aerobic_a_25,bacillus subtilis,lb,25,aerobic,yes,high
+20260325,aerobic_a_25,bacillus subtilis,mb,25,aerobic,yes,high
+20260325,aerobic_a_25,bacillus subtilis,nb,25,aerobic,yes,high
+20260325,aerobic_a_25,bacillus subtilis,bhi,25,aerobic,yes,high
+20260325,aerobic_a_25,bacillus subtilis,mrs,25,aerobic,yes,medium
+20260325,aerobic_a_25,bacillus subtilis,thy,25,aerobic,yes,high
+20260325,aerobic_a_25,bacillus subtilis,tsb,25,aerobic,yes,high
+20260325,aerobic_a_25,bacillus subtilis,gifu,25,aerobic,yes,high
+20260325,aerobic_a_25,bacillus subtilis,mrc,25,aerobic,yes,high
+20260325,aerobic_a_25,bacillus subtilis,cdm,25,aerobic,yes,high
+20260325,aerobic_a_25,bacillus subtilis,m9,25,aerobic,yes,high
+20260325,aerobic_a_25,bacillus subtilis,water,25,aerobic,no,high
+20260325,aerobic_a_25,bifidobacterium animalis,lb,25,aerobic,no,high
+20260325,aerobic_a_25,bifidobacterium animalis,mb,25,aerobic,yes,medium
+20260325,aerobic_a_25,bifidobacterium animalis,nb,25,aerobic,no,high
+20260325,aerobic_a_25,bifidobacterium animalis,bhi,25,aerobic,yes,medium
+20260325,aerobic_a_25,bifidobacterium animalis,mrs,25,aerobic,no,high
+20260325,aerobic_a_25,bifidobacterium animalis,thy,25,aerobic,yes,high
+20260325,aerobic_a_25,bifidobacterium animalis,tsb,25,aerobic,yes,medium
+20260325,aerobic_a_25,bifidobacterium animalis,gifu,25,aerobic,no,high
+20260325,aerobic_a_25,bifidobacterium animalis,mrc,25,aerobic,yes,medium
+20260325,aerobic_a_25,bifidobacterium animalis,cdm,25,aerobic,yes,medium
+20260325,aerobic_a_25,bifidobacterium animalis,m9,25,aerobic,no,high
+20260325,aerobic_a_25,bifidobacterium animalis,water,25,aerobic,no,high
+20260325,aerobic_a_25,corynebacterium glutamicum,lb,25,aerobic,yes,high
+20260325,aerobic_a_25,corynebacterium glutamicum,mb,25,aerobic,yes,medium
+20260325,aerobic_a_25,corynebacterium glutamicum,nb,25,aerobic,yes,high
+20260325,aerobic_a_25,corynebacterium glutamicum,bhi,25,aerobic,yes,high
+20260325,aerobic_a_25,corynebacterium glutamicum,mrs,25,aerobic,yes,high
+20260325,aerobic_a_25,corynebacterium glutamicum,thy,25,aerobic,yes,high
+20260325,aerobic_a_25,corynebacterium glutamicum,tsb,25,aerobic,yes,high
+20260325,aerobic_a_25,corynebacterium glutamicum,gifu,25,aerobic,yes,high
+20260325,aerobic_a_25,corynebacterium glutamicum,mrc,25,aerobic,yes,high
+20260325,aerobic_a_25,corynebacterium glutamicum,cdm,25,aerobic,yes,high
+20260325,aerobic_a_25,corynebacterium glutamicum,m9,25,aerobic,yes,high
+20260325,aerobic_a_25,corynebacterium glutamicum,water,25,aerobic,no,high
+20260325,aerobic_a_25,escherichia coli bl21,lb,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli bl21,mb,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli bl21,nb,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli bl21,bhi,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli bl21,mrs,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli bl21,thy,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli bl21,tsb,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli bl21,gifu,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli bl21,mrc,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli bl21,cdm,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli bl21,m9,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli bl21,water,25,aerobic,no,high
+20260325,aerobic_a_25,escherichia coli k12,lb,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli k12,mb,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli k12,nb,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli k12,bhi,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli k12,mrs,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli k12,thy,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli k12,tsb,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli k12,gifu,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli k12,mrc,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli k12,cdm,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli k12,m9,25,aerobic,yes,high
+20260325,aerobic_a_25,escherichia coli k12,water,25,aerobic,no,high
+20260325,aerobic_a_25,pseudomonas putida,lb,25,aerobic,yes,high
+20260325,aerobic_a_25,pseudomonas putida,mb,25,aerobic,yes,high
+20260325,aerobic_a_25,pseudomonas putida,nb,25,aerobic,yes,high
+20260325,aerobic_a_25,pseudomonas putida,bhi,25,aerobic,yes,high
+20260325,aerobic_a_25,pseudomonas putida,mrs,25,aerobic,yes,yes
+20260325,aerobic_a_25,pseudomonas putida,thy,25,aerobic,yes,high
+20260325,aerobic_a_25,pseudomonas putida,tsb,25,aerobic,yes,high
+20260325,aerobic_a_25,pseudomonas putida,gifu,25,aerobic,yes,high
+20260325,aerobic_a_25,pseudomonas putida,mrc,25,aerobic,yes,high
+20260325,aerobic_a_25,pseudomonas putida,cdm,25,aerobic,yes,high
+20260325,aerobic_a_25,pseudomonas putida,m9,25,aerobic,yes,high
+20260325,aerobic_a_25,pseudomonas putida,water,25,aerobic,no,high
+20260325,aerobic_a_25,streptococcus thermophilus,lb,25,aerobic,no,high
+20260325,aerobic_a_25,streptococcus thermophilus,mb,25,aerobic,yes,medium
+20260325,aerobic_a_25,streptococcus thermophilus,nb,25,aerobic,no,high
+20260325,aerobic_a_25,streptococcus thermophilus,bhi,25,aerobic,no,high
+20260325,aerobic_a_25,streptococcus thermophilus,mrs,25,aerobic,yes,medium
+20260325,aerobic_a_25,streptococcus thermophilus,thy,25,aerobic,yes,low
+20260325,aerobic_a_25,streptococcus thermophilus,tsb,25,aerobic,no,low
+20260325,aerobic_a_25,streptococcus thermophilus,gifu,25,aerobic,no,low
+20260325,aerobic_a_25,streptococcus thermophilus,mrc,25,aerobic,yes,low
+20260325,aerobic_a_25,streptococcus thermophilus,cdm,25,aerobic,no,medium
+20260325,aerobic_a_25,streptococcus thermophilus,m9,25,aerobic,no,medium
+20260325,aerobic_a_25,streptococcus thermophilus,water,25,aerobic,no,high
+20260325,aerobic_a_37,bacillus subtilis,lb,37,aerobic,yes,high
+20260325,aerobic_a_37,bacillus subtilis,mb,37,aerobic,yes,high
+20260325,aerobic_a_37,bacillus subtilis,nb,37,aerobic,yes,high
+20260325,aerobic_a_37,bacillus subtilis,bhi,37,aerobic,yes,high
+20260325,aerobic_a_37,bacillus subtilis,mrs,37,aerobic,yes,high
+20260325,aerobic_a_37,bacillus subtilis,thy,37,aerobic,yes,high
+20260325,aerobic_a_37,bacillus subtilis,tsb,37,aerobic,yes,high
+20260325,aerobic_a_37,bacillus subtilis,gifu,37,aerobic,yes,high
+20260325,aerobic_a_37,bacillus subtilis,mrc,37,aerobic,yes,high
+20260325,aerobic_a_37,bacillus subtilis,cdm,37,aerobic,yes,high
+20260325,aerobic_a_37,bacillus subtilis,m9,37,aerobic,yes,high
+20260325,aerobic_a_37,bacillus subtilis,water,37,aerobic,no,high
+20260325,aerobic_a_37,bifidobacterium animalis,lb,37,aerobic,no,high
+20260325,aerobic_a_37,bifidobacterium animalis,mb,37,aerobic,yes,medium
+20260325,aerobic_a_37,bifidobacterium animalis,nb,37,aerobic,no,high
+20260325,aerobic_a_37,bifidobacterium animalis,bhi,37,aerobic,yes,high
+20260325,aerobic_a_37,bifidobacterium animalis,mrs,37,aerobic,yes,high
+20260325,aerobic_a_37,bifidobacterium animalis,thy,37,aerobic,yes,high
+20260325,aerobic_a_37,bifidobacterium animalis,tsb,37,aerobic,yes,high
+20260325,aerobic_a_37,bifidobacterium animalis,gifu,37,aerobic,no,high
+20260325,aerobic_a_37,bifidobacterium animalis,mrc,37,aerobic,yes,high
+20260325,aerobic_a_37,bifidobacterium animalis,cdm,37,aerobic,yes,high
+20260325,aerobic_a_37,bifidobacterium animalis,m9,37,aerobic,no,high
+20260325,aerobic_a_37,bifidobacterium animalis,water,37,aerobic,no,high
+20260325,aerobic_a_37,corynebacterium glutamicum,lb,37,aerobic,yes,high
+20260325,aerobic_a_37,corynebacterium glutamicum,mb,37,aerobic,yes,medium
+20260325,aerobic_a_37,corynebacterium glutamicum,nb,37,aerobic,yes,high
+20260325,aerobic_a_37,corynebacterium glutamicum,bhi,37,aerobic,yes,high
+20260325,aerobic_a_37,corynebacterium glutamicum,mrs,37,aerobic,yes,high
+20260325,aerobic_a_37,corynebacterium glutamicum,thy,37,aerobic,yes,high
+20260325,aerobic_a_37,corynebacterium glutamicum,tsb,37,aerobic,yes,high
+20260325,aerobic_a_37,corynebacterium glutamicum,gifu,37,aerobic,yes,high
+20260325,aerobic_a_37,corynebacterium glutamicum,mrc,37,aerobic,yes,high
+20260325,aerobic_a_37,corynebacterium glutamicum,cdm,37,aerobic,yes,high
+20260325,aerobic_a_37,corynebacterium glutamicum,m9,37,aerobic,yes,high
+20260325,aerobic_a_37,corynebacterium glutamicum,water,37,aerobic,no,high
+20260325,aerobic_a_37,escherichia coli bl21,lb,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli bl21,mb,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli bl21,nb,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli bl21,bhi,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli bl21,mrs,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli bl21,thy,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli bl21,tsb,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli bl21,gifu,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli bl21,mrc,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli bl21,cdm,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli bl21,m9,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli bl21,water,37,aerobic,no,high
+20260325,aerobic_a_37,escherichia coli k12,lb,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli k12,mb,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli k12,nb,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli k12,bhi,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli k12,mrs,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli k12,thy,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli k12,tsb,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli k12,gifu,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli k12,mrc,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli k12,cdm,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli k12,m9,37,aerobic,yes,high
+20260325,aerobic_a_37,escherichia coli k12,water,37,aerobic,no,high
+20260325,aerobic_a_37,pseudomonas putida,lb,37,aerobic,yes,high
+20260325,aerobic_a_37,pseudomonas putida,mb,37,aerobic,yes,high
+20260325,aerobic_a_37,pseudomonas putida,nb,37,aerobic,yes,high
+20260325,aerobic_a_37,pseudomonas putida,bhi,37,aerobic,yes,high
+20260325,aerobic_a_37,pseudomonas putida,mrs,37,aerobic,yes,medium
+20260325,aerobic_a_37,pseudomonas putida,thy,37,aerobic,yes,high
+20260325,aerobic_a_37,pseudomonas putida,tsb,37,aerobic,yes,high
+20260325,aerobic_a_37,pseudomonas putida,gifu,37,aerobic,yes,high
+20260325,aerobic_a_37,pseudomonas putida,mrc,37,aerobic,yes,high
+20260325,aerobic_a_37,pseudomonas putida,cdm,37,aerobic,yes,high
+20260325,aerobic_a_37,pseudomonas putida,m9,37,aerobic,yes,high
+20260325,aerobic_a_37,pseudomonas putida,water,37,aerobic,no,high
+20260325,aerobic_a_37,streptococcus thermophilus,lb,37,aerobic,no,low
+20260325,aerobic_a_37,streptococcus thermophilus,mb,37,aerobic,yes,high
+20260325,aerobic_a_37,streptococcus thermophilus,nb,37,aerobic,no,high
+20260325,aerobic_a_37,streptococcus thermophilus,bhi,37,aerobic,yes,high
+20260325,aerobic_a_37,streptococcus thermophilus,mrs,37,aerobic,yes,high
+20260325,aerobic_a_37,streptococcus thermophilus,thy,37,aerobic,yes,high
+20260325,aerobic_a_37,streptococcus thermophilus,tsb,37,aerobic,no,medium
+20260325,aerobic_a_37,streptococcus thermophilus,gifu,37,aerobic,yes,high
+20260325,aerobic_a_37,streptococcus thermophilus,mrc,37,aerobic,yes,medium
+20260325,aerobic_a_37,streptococcus thermophilus,cdm,37,aerobic,yes,medium
+20260325,aerobic_a_37,streptococcus thermophilus,m9,37,aerobic,no,low
+20260325,aerobic_a_37,streptococcus thermophilus,water,37,aerobic,no,high
+20260408,aerobic_b_25,acetobacter pasteurianus,lb,25,aerobic,yes,high
+20260408,aerobic_b_25,acetobacter pasteurianus,mb,25,aerobic,yes,medium
+20260408,aerobic_b_25,acetobacter pasteurianus,nb,25,aerobic,yes,high
+20260408,aerobic_b_25,acetobacter pasteurianus,bhi,25,aerobic,yes,high
+20260408,aerobic_b_25,acetobacter pasteurianus,mrs,25,aerobic,yes,high
+20260408,aerobic_b_25,acetobacter pasteurianus,thy,25,aerobic,yes,medium
+20260408,aerobic_b_25,acetobacter pasteurianus,tsb,25,aerobic,yes,medium
+20260408,aerobic_b_25,acetobacter pasteurianus,gifu,25,aerobic,yes,high
+20260408,aerobic_b_25,acetobacter pasteurianus,mrc,25,aerobic,yes,high
+20260408,aerobic_b_25,acetobacter pasteurianus,cdm,25,aerobic,yes,high
+20260408,aerobic_b_25,acetobacter pasteurianus,m9,25,aerobic,no,medium
+20260408,aerobic_b_25,acetobacter pasteurianus,water,25,aerobic,no,high
+20260408,aerobic_b_25,acinetobacter baylyi,lb,25,aerobic,yes,high
+20260408,aerobic_b_25,acinetobacter baylyi,mb,25,aerobic,yes,high
+20260408,aerobic_b_25,acinetobacter baylyi,nb,25,aerobic,yes,high
+20260408,aerobic_b_25,acinetobacter baylyi,bhi,25,aerobic,yes,high
+20260408,aerobic_b_25,acinetobacter baylyi,mrs,25,aerobic,yes,high
+20260408,aerobic_b_25,acinetobacter baylyi,thy,25,aerobic,yes,high
+20260408,aerobic_b_25,acinetobacter baylyi,tsb,25,aerobic,yes,high
+20260408,aerobic_b_25,acinetobacter baylyi,gifu,25,aerobic,yes,high
+20260408,aerobic_b_25,acinetobacter baylyi,mrc,25,aerobic,yes,high
+20260408,aerobic_b_25,acinetobacter baylyi,cdm,25,aerobic,yes,high
+20260408,aerobic_b_25,acinetobacter baylyi,m9,25,aerobic,yes,high
+20260408,aerobic_b_25,acinetobacter baylyi,water,25,aerobic,no,high
+20260408,aerobic_b_25,arthrobacter globiformis,lb,25,aerobic,yes,high
+20260408,aerobic_b_25,arthrobacter globiformis,mb,25,aerobic,yes,high
+20260408,aerobic_b_25,arthrobacter globiformis,nb,25,aerobic,yes,high
+20260408,aerobic_b_25,arthrobacter globiformis,bhi,25,aerobic,yes,high
+20260408,aerobic_b_25,arthrobacter globiformis,mrs,25,aerobic,no,high
+20260408,aerobic_b_25,arthrobacter globiformis,thy,25,aerobic,yes,high
+20260408,aerobic_b_25,arthrobacter globiformis,tsb,25,aerobic,yes,high
+20260408,aerobic_b_25,arthrobacter globiformis,gifu,25,aerobic,yes,high
+20260408,aerobic_b_25,arthrobacter globiformis,mrc,25,aerobic,yes,high
+20260408,aerobic_b_25,arthrobacter globiformis,cdm,25,aerobic,yes,high
+20260408,aerobic_b_25,arthrobacter globiformis,m9,25,aerobic,yes,high
+20260408,aerobic_b_25,arthrobacter globiformis,water,25,aerobic,no,high
+20260408,aerobic_b_25,bacillus subtilis,lb,25,aerobic,yes,high
+20260408,aerobic_b_25,bacillus subtilis,mb,25,aerobic,yes,high
+20260408,aerobic_b_25,bacillus subtilis,nb,25,aerobic,yes,high
+20260408,aerobic_b_25,bacillus subtilis,bhi,25,aerobic,yes,high
+20260408,aerobic_b_25,bacillus subtilis,mrs,25,aerobic,no,high
+20260408,aerobic_b_25,bacillus subtilis,thy,25,aerobic,yes,high
+20260408,aerobic_b_25,bacillus subtilis,tsb,25,aerobic,yes,high
+20260408,aerobic_b_25,bacillus subtilis,gifu,25,aerobic,yes,high
+20260408,aerobic_b_25,bacillus subtilis,mrc,25,aerobic,yes,high
+20260408,aerobic_b_25,bacillus subtilis,cdm,25,aerobic,yes,high
+20260408,aerobic_b_25,bacillus subtilis,m9,25,aerobic,yes,high
+20260408,aerobic_b_25,bacillus subtilis,water,25,aerobic,no,high
+20260408,aerobic_b_25,cupriavidus necator,lb,25,aerobic,yes,high
+20260408,aerobic_b_25,cupriavidus necator,mb,25,aerobic,yes,high
+20260408,aerobic_b_25,cupriavidus necator,nb,25,aerobic,yes,high
+20260408,aerobic_b_25,cupriavidus necator,bhi,25,aerobic,yes,high
+20260408,aerobic_b_25,cupriavidus necator,mrs,25,aerobic,no,high
+20260408,aerobic_b_25,cupriavidus necator,thy,25,aerobic,yes,high
+20260408,aerobic_b_25,cupriavidus necator,tsb,25,aerobic,yes,high
+20260408,aerobic_b_25,cupriavidus necator,gifu,25,aerobic,yes,high
+20260408,aerobic_b_25,cupriavidus necator,mrc,25,aerobic,yes,high
+20260408,aerobic_b_25,cupriavidus necator,cdm,25,aerobic,yes,high
+20260408,aerobic_b_25,cupriavidus necator,m9,25,aerobic,no,high
+20260408,aerobic_b_25,cupriavidus necator,water,25,aerobic,no,high
+20260408,aerobic_b_25,gluconobacter oxydans,lb,25,aerobic,no,high
+20260408,aerobic_b_25,gluconobacter oxydans,mb,25,aerobic,yes,high
+20260408,aerobic_b_25,gluconobacter oxydans,nb,25,aerobic,no,medium
+20260408,aerobic_b_25,gluconobacter oxydans,bhi,25,aerobic,yes,high
+20260408,aerobic_b_25,gluconobacter oxydans,mrs,25,aerobic,yes,high
+20260408,aerobic_b_25,gluconobacter oxydans,thy,25,aerobic,no,medium
+20260408,aerobic_b_25,gluconobacter oxydans,tsb,25,aerobic,yes,high
+20260408,aerobic_b_25,gluconobacter oxydans,gifu,25,aerobic,yes,high
+20260408,aerobic_b_25,gluconobacter oxydans,mrc,25,aerobic,yes,high
+20260408,aerobic_b_25,gluconobacter oxydans,cdm,25,aerobic,yes,high
+20260408,aerobic_b_25,gluconobacter oxydans,m9,25,aerobic,no,medium
+20260408,aerobic_b_25,gluconobacter oxydans,water,25,aerobic,no,high
+20260408,aerobic_b_25,priestia megaterium,lb,25,aerobic,yes,high
+20260408,aerobic_b_25,priestia megaterium,mb,25,aerobic,yes,high
+20260408,aerobic_b_25,priestia megaterium,nb,25,aerobic,yes,high
+20260408,aerobic_b_25,priestia megaterium,bhi,25,aerobic,yes,high
+20260408,aerobic_b_25,priestia megaterium,mrs,25,aerobic,no,high
+20260408,aerobic_b_25,priestia megaterium,thy,25,aerobic,yes,high
+20260408,aerobic_b_25,priestia megaterium,tsb,25,aerobic,yes,high
+20260408,aerobic_b_25,priestia megaterium,gifu,25,aerobic,yes,high
+20260408,aerobic_b_25,priestia megaterium,mrc,25,aerobic,yes,high
+20260408,aerobic_b_25,priestia megaterium,cdm,25,aerobic,yes,high
+20260408,aerobic_b_25,priestia megaterium,m9,25,aerobic,yes,high
+20260408,aerobic_b_25,priestia megaterium,water,25,aerobic,no,high
+20260417,aerobic_b_37,acetobacter pasteurianus,lb,37,aerobic,yes,medium
+20260417,aerobic_b_37,acetobacter pasteurianus,mb,37,aerobic,yes,medium
+20260417,aerobic_b_37,acetobacter pasteurianus,nb,37,aerobic,yes,high
+20260417,aerobic_b_37,acetobacter pasteurianus,bhi,37,aerobic,yes,medium
+20260417,aerobic_b_37,acetobacter pasteurianus,mrs,37,aerobic,yes,high
+20260417,aerobic_b_37,acetobacter pasteurianus,thy,37,aerobic,no,medium
+20260417,aerobic_b_37,acetobacter pasteurianus,tsb,37,aerobic,yes,medium
+20260417,aerobic_b_37,acetobacter pasteurianus,gifu,37,aerobic,yes,low
+20260417,aerobic_b_37,acetobacter pasteurianus,mrc,37,aerobic,yes,high
+20260417,aerobic_b_37,acetobacter pasteurianus,cdm,37,aerobic,yes,high
+20260417,aerobic_b_37,acetobacter pasteurianus,m9,37,aerobic,no,medium
+20260417,aerobic_b_37,acetobacter pasteurianus,water,37,aerobic,no,high
+20260417,aerobic_b_37,acinetobacter baylyi,lb,37,aerobic,yes,high
+20260417,aerobic_b_37,acinetobacter baylyi,mb,37,aerobic,yes,high
+20260417,aerobic_b_37,acinetobacter baylyi,nb,37,aerobic,yes,high
+20260417,aerobic_b_37,acinetobacter baylyi,bhi,37,aerobic,yes,high
+20260417,aerobic_b_37,acinetobacter baylyi,mrs,37,aerobic,yes,high
+20260417,aerobic_b_37,acinetobacter baylyi,thy,37,aerobic,yes,high
+20260417,aerobic_b_37,acinetobacter baylyi,tsb,37,aerobic,yes,high
+20260417,aerobic_b_37,acinetobacter baylyi,gifu,37,aerobic,yes,high
+20260417,aerobic_b_37,acinetobacter baylyi,mrc,37,aerobic,yes,high
+20260417,aerobic_b_37,acinetobacter baylyi,cdm,37,aerobic,yes,high
+20260417,aerobic_b_37,acinetobacter baylyi,m9,37,aerobic,yes,high
+20260417,aerobic_b_37,acinetobacter baylyi,water,37,aerobic,no,high
+20260417,aerobic_b_37,arthrobacter globiformis,lb,37,aerobic,yes,high
+20260417,aerobic_b_37,arthrobacter globiformis,mb,37,aerobic,yes,high
+20260417,aerobic_b_37,arthrobacter globiformis,nb,37,aerobic,no,medium
+20260417,aerobic_b_37,arthrobacter globiformis,bhi,37,aerobic,yes,high
+20260417,aerobic_b_37,arthrobacter globiformis,mrs,37,aerobic,no,high
+20260417,aerobic_b_37,arthrobacter globiformis,thy,37,aerobic,yes,high
+20260417,aerobic_b_37,arthrobacter globiformis,tsb,37,aerobic,yes,high
+20260417,aerobic_b_37,arthrobacter globiformis,gifu,37,aerobic,yes,high
+20260417,aerobic_b_37,arthrobacter globiformis,mrc,37,aerobic,yes,high
+20260417,aerobic_b_37,arthrobacter globiformis,cdm,37,aerobic,yes,high
+20260417,aerobic_b_37,arthrobacter globiformis,m9,37,aerobic,yes,high
+20260417,aerobic_b_37,arthrobacter globiformis,water,37,aerobic,no,high
+20260417,aerobic_b_37,bacillus subtilis,lb,37,aerobic,yes,high
+20260417,aerobic_b_37,bacillus subtilis,mb,37,aerobic,yes,high
+20260417,aerobic_b_37,bacillus subtilis,nb,37,aerobic,yes,high
+20260417,aerobic_b_37,bacillus subtilis,bhi,37,aerobic,yes,high
+20260417,aerobic_b_37,bacillus subtilis,mrs,37,aerobic,yes,high
+20260417,aerobic_b_37,bacillus subtilis,thy,37,aerobic,yes,high
+20260417,aerobic_b_37,bacillus subtilis,tsb,37,aerobic,yes,high
+20260417,aerobic_b_37,bacillus subtilis,gifu,37,aerobic,yes,high
+20260417,aerobic_b_37,bacillus subtilis,mrc,37,aerobic,yes,high
+20260417,aerobic_b_37,bacillus subtilis,cdm,37,aerobic,yes,high
+20260417,aerobic_b_37,bacillus subtilis,m9,37,aerobic,yes,high
+20260417,aerobic_b_37,bacillus subtilis,water,37,aerobic,no,high
+20260417,aerobic_b_37,cupriavidus necator,lb,37,aerobic,yes,high
+20260417,aerobic_b_37,cupriavidus necator,mb,37,aerobic,yes,medium
+20260417,aerobic_b_37,cupriavidus necator,nb,37,aerobic,yes,high
+20260417,aerobic_b_37,cupriavidus necator,bhi,37,aerobic,yes,high
+20260417,aerobic_b_37,cupriavidus necator,mrs,37,aerobic,no,high
+20260417,aerobic_b_37,cupriavidus necator,thy,37,aerobic,yes,high
+20260417,aerobic_b_37,cupriavidus necator,tsb,37,aerobic,yes,high
+20260417,aerobic_b_37,cupriavidus necator,gifu,37,aerobic,yes,high
+20260417,aerobic_b_37,cupriavidus necator,mrc,37,aerobic,yes,high
+20260417,aerobic_b_37,cupriavidus necator,cdm,37,aerobic,yes,high
+20260417,aerobic_b_37,cupriavidus necator,m9,37,aerobic,no,high
+20260417,aerobic_b_37,cupriavidus necator,water,37,aerobic,no,high
+20260417,aerobic_b_37,gluconobacter oxydans,lb,37,aerobic,no,high
+20260417,aerobic_b_37,gluconobacter oxydans,mb,37,aerobic,yes,high
+20260417,aerobic_b_37,gluconobacter oxydans,nb,37,aerobic,no,high
+20260417,aerobic_b_37,gluconobacter oxydans,bhi,37,aerobic,no,high
+20260417,aerobic_b_37,gluconobacter oxydans,mrs,37,aerobic,yes,high
+20260417,aerobic_b_37,gluconobacter oxydans,thy,37,aerobic,no,high
+20260417,aerobic_b_37,gluconobacter oxydans,tsb,37,aerobic,no,high
+20260417,aerobic_b_37,gluconobacter oxydans,gifu,37,aerobic,no,low
+20260417,aerobic_b_37,gluconobacter oxydans,mrc,37,aerobic,yes,medium
+20260417,aerobic_b_37,gluconobacter oxydans,cdm,37,aerobic,yes,medium
+20260417,aerobic_b_37,gluconobacter oxydans,m9,37,aerobic,no,low
+20260417,aerobic_b_37,gluconobacter oxydans,water,37,aerobic,no,high
+20260417,aerobic_b_37,priestia megaterium,lb,37,aerobic,yes,high
+20260417,aerobic_b_37,priestia megaterium,mb,37,aerobic,yes,high
+20260417,aerobic_b_37,priestia megaterium,nb,37,aerobic,yes,high
+20260417,aerobic_b_37,priestia megaterium,bhi,37,aerobic,yes,high
+20260417,aerobic_b_37,priestia megaterium,mrs,37,aerobic,yes,high
+20260417,aerobic_b_37,priestia megaterium,thy,37,aerobic,yes,high
+20260417,aerobic_b_37,priestia megaterium,tsb,37,aerobic,yes,high
+20260417,aerobic_b_37,priestia megaterium,gifu,37,aerobic,yes,high
+20260417,aerobic_b_37,priestia megaterium,mrc,37,aerobic,yes,high
+20260417,aerobic_b_37,priestia megaterium,cdm,37,aerobic,yes,high
+20260417,aerobic_b_37,priestia megaterium,m9,37,aerobic,yes,high
+20260417,aerobic_b_37,priestia megaterium,water,37,aerobic,no,high
+20260408,aerobic_c_25,acetobacter aceti,lb,25,aerobic,no,low
+20260408,aerobic_c_25,acetobacter aceti,mb,25,aerobic,no,low
+20260408,aerobic_c_25,acetobacter aceti,nb,25,aerobic,no,low
+20260408,aerobic_c_25,acetobacter aceti,bhi,25,aerobic,yes,high
+20260408,aerobic_c_25,acetobacter aceti,mrs,25,aerobic,yes,high
+20260408,aerobic_c_25,acetobacter aceti,thy,25,aerobic,yes,high
+20260408,aerobic_c_25,acetobacter aceti,tsb,25,aerobic,no,low
+20260408,aerobic_c_25,acetobacter aceti,gifu,25,aerobic,no,medium
+20260408,aerobic_c_25,acetobacter aceti,mrc,25,aerobic,yes,medium
+20260408,aerobic_c_25,acetobacter aceti,cdm,25,aerobic,yes,low
+20260408,aerobic_c_25,acetobacter aceti,m9,25,aerobic,no,high
+20260408,aerobic_c_25,acetobacter aceti,water,25,aerobic,no,high
+20260408,aerobic_c_25,azotobacter vinelandii,lb,25,aerobic,yes,high
+20260408,aerobic_c_25,azotobacter vinelandii,mb,25,aerobic,yes,high
+20260408,aerobic_c_25,azotobacter vinelandii,nb,25,aerobic,yes,high
+20260408,aerobic_c_25,azotobacter vinelandii,bhi,25,aerobic,yes,high
+20260408,aerobic_c_25,azotobacter vinelandii,mrs,25,aerobic,no,high
+20260408,aerobic_c_25,azotobacter vinelandii,thy,25,aerobic,yes,high
+20260408,aerobic_c_25,azotobacter vinelandii,tsb,25,aerobic,yes,high
+20260408,aerobic_c_25,azotobacter vinelandii,gifu,25,aerobic,yes,high
+20260408,aerobic_c_25,azotobacter vinelandii,mrc,25,aerobic,yes,high
+20260408,aerobic_c_25,azotobacter vinelandii,cdm,25,aerobic,yes,high
+20260408,aerobic_c_25,azotobacter vinelandii,m9,25,aerobic,yes,high
+20260408,aerobic_c_25,azotobacter vinelandii,water,25,aerobic,no,high
+20260408,aerobic_c_25,caulobacter vibrioides,lb,25,aerobic,no,low
+20260408,aerobic_c_25,caulobacter vibrioides,mb,25,aerobic,yes,low
+20260408,aerobic_c_25,caulobacter vibrioides,nb,25,aerobic,no,low
+20260408,aerobic_c_25,caulobacter vibrioides,bhi,25,aerobic,no,low
+20260408,aerobic_c_25,caulobacter vibrioides,mrs,25,aerobic,no,low
+20260408,aerobic_c_25,caulobacter vibrioides,thy,25,aerobic,no,low
+20260408,aerobic_c_25,caulobacter vibrioides,tsb,25,aerobic,no,low
+20260408,aerobic_c_25,caulobacter vibrioides,gifu,25,aerobic,no,low
+20260408,aerobic_c_25,caulobacter vibrioides,mrc,25,aerobic,no,low
+20260408,aerobic_c_25,caulobacter vibrioides,cdm,25,aerobic,yes,low
+20260408,aerobic_c_25,caulobacter vibrioides,m9,25,aerobic,no,low
+20260408,aerobic_c_25,caulobacter vibrioides,water,25,aerobic,no,low
+20260408,aerobic_c_25,deinococcus radiodurans,lb,25,aerobic,yes,high
+20260408,aerobic_c_25,deinococcus radiodurans,mb,25,aerobic,yes,low
+20260408,aerobic_c_25,deinococcus radiodurans,nb,25,aerobic,yes,high
+20260408,aerobic_c_25,deinococcus radiodurans,bhi,25,aerobic,yes,high
+20260408,aerobic_c_25,deinococcus radiodurans,mrs,25,aerobic,no,high
+20260408,aerobic_c_25,deinococcus radiodurans,thy,25,aerobic,yes,high
+20260408,aerobic_c_25,deinococcus radiodurans,tsb,25,aerobic,yes,high
+20260408,aerobic_c_25,deinococcus radiodurans,gifu,25,aerobic,yes,high
+20260408,aerobic_c_25,deinococcus radiodurans,mrc,25,aerobic,yes,high
+20260408,aerobic_c_25,deinococcus radiodurans,cdm,25,aerobic,yes,high
+20260408,aerobic_c_25,deinococcus radiodurans,m9,25,aerobic,no,high
+20260408,aerobic_c_25,deinococcus radiodurans,water,25,aerobic,no,high
+20260408,aerobic_c_25,kocuria rhizophila,lb,25,aerobic,yes,low
+20260408,aerobic_c_25,kocuria rhizophila,mb,25,aerobic,yes,low
+20260408,aerobic_c_25,kocuria rhizophila,nb,25,aerobic,yes,low
+20260408,aerobic_c_25,kocuria rhizophila,bhi,25,aerobic,yes,low
+20260408,aerobic_c_25,kocuria rhizophila,mrs,25,aerobic,yes,low
+20260408,aerobic_c_25,kocuria rhizophila,thy,25,aerobic,yes,low
+20260408,aerobic_c_25,kocuria rhizophila,tsb,25,aerobic,yes,low
+20260408,aerobic_c_25,kocuria rhizophila,gifu,25,aerobic,yes,low
+20260408,aerobic_c_25,kocuria rhizophila,mrc,25,aerobic,yes,low
+20260408,aerobic_c_25,kocuria rhizophila,cdm,25,aerobic,yes,low
+20260408,aerobic_c_25,kocuria rhizophila,m9,25,aerobic,yes,low
+20260408,aerobic_c_25,kocuria rhizophila,water,25,aerobic,no,high
+20260408,aerobic_c_25,micrococcus luteus,lb,25,aerobic,yes,low
+20260408,aerobic_c_25,micrococcus luteus,mb,25,aerobic,yes,low
+20260408,aerobic_c_25,micrococcus luteus,nb,25,aerobic,no,medium
+20260408,aerobic_c_25,micrococcus luteus,bhi,25,aerobic,yes,high
+20260408,aerobic_c_25,micrococcus luteus,mrs,25,aerobic,no,high
+20260408,aerobic_c_25,micrococcus luteus,thy,25,aerobic,yes,high
+20260408,aerobic_c_25,micrococcus luteus,tsb,25,aerobic,yes,high
+20260408,aerobic_c_25,micrococcus luteus,gifu,25,aerobic,no,high
+20260408,aerobic_c_25,micrococcus luteus,mrc,25,aerobic,yes,high
+20260408,aerobic_c_25,micrococcus luteus,cdm,25,aerobic,yes,high
+20260408,aerobic_c_25,micrococcus luteus,m9,25,aerobic,no,high
+20260408,aerobic_c_25,micrococcus luteus,water,25,aerobic,no,high
+20260408,aerobic_c_25,paracoccus denitrificans,lb,25,aerobic,yes,high
+20260408,aerobic_c_25,paracoccus denitrificans,mb,25,aerobic,yes,high
+20260408,aerobic_c_25,paracoccus denitrificans,nb,25,aerobic,no,high
+20260408,aerobic_c_25,paracoccus denitrificans,bhi,25,aerobic,yes,high
+20260408,aerobic_c_25,paracoccus denitrificans,mrs,25,aerobic,no,high
+20260408,aerobic_c_25,paracoccus denitrificans,thy,25,aerobic,yes,high
+20260408,aerobic_c_25,paracoccus denitrificans,tsb,25,aerobic,yes,high
+20260408,aerobic_c_25,paracoccus denitrificans,gifu,25,aerobic,no,high
+20260408,aerobic_c_25,paracoccus denitrificans,mrc,25,aerobic,yes,high
+20260408,aerobic_c_25,paracoccus denitrificans,cdm,25,aerobic,yes,high
+20260408,aerobic_c_25,paracoccus denitrificans,m9,25,aerobic,yes,high
+20260408,aerobic_c_25,paracoccus denitrificans,water,25,aerobic,no,high
+20260417,aerobic_c_37,acetobacter aceti,lb,37,aerobic,no,low
+20260417,aerobic_c_37,acetobacter aceti,mb,37,aerobic,no,low
+20260417,aerobic_c_37,acetobacter aceti,nb,37,aerobic,no,low
+20260417,aerobic_c_37,acetobacter aceti,bhi,37,aerobic,no,low
+20260417,aerobic_c_37,acetobacter aceti,mrs,37,aerobic,yes,medium
+20260417,aerobic_c_37,acetobacter aceti,thy,37,aerobic,no,low
+20260417,aerobic_c_37,acetobacter aceti,tsb,37,aerobic,no,low
+20260417,aerobic_c_37,acetobacter aceti,gifu,37,aerobic,no,low
+20260417,aerobic_c_37,acetobacter aceti,mrc,37,aerobic,no,low
+20260417,aerobic_c_37,acetobacter aceti,cdm,37,aerobic,no,low
+20260417,aerobic_c_37,acetobacter aceti,m9,37,aerobic,no,low
+20260417,aerobic_c_37,acetobacter aceti,water,37,aerobic,no,medium
+20260417,aerobic_c_37,azotobacter vinelandii,lb,37,aerobic,yes,medium
+20260417,aerobic_c_37,azotobacter vinelandii,mb,37,aerobic,yes,low
+20260417,aerobic_c_37,azotobacter vinelandii,nb,37,aerobic,no,high
+20260417,aerobic_c_37,azotobacter vinelandii,bhi,37,aerobic,no,high
+20260417,aerobic_c_37,azotobacter vinelandii,mrs,37,aerobic,no,high
+20260417,aerobic_c_37,azotobacter vinelandii,thy,37,aerobic,no,high
+20260417,aerobic_c_37,azotobacter vinelandii,tsb,37,aerobic,yes,high
+20260417,aerobic_c_37,azotobacter vinelandii,gifu,37,aerobic,no,high
+20260417,aerobic_c_37,azotobacter vinelandii,mrc,37,aerobic,yes,high
+20260417,aerobic_c_37,azotobacter vinelandii,cdm,37,aerobic,no,medium
+20260417,aerobic_c_37,azotobacter vinelandii,m9,37,aerobic,yes,high
+20260417,aerobic_c_37,azotobacter vinelandii,water,37,aerobic,no,high
+20260417,aerobic_c_37,caulobacter vibrioides,lb,37,aerobic,no,low
+20260417,aerobic_c_37,caulobacter vibrioides,mb,37,aerobic,no,low
+20260417,aerobic_c_37,caulobacter vibrioides,nb,37,aerobic,no,low
+20260417,aerobic_c_37,caulobacter vibrioides,bhi,37,aerobic,no,low
+20260417,aerobic_c_37,caulobacter vibrioides,mrs,37,aerobic,no,low
+20260417,aerobic_c_37,caulobacter vibrioides,thy,37,aerobic,no,low
+20260417,aerobic_c_37,caulobacter vibrioides,tsb,37,aerobic,no,low
+20260417,aerobic_c_37,caulobacter vibrioides,gifu,37,aerobic,no,low
+20260417,aerobic_c_37,caulobacter vibrioides,mrc,37,aerobic,no,low
+20260417,aerobic_c_37,caulobacter vibrioides,cdm,37,aerobic,yes,low
+20260417,aerobic_c_37,caulobacter vibrioides,m9,37,aerobic,no,low
+20260417,aerobic_c_37,caulobacter vibrioides,water,37,aerobic,no,low
+20260417,aerobic_c_37,deinococcus radiodurans,lb,37,aerobic,no,low
+20260417,aerobic_c_37,deinococcus radiodurans,mb,37,aerobic,no,low
+20260417,aerobic_c_37,deinococcus radiodurans,nb,37,aerobic,no,low
+20260417,aerobic_c_37,deinococcus radiodurans,bhi,37,aerobic,yes,high
+20260417,aerobic_c_37,deinococcus radiodurans,mrs,37,aerobic,no,low
+20260417,aerobic_c_37,deinococcus radiodurans,thy,37,aerobic,yes,high
+20260417,aerobic_c_37,deinococcus radiodurans,tsb,37,aerobic,yes,high
+20260417,aerobic_c_37,deinococcus radiodurans,gifu,37,aerobic,no,low
+20260417,aerobic_c_37,deinococcus radiodurans,mrc,37,aerobic,yes,high
+20260417,aerobic_c_37,deinococcus radiodurans,cdm,37,aerobic,no,low
+20260417,aerobic_c_37,deinococcus radiodurans,m9,37,aerobic,no,low
+20260417,aerobic_c_37,deinococcus radiodurans,water,37,aerobic,no,high
+20260417,aerobic_c_37,kocuria rhizophila,lb,37,aerobic,yes,high
+20260417,aerobic_c_37,kocuria rhizophila,mb,37,aerobic,yes,high
+20260417,aerobic_c_37,kocuria rhizophila,nb,37,aerobic,yes,high
+20260417,aerobic_c_37,kocuria rhizophila,bhi,37,aerobic,yes,high
+20260417,aerobic_c_37,kocuria rhizophila,mrs,37,aerobic,yes,high
+20260417,aerobic_c_37,kocuria rhizophila,thy,37,aerobic,yes,high
+20260417,aerobic_c_37,kocuria rhizophila,tsb,37,aerobic,yes,high
+20260417,aerobic_c_37,kocuria rhizophila,gifu,37,aerobic,yes,high
+20260417,aerobic_c_37,kocuria rhizophila,mrc,37,aerobic,yes,high
+20260417,aerobic_c_37,kocuria rhizophila,cdm,37,aerobic,yes,high
+20260417,aerobic_c_37,kocuria rhizophila,m9,37,aerobic,yes,high
+20260417,aerobic_c_37,kocuria rhizophila,water,37,aerobic,no,high
+20260417,aerobic_c_37,micrococcus luteus,lb,37,aerobic,yes,high
+20260417,aerobic_c_37,micrococcus luteus,mb,37,aerobic,yes,high
+20260417,aerobic_c_37,micrococcus luteus,nb,37,aerobic,yes,high
+20260417,aerobic_c_37,micrococcus luteus,bhi,37,aerobic,yes,high
+20260417,aerobic_c_37,micrococcus luteus,mrs,37,aerobic,yes,high
+20260417,aerobic_c_37,micrococcus luteus,thy,37,aerobic,yes,high
+20260417,aerobic_c_37,micrococcus luteus,tsb,37,aerobic,yes,high
+20260417,aerobic_c_37,micrococcus luteus,gifu,37,aerobic,yes,high
+20260417,aerobic_c_37,micrococcus luteus,mrc,37,aerobic,yes,high
+20260417,aerobic_c_37,micrococcus luteus,cdm,37,aerobic,yes,high
+20260417,aerobic_c_37,micrococcus luteus,m9,37,aerobic,no,high
+20260417,aerobic_c_37,micrococcus luteus,water,37,aerobic,no,high
+20260417,aerobic_c_37,paracoccus denitrificans,lb,37,aerobic,yes,high
+20260417,aerobic_c_37,paracoccus denitrificans,mb,37,aerobic,yes,high
+20260417,aerobic_c_37,paracoccus denitrificans,nb,37,aerobic,yes,high
+20260417,aerobic_c_37,paracoccus denitrificans,bhi,37,aerobic,yes,high
+20260417,aerobic_c_37,paracoccus denitrificans,mrs,37,aerobic,no,medium
+20260417,aerobic_c_37,paracoccus denitrificans,thy,37,aerobic,yes,high
+20260417,aerobic_c_37,paracoccus denitrificans,tsb,37,aerobic,yes,high
+20260417,aerobic_c_37,paracoccus denitrificans,gifu,37,aerobic,yes,high
+20260417,aerobic_c_37,paracoccus denitrificans,mrc,37,aerobic,yes,high
+20260417,aerobic_c_37,paracoccus denitrificans,cdm,37,aerobic,yes,high
+20260417,aerobic_c_37,paracoccus denitrificans,m9,37,aerobic,yes,high
+20260417,aerobic_c_37,paracoccus denitrificans,water,37,aerobic,no,high
+20260512,aerobic_d_25,clostridium sporogenes,lb,25,aerobic,no,high
+20260512,aerobic_d_25,clostridium sporogenes,mb,25,aerobic,no,high
+20260512,aerobic_d_25,clostridium sporogenes,nb,25,aerobic,no,high
+20260512,aerobic_d_25,clostridium sporogenes,bhi,25,aerobic,no,high
+20260512,aerobic_d_25,clostridium sporogenes,mrs,25,aerobic,no,high
+20260512,aerobic_d_25,clostridium sporogenes,thy,25,aerobic,no,high
+20260512,aerobic_d_25,clostridium sporogenes,tsb,25,aerobic,no,high
+20260512,aerobic_d_25,clostridium sporogenes,gifu,25,aerobic,no,high
+20260512,aerobic_d_25,clostridium sporogenes,mrc,25,aerobic,no,high
+20260512,aerobic_d_25,clostridium sporogenes,cdm,25,aerobic,no,high
+20260512,aerobic_d_25,clostridium sporogenes,m9,25,aerobic,no,high
+20260512,aerobic_d_25,clostridium sporogenes,water,25,aerobic,no,high
+20260512,aerobic_d_25,komagataeibacter xylinus,lb,25,aerobic,no,low
+20260512,aerobic_d_25,komagataeibacter xylinus,mb,25,aerobic,no,low
+20260512,aerobic_d_25,komagataeibacter xylinus,nb,25,aerobic,no,low
+20260512,aerobic_d_25,komagataeibacter xylinus,bhi,25,aerobic,no,low
+20260512,aerobic_d_25,komagataeibacter xylinus,mrs,25,aerobic,yes,high
+20260512,aerobic_d_25,komagataeibacter xylinus,thy,25,aerobic,no,low
+20260512,aerobic_d_25,komagataeibacter xylinus,tsb,25,aerobic,no,low
+20260512,aerobic_d_25,komagataeibacter xylinus,gifu,25,aerobic,no,low
+20260512,aerobic_d_25,komagataeibacter xylinus,mrc,25,aerobic,no,low
+20260512,aerobic_d_25,komagataeibacter xylinus,cdm,25,aerobic,no,low
+20260512,aerobic_d_25,komagataeibacter xylinus,m9,25,aerobic,no,low
+20260512,aerobic_d_25,komagataeibacter xylinus,water,25,aerobic,no,high
+20260512,aerobic_d_25,lactiplantibacillus plantarum,lb,25,aerobic,yes,medium
+20260512,aerobic_d_25,lactiplantibacillus plantarum,mb,25,aerobic,no,high
+20260512,aerobic_d_25,lactiplantibacillus plantarum,nb,25,aerobic,no,high
+20260512,aerobic_d_25,lactiplantibacillus plantarum,bhi,25,aerobic,yes,high
+20260512,aerobic_d_25,lactiplantibacillus plantarum,mrs,25,aerobic,yes,high
+20260512,aerobic_d_25,lactiplantibacillus plantarum,thy,25,aerobic,yes,high
+20260512,aerobic_d_25,lactiplantibacillus plantarum,tsb,25,aerobic,yes,high
+20260512,aerobic_d_25,lactiplantibacillus plantarum,gifu,25,aerobic,yes,high
+20260512,aerobic_d_25,lactiplantibacillus plantarum,mrc,25,aerobic,yes,high
+20260512,aerobic_d_25,lactiplantibacillus plantarum,cdm,25,aerobic,yes,high
+20260512,aerobic_d_25,lactiplantibacillus plantarum,m9,25,aerobic,no,high
+20260512,aerobic_d_25,lactiplantibacillus plantarum,water,25,aerobic,no,high
+20260512,aerobic_d_25,lactobacillus acidophilus,lb,25,aerobic,no,high
+20260512,aerobic_d_25,lactobacillus acidophilus,mb,25,aerobic,no,high
+20260512,aerobic_d_25,lactobacillus acidophilus,nb,25,aerobic,no,high
+20260512,aerobic_d_25,lactobacillus acidophilus,bhi,25,aerobic,no,high
+20260512,aerobic_d_25,lactobacillus acidophilus,mrs,25,aerobic,yes,medium
+20260512,aerobic_d_25,lactobacillus acidophilus,thy,25,aerobic,no,high
+20260512,aerobic_d_25,lactobacillus acidophilus,tsb,25,aerobic,no,high
+20260512,aerobic_d_25,lactobacillus acidophilus,gifu,25,aerobic,no,high
+20260512,aerobic_d_25,lactobacillus acidophilus,mrc,25,aerobic,yes,medium
+20260512,aerobic_d_25,lactobacillus acidophilus,cdm,25,aerobic,no,high
+20260512,aerobic_d_25,lactobacillus acidophilus,m9,25,aerobic,no,high
+20260512,aerobic_d_25,lactobacillus acidophilus,water,25,aerobic,no,high
+20260512,aerobic_d_25,other,lb,25,aerobic,no,low
+20260512,aerobic_d_25,other,mb,25,aerobic,yes,low
+20260512,aerobic_d_25,other,nb,25,aerobic,yes,low
+20260512,aerobic_d_25,other,bhi,25,aerobic,no,low
+20260512,aerobic_d_25,other,mrs,25,aerobic,yes,low
+20260512,aerobic_d_25,other,thy,25,aerobic,no,low
+20260512,aerobic_d_25,other,tsb,25,aerobic,yes,low
+20260512,aerobic_d_25,other,gifu,25,aerobic,yes,low
+20260512,aerobic_d_25,other,mrc,25,aerobic,yes,low
+20260512,aerobic_d_25,other,cdm,25,aerobic,no,low
+20260512,aerobic_d_25,other,m9,25,aerobic,no,low
+20260512,aerobic_d_25,other,water,25,aerobic,no,low
+20260512,aerobic_d_25,pediococcus acidilactici,lb,25,aerobic,yes,high
+20260512,aerobic_d_25,pediococcus acidilactici,mb,25,aerobic,no,high
+20260512,aerobic_d_25,pediococcus acidilactici,nb,25,aerobic,yes,high
+20260512,aerobic_d_25,pediococcus acidilactici,bhi,25,aerobic,yes,high
+20260512,aerobic_d_25,pediococcus acidilactici,mrs,25,aerobic,yes,high
+20260512,aerobic_d_25,pediococcus acidilactici,thy,25,aerobic,yes,high
+20260512,aerobic_d_25,pediococcus acidilactici,tsb,25,aerobic,yes,high
+20260512,aerobic_d_25,pediococcus acidilactici,gifu,25,aerobic,yes,high
+20260512,aerobic_d_25,pediococcus acidilactici,mrc,25,aerobic,yes,high
+20260512,aerobic_d_25,pediococcus acidilactici,cdm,25,aerobic,no,high
+20260512,aerobic_d_25,pediococcus acidilactici,m9,25,aerobic,no,high
+20260512,aerobic_d_25,pediococcus acidilactici,water,25,aerobic,no,high
+20260512,aerobic_d_37,clostridium sporogenes,lb,37,aerobic,no,high
+20260512,aerobic_d_37,clostridium sporogenes,mb,37,aerobic,no,high
+20260512,aerobic_d_37,clostridium sporogenes,nb,37,aerobic,no,high
+20260512,aerobic_d_37,clostridium sporogenes,bhi,37,aerobic,no,high
+20260512,aerobic_d_37,clostridium sporogenes,mrs,37,aerobic,no,high
+20260512,aerobic_d_37,clostridium sporogenes,thy,37,aerobic,no,high
+20260512,aerobic_d_37,clostridium sporogenes,tsb,37,aerobic,no,high
+20260512,aerobic_d_37,clostridium sporogenes,gifu,37,aerobic,no,high
+20260512,aerobic_d_37,clostridium sporogenes,mrc,37,aerobic,no,high
+20260512,aerobic_d_37,clostridium sporogenes,cdm,37,aerobic,no,high
+20260512,aerobic_d_37,clostridium sporogenes,m9,37,aerobic,no,high
+20260512,aerobic_d_37,clostridium sporogenes,water,37,aerobic,no,high
+20260512,aerobic_d_37,komagataeibacter xylinus,lb,37,aerobic,no,low
+20260512,aerobic_d_37,komagataeibacter xylinus,mb,37,aerobic,no,low
+20260512,aerobic_d_37,komagataeibacter xylinus,nb,37,aerobic,no,low
+20260512,aerobic_d_37,komagataeibacter xylinus,bhi,37,aerobic,no,low
+20260512,aerobic_d_37,komagataeibacter xylinus,mrs,37,aerobic,no,low
+20260512,aerobic_d_37,komagataeibacter xylinus,thy,37,aerobic,no,low
+20260512,aerobic_d_37,komagataeibacter xylinus,tsb,37,aerobic,no,low
+20260512,aerobic_d_37,komagataeibacter xylinus,gifu,37,aerobic,no,low
+20260512,aerobic_d_37,komagataeibacter xylinus,mrc,37,aerobic,no,low
+20260512,aerobic_d_37,komagataeibacter xylinus,cdm,37,aerobic,no,low
+20260512,aerobic_d_37,komagataeibacter xylinus,m9,37,aerobic,no,low
+20260512,aerobic_d_37,komagataeibacter xylinus,water,37,aerobic,no,low
+20260512,aerobic_d_37,lactiplantibacillus plantarum,lb,37,aerobic,no,low
+20260512,aerobic_d_37,lactiplantibacillus plantarum,mb,37,aerobic,no,high
+20260512,aerobic_d_37,lactiplantibacillus plantarum,nb,37,aerobic,now,low
+20260512,aerobic_d_37,lactiplantibacillus plantarum,bhi,37,aerobic,yes,high
+20260512,aerobic_d_37,lactiplantibacillus plantarum,mrs,37,aerobic,yes,high
+20260512,aerobic_d_37,lactiplantibacillus plantarum,thy,37,aerobic,yes,high
+20260512,aerobic_d_37,lactiplantibacillus plantarum,tsb,37,aerobic,yes,high
+20260512,aerobic_d_37,lactiplantibacillus plantarum,gifu,37,aerobic,yes,high
+20260512,aerobic_d_37,lactiplantibacillus plantarum,mrc,37,aerobic,yes,high
+20260512,aerobic_d_37,lactiplantibacillus plantarum,cdm,37,aerobic,yes,high
+20260512,aerobic_d_37,lactiplantibacillus plantarum,m9,37,aerobic,no,high
+20260512,aerobic_d_37,lactiplantibacillus plantarum,water,37,aerobic,no,high
+20260512,aerobic_d_37,lactobacillus acidophilus,lb,37,aerobic,no,high
+20260512,aerobic_d_37,lactobacillus acidophilus,mb,37,aerobic,no,high
+20260512,aerobic_d_37,lactobacillus acidophilus,nb,37,aerobic,no,high
+20260512,aerobic_d_37,lactobacillus acidophilus,bhi,37,aerobic,yes,high
+20260512,aerobic_d_37,lactobacillus acidophilus,mrs,37,aerobic,yes,high
+20260512,aerobic_d_37,lactobacillus acidophilus,thy,37,aerobic,no,high
+20260512,aerobic_d_37,lactobacillus acidophilus,tsb,37,aerobic,no,high
+20260512,aerobic_d_37,lactobacillus acidophilus,gifu,37,aerobic,no,high
+20260512,aerobic_d_37,lactobacillus acidophilus,mrc,37,aerobic,yes,high
+20260512,aerobic_d_37,lactobacillus acidophilus,cdm,37,aerobic,no,high
+20260512,aerobic_d_37,lactobacillus acidophilus,m9,37,aerobic,no,high
+20260512,aerobic_d_37,lactobacillus acidophilus,water,37,aerobic,no,high
+20260512,aerobic_d_37,other,lb,37,aerobic,no,low
+20260512,aerobic_d_37,other,mb,37,aerobic,yes,low
+20260512,aerobic_d_37,other,nb,37,aerobic,no,low
+20260512,aerobic_d_37,other,bhi,37,aerobic,no,low
+20260512,aerobic_d_37,other,mrs,37,aerobic,yes,low
+20260512,aerobic_d_37,other,thy,37,aerobic,no,low
+20260512,aerobic_d_37,other,tsb,37,aerobic,no,low
+20260512,aerobic_d_37,other,gifu,37,aerobic,yes,low
+20260512,aerobic_d_37,other,mrc,37,aerobic,no,low
+20260512,aerobic_d_37,other,cdm,37,aerobic,no,low
+20260512,aerobic_d_37,other,m9,37,aerobic,no,low
+20260512,aerobic_d_37,other,water,37,aerobic,no,low
+20260512,aerobic_d_37,pediococcus acidilactici,lb,37,aerobic,yes,high
+20260512,aerobic_d_37,pediococcus acidilactici,mb,37,aerobic,no,high
+20260512,aerobic_d_37,pediococcus acidilactici,nb,37,aerobic,yes,low
+20260512,aerobic_d_37,pediococcus acidilactici,bhi,37,aerobic,yes,high
+20260512,aerobic_d_37,pediococcus acidilactici,mrs,37,aerobic,yes,high
+20260512,aerobic_d_37,pediococcus acidilactici,thy,37,aerobic,yes,high
+20260512,aerobic_d_37,pediococcus acidilactici,tsb,37,aerobic,yes,high
+20260512,aerobic_d_37,pediococcus acidilactici,gifu,37,aerobic,yes,high
+20260512,aerobic_d_37,pediococcus acidilactici,mrc,37,aerobic,yes,high
+20260512,aerobic_d_37,pediococcus acidilactici,cdm,37,aerobic,yes,high
+20260512,aerobic_d_37,pediococcus acidilactici,m9,37,aerobic,no,high
+20260512,aerobic_d_37,pediococcus acidilactici,water,37,aerobic,no,high
+20260325,anaerobic_a_37,bacillus subtilis,lb,37,anaerobic,no,high
+20260325,anaerobic_a_37,bacillus subtilis,mb,37,anaerobic,no,high
+20260325,anaerobic_a_37,bacillus subtilis,nb,37,anaerobic,no,high
+20260325,anaerobic_a_37,bacillus subtilis,bhi,37,anaerobic,yes,high
+20260325,anaerobic_a_37,bacillus subtilis,mrs,37,anaerobic,no,high
+20260325,anaerobic_a_37,bacillus subtilis,thy,37,anaerobic,yes,high
+20260325,anaerobic_a_37,bacillus subtilis,tsb,37,anaerobic,yes,high
+20260325,anaerobic_a_37,bacillus subtilis,gifu,37,anaerobic,yes,high
+20260325,anaerobic_a_37,bacillus subtilis,mrc,37,anaerobic,yes,high
+20260325,anaerobic_a_37,bacillus subtilis,cdm,37,anaerobic,yes,high
+20260325,anaerobic_a_37,bacillus subtilis,m9,37,anaerobic,yes,low
+20260325,anaerobic_a_37,bacillus subtilis,water,37,anaerobic,no,high
+20260325,anaerobic_a_37,bifidobacterium animalis,lb,37,anaerobic,no,high
+20260325,anaerobic_a_37,bifidobacterium animalis,mb,37,anaerobic,no,high
+20260325,anaerobic_a_37,bifidobacterium animalis,nb,37,anaerobic,no,high
+20260325,anaerobic_a_37,bifidobacterium animalis,bhi,37,anaerobic,yes,high
+20260325,anaerobic_a_37,bifidobacterium animalis,mrs,37,anaerobic,yes,low
+20260325,anaerobic_a_37,bifidobacterium animalis,thy,37,anaerobic,yes,high
+20260325,anaerobic_a_37,bifidobacterium animalis,tsb,37,anaerobic,yes,high
+20260325,anaerobic_a_37,bifidobacterium animalis,gifu,37,anaerobic,no,high
+20260325,anaerobic_a_37,bifidobacterium animalis,mrc,37,anaerobic,yes,high
+20260325,anaerobic_a_37,bifidobacterium animalis,cdm,37,anaerobic,yes,low
+20260325,anaerobic_a_37,bifidobacterium animalis,m9,37,anaerobic,no,low
+20260325,anaerobic_a_37,bifidobacterium animalis,water,37,anaerobic,no,high
+20260325,anaerobic_a_37,corynebacterium glutamicum,lb,37,anaerobic,yes,high
+20260325,anaerobic_a_37,corynebacterium glutamicum,mb,37,anaerobic,no,low
+20260325,anaerobic_a_37,corynebacterium glutamicum,nb,37,anaerobic,no,low
+20260325,anaerobic_a_37,corynebacterium glutamicum,bhi,37,anaerobic,yes,high
+20260325,anaerobic_a_37,corynebacterium glutamicum,mrs,37,anaerobic,yes,medium
+20260325,anaerobic_a_37,corynebacterium glutamicum,thy,37,anaerobic,yes,high
+20260325,anaerobic_a_37,corynebacterium glutamicum,tsb,37,anaerobic,yes,high
+20260325,anaerobic_a_37,corynebacterium glutamicum,gifu,37,anaerobic,yes,high
+20260325,anaerobic_a_37,corynebacterium glutamicum,mrc,37,anaerobic,yes,high
+20260325,anaerobic_a_37,corynebacterium glutamicum,cdm,37,anaerobic,yes,high
+20260325,anaerobic_a_37,corynebacterium glutamicum,m9,37,anaerobic,yes,high
+20260325,anaerobic_a_37,corynebacterium glutamicum,water,37,anaerobic,no,high
+20260325,anaerobic_a_37,escherichia coli bl21,lb,37,anaerobic,yes,high
+20260325,anaerobic_a_37,escherichia coli bl21,mb,37,anaerobic,yes,low
+20260325,anaerobic_a_37,escherichia coli bl21,nb,37,anaerobic,yes,low
+20260325,anaerobic_a_37,escherichia coli bl21,bhi,37,anaerobic,yes,high
+20260325,anaerobic_a_37,escherichia coli bl21,mrs,37,anaerobic,no,medium
+20260325,anaerobic_a_37,escherichia coli bl21,thy,37,anaerobic,yes,high
+20260325,anaerobic_a_37,escherichia coli bl21,tsb,37,anaerobic,yes,high
+20260325,anaerobic_a_37,escherichia coli bl21,gifu,37,anaerobic,yes,high
+20260325,anaerobic_a_37,escherichia coli bl21,mrc,37,anaerobic,yes,high
+20260325,anaerobic_a_37,escherichia coli bl21,cdm,37,anaerobic,yes,high
+20260325,anaerobic_a_37,escherichia coli bl21,m9,37,anaerobic,yes,high
+20260325,anaerobic_a_37,escherichia coli bl21,water,37,anaerobic,no,high
+20260325,anaerobic_a_37,escherichia coli k12,lb,37,anaerobic,yes,high
+20260325,anaerobic_a_37,escherichia coli k12,mb,37,anaerobic,yes,low
+20260325,anaerobic_a_37,escherichia coli k12,nb,37,anaerobic,no,low
+20260325,anaerobic_a_37,escherichia coli k12,bhi,37,anaerobic,yes,high
+20260325,anaerobic_a_37,escherichia coli k12,mrs,37,anaerobic,yes,low
+20260325,anaerobic_a_37,escherichia coli k12,thy,37,anaerobic,yes,high
+20260325,anaerobic_a_37,escherichia coli k12,tsb,37,anaerobic,yes,high
+20260325,anaerobic_a_37,escherichia coli k12,gifu,37,anaerobic,yes,high
+20260325,anaerobic_a_37,escherichia coli k12,mrc,37,anaerobic,yes,high
+20260325,anaerobic_a_37,escherichia coli k12,cdm,37,anaerobic,yes,high
+20260325,anaerobic_a_37,escherichia coli k12,m9,37,anaerobic,yes,high
+20260325,anaerobic_a_37,escherichia coli k12,water,37,anaerobic,no,high
+20260325,anaerobic_a_37,pseudomonas putida,lb,37,anaerobic,no,low
+20260325,anaerobic_a_37,pseudomonas putida,mb,37,anaerobic,no,low
+20260325,anaerobic_a_37,pseudomonas putida,nb,37,anaerobic,no,low
+20260325,anaerobic_a_37,pseudomonas putida,bhi,37,anaerobic,yes,medium
+20260325,anaerobic_a_37,pseudomonas putida,mrs,37,anaerobic,yes,medium
+20260325,anaerobic_a_37,pseudomonas putida,thy,37,anaerobic,yes,medium
+20260325,anaerobic_a_37,pseudomonas putida,tsb,37,anaerobic,yes,medium
+20260325,anaerobic_a_37,pseudomonas putida,gifu,37,anaerobic,no,low
+20260325,anaerobic_a_37,pseudomonas putida,mrc,37,anaerobic,yes,low
+20260325,anaerobic_a_37,pseudomonas putida,cdm,37,anaerobic,no,low
+20260325,anaerobic_a_37,pseudomonas putida,m9,37,anaerobic,no,low
+20260325,anaerobic_a_37,pseudomonas putida,water,37,anaerobic,no,high
+20260325,anaerobic_a_37,streptococcus thermophilus,lb,37,anaerobic,no,high
+20260325,anaerobic_a_37,streptococcus thermophilus,mb,37,anaerobic,no,high
+20260325,anaerobic_a_37,streptococcus thermophilus,nb,37,anaerobic,no,high
+20260325,anaerobic_a_37,streptococcus thermophilus,bhi,37,anaerobic,yes,high
+20260325,anaerobic_a_37,streptococcus thermophilus,mrs,37,anaerobic,yes,high
+20260325,anaerobic_a_37,streptococcus thermophilus,thy,37,anaerobic,yes,high
+20260325,anaerobic_a_37,streptococcus thermophilus,tsb,37,anaerobic,yes,high
+20260325,anaerobic_a_37,streptococcus thermophilus,gifu,37,anaerobic,yes,high
+20260325,anaerobic_a_37,streptococcus thermophilus,mrc,37,anaerobic,yes,high
+20260325,anaerobic_a_37,streptococcus thermophilus,cdm,37,anaerobic,yes,high
+20260325,anaerobic_a_37,streptococcus thermophilus,m9,37,anaerobic,no,low
+20260325,anaerobic_a_37,streptococcus thermophilus,water,37,anaerobic,no,high
+20260408,anaerobic_b_37,acetobacter pasteurianus,lb,37,anaerobic,no,high
+20260408,anaerobic_b_37,acetobacter pasteurianus,mb,37,anaerobic,yes,high
+20260408,anaerobic_b_37,acetobacter pasteurianus,nb,37,anaerobic,no,high
+20260408,anaerobic_b_37,acetobacter pasteurianus,bhi,37,anaerobic,no,low
+20260408,anaerobic_b_37,acetobacter pasteurianus,mrs,37,anaerobic,yes,high
+20260408,anaerobic_b_37,acetobacter pasteurianus,thy,37,anaerobic,no,low
+20260408,anaerobic_b_37,acetobacter pasteurianus,tsb,37,anaerobic,yes,medium
+20260408,anaerobic_b_37,acetobacter pasteurianus,gifu,37,anaerobic,yes,low
+20260408,anaerobic_b_37,acetobacter pasteurianus,mrc,37,anaerobic,no,low
+20260408,anaerobic_b_37,acetobacter pasteurianus,cdm,37,anaerobic,yes,medium
+20260408,anaerobic_b_37,acetobacter pasteurianus,m9,37,anaerobic,yes,medium
+20260408,anaerobic_b_37,acetobacter pasteurianus,water,37,anaerobic,no,high
+20260408,anaerobic_b_37,acinetobacter baylyi,lb,37,anaerobic,no,medium
+20260408,anaerobic_b_37,acinetobacter baylyi,mb,37,anaerobic,no,medium
+20260408,anaerobic_b_37,acinetobacter baylyi,nb,37,anaerobic,no,medium
+20260408,anaerobic_b_37,acinetobacter baylyi,bhi,37,anaerobic,no,medium
+20260408,anaerobic_b_37,acinetobacter baylyi,mrs,37,anaerobic,no,medium
+20260408,anaerobic_b_37,acinetobacter baylyi,thy,37,anaerobic,no,medium
+20260408,anaerobic_b_37,acinetobacter baylyi,tsb,37,anaerobic,no,medium
+20260408,anaerobic_b_37,acinetobacter baylyi,gifu,37,anaerobic,no,medium
+20260408,anaerobic_b_37,acinetobacter baylyi,mrc,37,anaerobic,no,medium
+20260408,anaerobic_b_37,acinetobacter baylyi,cdm,37,anaerobic,no,low
+20260408,anaerobic_b_37,acinetobacter baylyi,m9,37,anaerobic,no,medium
+20260408,anaerobic_b_37,acinetobacter baylyi,water,37,anaerobic,no,medium
+20260408,anaerobic_b_37,arthrobacter globiformis,lb,37,anaerobic,no,low
+20260408,anaerobic_b_37,arthrobacter globiformis,mb,37,anaerobic,no,low
+20260408,anaerobic_b_37,arthrobacter globiformis,nb,37,anaerobic,no,low
+20260408,anaerobic_b_37,arthrobacter globiformis,bhi,37,anaerobic,no,low
+20260408,anaerobic_b_37,arthrobacter globiformis,mrs,37,anaerobic,no,low
+20260408,anaerobic_b_37,arthrobacter globiformis,thy,37,anaerobic,no,low
+20260408,anaerobic_b_37,arthrobacter globiformis,tsb,37,anaerobic,no,low
+20260408,anaerobic_b_37,arthrobacter globiformis,gifu,37,anaerobic,no,low
+20260408,anaerobic_b_37,arthrobacter globiformis,mrc,37,anaerobic,no,low
+20260408,anaerobic_b_37,arthrobacter globiformis,cdm,37,anaerobic,yes,low
+20260408,anaerobic_b_37,arthrobacter globiformis,m9,37,anaerobic,yes,low
+20260408,anaerobic_b_37,arthrobacter globiformis,water,37,anaerobic,no,high
+20260408,anaerobic_b_37,bacillus subtilis,lb,37,anaerobic,yes,high
+20260408,anaerobic_b_37,bacillus subtilis,mb,37,anaerobic,no,high
+20260408,anaerobic_b_37,bacillus subtilis,nb,37,anaerobic,no,high
+20260408,anaerobic_b_37,bacillus subtilis,bhi,37,anaerobic,yes,high
+20260408,anaerobic_b_37,bacillus subtilis,mrs,37,anaerobic,no,high
+20260408,anaerobic_b_37,bacillus subtilis,thy,37,anaerobic,yes,high
+20260408,anaerobic_b_37,bacillus subtilis,tsb,37,anaerobic,yes,high
+20260408,anaerobic_b_37,bacillus subtilis,gifu,37,anaerobic,yes,high
+20260408,anaerobic_b_37,bacillus subtilis,mrc,37,anaerobic,no,high
+20260408,anaerobic_b_37,bacillus subtilis,cdm,37,anaerobic,yes,high
+20260408,anaerobic_b_37,bacillus subtilis,m9,37,anaerobic,no,high
+20260408,anaerobic_b_37,bacillus subtilis,water,37,anaerobic,no,high
+20260408,anaerobic_b_37,cupriavidus necator,lb,37,anaerobic,no,medium
+20260408,anaerobic_b_37,cupriavidus necator,mb,37,anaerobic,yes,low
+20260408,anaerobic_b_37,cupriavidus necator,nb,37,anaerobic,no,high
+20260408,anaerobic_b_37,cupriavidus necator,bhi,37,anaerobic,no,high
+20260408,anaerobic_b_37,cupriavidus necator,mrs,37,anaerobic,no,high
+20260408,anaerobic_b_37,cupriavidus necator,thy,37,anaerobic,no,high
+20260408,anaerobic_b_37,cupriavidus necator,tsb,37,anaerobic,no,high
+20260408,anaerobic_b_37,cupriavidus necator,gifu,37,anaerobic,no,high
+20260408,anaerobic_b_37,cupriavidus necator,mrc,37,anaerobic,no,high
+20260408,anaerobic_b_37,cupriavidus necator,cdm,37,anaerobic,no,high
+20260408,anaerobic_b_37,cupriavidus necator,m9,37,anaerobic,yes,low
+20260408,anaerobic_b_37,cupriavidus necator,water,37,anaerobic,no,medium
+20260408,anaerobic_b_37,gluconobacter oxydans,lb,37,anaerobic,no,medium
+20260408,anaerobic_b_37,gluconobacter oxydans,mb,37,anaerobic,no,medium
+20260408,anaerobic_b_37,gluconobacter oxydans,nb,37,anaerobic,no,medium
+20260408,anaerobic_b_37,gluconobacter oxydans,bhi,37,anaerobic,no,medium
+20260408,anaerobic_b_37,gluconobacter oxydans,mrs,37,anaerobic,yes,low
+20260408,anaerobic_b_37,gluconobacter oxydans,thy,37,anaerobic,no,medium
+20260408,anaerobic_b_37,gluconobacter oxydans,tsb,37,anaerobic,no,medium
+20260408,anaerobic_b_37,gluconobacter oxydans,gifu,37,anaerobic,no,medium
+20260408,anaerobic_b_37,gluconobacter oxydans,mrc,37,anaerobic,no,medium
+20260408,anaerobic_b_37,gluconobacter oxydans,cdm,37,anaerobic,no,medium
+20260408,anaerobic_b_37,gluconobacter oxydans,m9,37,anaerobic,yes,low
+20260408,anaerobic_b_37,gluconobacter oxydans,water,37,anaerobic,no,medium
+20260408,anaerobic_b_37,priestia megaterium,lb,37,anaerobic,no,low
+20260408,anaerobic_b_37,priestia megaterium,mb,37,anaerobic,no,low
+20260408,anaerobic_b_37,priestia megaterium,nb,37,anaerobic,no,low
+20260408,anaerobic_b_37,priestia megaterium,bhi,37,anaerobic,no,low
+20260408,anaerobic_b_37,priestia megaterium,mrs,37,anaerobic,no,low
+20260408,anaerobic_b_37,priestia megaterium,thy,37,anaerobic,no,low
+20260408,anaerobic_b_37,priestia megaterium,tsb,37,anaerobic,no,low
+20260408,anaerobic_b_37,priestia megaterium,gifu,37,anaerobic,no,low
+20260408,anaerobic_b_37,priestia megaterium,mrc,37,anaerobic,no,low
+20260408,anaerobic_b_37,priestia megaterium,cdm,37,anaerobic,no,low
+20260408,anaerobic_b_37,priestia megaterium,m9,37,anaerobic,no,low
+20260408,anaerobic_b_37,priestia megaterium,water,37,anaerobic,no,medium
+20260408,anaerobic_c_37,acetobacter aceti,lb,37,anaerobic,no,medium
+20260408,anaerobic_c_37,acetobacter aceti,mb,37,anaerobic,no,medium
+20260408,anaerobic_c_37,acetobacter aceti,nb,37,anaerobic,yes,low
+20260408,anaerobic_c_37,acetobacter aceti,bhi,37,anaerobic,yes,low
+20260408,anaerobic_c_37,acetobacter aceti,mrs,37,anaerobic,yes,low
+20260408,anaerobic_c_37,acetobacter aceti,thy,37,anaerobic,no,medium
+20260408,anaerobic_c_37,acetobacter aceti,tsb,37,anaerobic,no,low
+20260408,anaerobic_c_37,acetobacter aceti,gifu,37,anaerobic,yes,low
+20260408,anaerobic_c_37,acetobacter aceti,mrc,37,anaerobic,yes,low
+20260408,anaerobic_c_37,acetobacter aceti,cdm,37,anaerobic,yes,low
+20260408,anaerobic_c_37,acetobacter aceti,m9,37,anaerobic,yes,low
+20260408,anaerobic_c_37,acetobacter aceti,water,37,anaerobic,no,high
+20260408,anaerobic_c_37,azotobacter vinelandii,lb,37,anaerobic,no,high
+20260408,anaerobic_c_37,azotobacter vinelandii,mb,37,anaerobic,yes,low
+20260408,anaerobic_c_37,azotobacter vinelandii,nb,37,anaerobic,yes,low
+20260408,anaerobic_c_37,azotobacter vinelandii,bhi,37,anaerobic,yes,low
+20260408,anaerobic_c_37,azotobacter vinelandii,mrs,37,anaerobic,yes,low
+20260408,anaerobic_c_37,azotobacter vinelandii,thy,37,anaerobic,yes,low
+20260408,anaerobic_c_37,azotobacter vinelandii,tsb,37,anaerobic,yes,low
+20260408,anaerobic_c_37,azotobacter vinelandii,gifu,37,anaerobic,yes,low
+20260408,anaerobic_c_37,azotobacter vinelandii,mrc,37,anaerobic,yes,low
+20260408,anaerobic_c_37,azotobacter vinelandii,cdm,37,anaerobic,yes,low
+20260408,anaerobic_c_37,azotobacter vinelandii,m9,37,anaerobic,yes,low
+20260408,anaerobic_c_37,azotobacter vinelandii,water,37,anaerobic,no,high
+20260408,anaerobic_c_37,caulobacter vibrioides,lb,37,anaerobic,no,high
+20260408,anaerobic_c_37,caulobacter vibrioides,mb,37,anaerobic,yes,low
+20260408,anaerobic_c_37,caulobacter vibrioides,nb,37,anaerobic,yes,low
+20260408,anaerobic_c_37,caulobacter vibrioides,bhi,37,anaerobic,yes,low
+20260408,anaerobic_c_37,caulobacter vibrioides,mrs,37,anaerobic,yes,low
+20260408,anaerobic_c_37,caulobacter vibrioides,thy,37,anaerobic,yes,low
+20260408,anaerobic_c_37,caulobacter vibrioides,tsb,37,anaerobic,yes,low
+20260408,anaerobic_c_37,caulobacter vibrioides,gifu,37,anaerobic,yes,low
+20260408,anaerobic_c_37,caulobacter vibrioides,mrc,37,anaerobic,yes,low
+20260408,anaerobic_c_37,caulobacter vibrioides,cdm,37,anaerobic,yes,low
+20260408,anaerobic_c_37,caulobacter vibrioides,m9,37,anaerobic,yes,low
+20260408,anaerobic_c_37,caulobacter vibrioides,water,37,anaerobic,no,high
+20260408,anaerobic_c_37,deinococcus radiodurans,lb,37,anaerobic,yes,low
+20260408,anaerobic_c_37,deinococcus radiodurans,mb,37,anaerobic,no,low
+20260408,anaerobic_c_37,deinococcus radiodurans,nb,37,anaerobic,yes,low
+20260408,anaerobic_c_37,deinococcus radiodurans,bhi,37,anaerobic,yes,low
+20260408,anaerobic_c_37,deinococcus radiodurans,mrs,37,anaerobic,yes,low
+20260408,anaerobic_c_37,deinococcus radiodurans,thy,37,anaerobic,yes,low
+20260408,anaerobic_c_37,deinococcus radiodurans,tsb,37,anaerobic,yes,low
+20260408,anaerobic_c_37,deinococcus radiodurans,gifu,37,anaerobic,no,low
+20260408,anaerobic_c_37,deinococcus radiodurans,mrc,37,anaerobic,yes,low
+20260408,anaerobic_c_37,deinococcus radiodurans,cdm,37,anaerobic,yes,low
+20260408,anaerobic_c_37,deinococcus radiodurans,m9,37,anaerobic,yes,low
+20260408,anaerobic_c_37,deinococcus radiodurans,water,37,anaerobic,no,high
+20260408,anaerobic_c_37,kocuria rhizophila,lb,37,anaerobic,yes,low
+20260408,anaerobic_c_37,kocuria rhizophila,mb,37,anaerobic,yes,low
+20260408,anaerobic_c_37,kocuria rhizophila,nb,37,anaerobic,yes,low
+20260408,anaerobic_c_37,kocuria rhizophila,bhi,37,anaerobic,yes,low
+20260408,anaerobic_c_37,kocuria rhizophila,mrs,37,anaerobic,yes,low
+20260408,anaerobic_c_37,kocuria rhizophila,thy,37,anaerobic,yes,low
+20260408,anaerobic_c_37,kocuria rhizophila,tsb,37,anaerobic,yes,low
+20260408,anaerobic_c_37,kocuria rhizophila,gifu,37,anaerobic,yes,low
+20260408,anaerobic_c_37,kocuria rhizophila,mrc,37,anaerobic,yes,low
+20260408,anaerobic_c_37,kocuria rhizophila,cdm,37,anaerobic,yes,low
+20260408,anaerobic_c_37,kocuria rhizophila,m9,37,anaerobic,yes,low
+20260408,anaerobic_c_37,kocuria rhizophila,water,37,anaerobic,no,high
+20260408,anaerobic_c_37,micrococcus luteus,lb,37,anaerobic,yes,low
+20260408,anaerobic_c_37,micrococcus luteus,mb,37,anaerobic,yes,low
+20260408,anaerobic_c_37,micrococcus luteus,nb,37,anaerobic,no,low
+20260408,anaerobic_c_37,micrococcus luteus,bhi,37,anaerobic,yes,low
+20260408,anaerobic_c_37,micrococcus luteus,mrs,37,anaerobic,yes,low
+20260408,anaerobic_c_37,micrococcus luteus,thy,37,anaerobic,yes,low
+20260408,anaerobic_c_37,micrococcus luteus,tsb,37,anaerobic,yes,low
+20260408,anaerobic_c_37,micrococcus luteus,gifu,37,anaerobic,yes,low
+20260408,anaerobic_c_37,micrococcus luteus,mrc,37,anaerobic,yes,low
+20260408,anaerobic_c_37,micrococcus luteus,cdm,37,anaerobic,yes,low
+20260408,anaerobic_c_37,micrococcus luteus,m9,37,anaerobic,yes,low
+20260408,anaerobic_c_37,micrococcus luteus,water,37,anaerobic,no,high
+20260408,anaerobic_c_37,paracoccus denitrificans,lb,37,anaerobic,no,high
+20260408,anaerobic_c_37,paracoccus denitrificans,mb,37,anaerobic,no,high
+20260408,anaerobic_c_37,paracoccus denitrificans,nb,37,anaerobic,no,high
+20260408,anaerobic_c_37,paracoccus denitrificans,bhi,37,anaerobic,no,high
+20260408,anaerobic_c_37,paracoccus denitrificans,mrs,37,anaerobic,no,high
+20260408,anaerobic_c_37,paracoccus denitrificans,thy,37,anaerobic,no,high
+20260408,anaerobic_c_37,paracoccus denitrificans,tsb,37,anaerobic,no,high
+20260408,anaerobic_c_37,paracoccus denitrificans,gifu,37,anaerobic,no,high
+20260408,anaerobic_c_37,paracoccus denitrificans,mrc,37,anaerobic,no,high
+20260408,anaerobic_c_37,paracoccus denitrificans,cdm,37,anaerobic,no,high
+20260408,anaerobic_c_37,paracoccus denitrificans,m9,37,anaerobic,no,high
+20260408,anaerobic_c_37,paracoccus denitrificans,water,37,anaerobic,no,high
+20260508,anaerobic_e_25,bacillus subtilis,lb,25,anaerobic,yes,low
+20260508,anaerobic_e_25,bacillus subtilis,mb,25,anaerobic,no,high
+20260508,anaerobic_e_25,bacillus subtilis,nb,25,anaerobic,no,high
+20260508,anaerobic_e_25,bacillus subtilis,bhi,25,anaerobic,yes,high
+20260508,anaerobic_e_25,bacillus subtilis,mrs,25,anaerobic,yes,medium
+20260508,anaerobic_e_25,bacillus subtilis,thy,25,anaerobic,yes,high
+20260508,anaerobic_e_25,bacillus subtilis,tsb,25,anaerobic,yes,high
+20260508,anaerobic_e_25,bacillus subtilis,gifu,25,anaerobic,yes,low
+20260508,anaerobic_e_25,bacillus subtilis,mrc,25,anaerobic,no,low
+20260508,anaerobic_e_25,bacillus subtilis,cdm,25,anaerobic,yes,low
+20260508,anaerobic_e_25,bacillus subtilis,m9,25,anaerobic,no,high
+20260508,anaerobic_e_25,bacillus subtilis,water,25,anaerobic,no,high
+20260508,anaerobic_e_25,bifidobacterium animalis,lb,25,anaerobic,no,low
+20260508,anaerobic_e_25,bifidobacterium animalis,mb,25,anaerobic,no,low
+20260508,anaerobic_e_25,bifidobacterium animalis,nb,25,anaerobic,no,low
+20260508,anaerobic_e_25,bifidobacterium animalis,bhi,25,anaerobic,yes,high
+20260508,anaerobic_e_25,bifidobacterium animalis,mrs,25,anaerobic,no,low
+20260508,anaerobic_e_25,bifidobacterium animalis,thy,25,anaerobic,no,low
+20260508,anaerobic_e_25,bifidobacterium animalis,tsb,25,anaerobic,no,low
+20260508,anaerobic_e_25,bifidobacterium animalis,gifu,25,anaerobic,no,low
+20260508,anaerobic_e_25,bifidobacterium animalis,mrc,25,anaerobic,no,low
+20260508,anaerobic_e_25,bifidobacterium animalis,cdm,25,anaerobic,no,low
+20260508,anaerobic_e_25,bifidobacterium animalis,m9,25,anaerobic,no,low
+20260508,anaerobic_e_25,bifidobacterium animalis,water,25,anaerobic,no,high
+20260508,anaerobic_e_25,corynebacterium glutamicum,lb,25,anaerobic,yes,low
+20260508,anaerobic_e_25,corynebacterium glutamicum,mb,25,anaerobic,yes,low
+20260508,anaerobic_e_25,corynebacterium glutamicum,nb,25,anaerobic,yes,low
+20260508,anaerobic_e_25,corynebacterium glutamicum,bhi,25,anaerobic,yes,low
+20260508,anaerobic_e_25,corynebacterium glutamicum,mrs,25,anaerobic,yes,low
+20260508,anaerobic_e_25,corynebacterium glutamicum,thy,25,anaerobic,yes,low
+20260508,anaerobic_e_25,corynebacterium glutamicum,tsb,25,anaerobic,yes,low
+20260508,anaerobic_e_25,corynebacterium glutamicum,gifu,25,anaerobic,yes,low
+20260508,anaerobic_e_25,corynebacterium glutamicum,mrc,25,anaerobic,yes,low
+20260508,anaerobic_e_25,corynebacterium glutamicum,cdm,25,anaerobic,yes,low
+20260508,anaerobic_e_25,corynebacterium glutamicum,m9,25,anaerobic,yes,low
+20260508,anaerobic_e_25,corynebacterium glutamicum,water,25,anaerobic,no,high
+20260508,anaerobic_e_25,escherichia coli bl21,lb,25,anaerobic,yes,high
+20260508,anaerobic_e_25,escherichia coli bl21,mb,25,anaerobic,yes,high
+20260508,anaerobic_e_25,escherichia coli bl21,nb,25,anaerobic,yes,low
+20260508,anaerobic_e_25,escherichia coli bl21,bhi,25,anaerobic,yes,high
+20260508,anaerobic_e_25,escherichia coli bl21,mrs,25,anaerobic,yes,low
+20260508,anaerobic_e_25,escherichia coli bl21,thy,25,anaerobic,yes,high
+20260508,anaerobic_e_25,escherichia coli bl21,tsb,25,anaerobic,yes,high
+20260508,anaerobic_e_25,escherichia coli bl21,gifu,25,anaerobic,yes,high
+20260508,anaerobic_e_25,escherichia coli bl21,mrc,25,anaerobic,yes,high
+20260508,anaerobic_e_25,escherichia coli bl21,cdm,25,anaerobic,yes,high
+20260508,anaerobic_e_25,escherichia coli bl21,m9,25,anaerobic,yes,high
+20260508,anaerobic_e_25,escherichia coli bl21,water,25,anaerobic,no,high
+20260508,anaerobic_e_25,escherichia coli k12,lb,25,anaerobic,yes,high
+20260508,anaerobic_e_25,escherichia coli k12,mb,25,anaerobic,yes,low
+20260508,anaerobic_e_25,escherichia coli k12,nb,25,anaerobic,yes,low
+20260508,anaerobic_e_25,escherichia coli k12,bhi,25,anaerobic,yes,high
+20260508,anaerobic_e_25,escherichia coli k12,mrs,25,anaerobic,yes,low
+20260508,anaerobic_e_25,escherichia coli k12,thy,25,anaerobic,yes,high
+20260508,anaerobic_e_25,escherichia coli k12,tsb,25,anaerobic,yes,high
+20260508,anaerobic_e_25,escherichia coli k12,gifu,25,anaerobic,yes,high
+20260508,anaerobic_e_25,escherichia coli k12,mrc,25,anaerobic,yes,high
+20260508,anaerobic_e_25,escherichia coli k12,cdm,25,anaerobic,yes,high
+20260508,anaerobic_e_25,escherichia coli k12,m9,25,anaerobic,yes,high
+20260508,anaerobic_e_25,escherichia coli k12,water,25,anaerobic,no,high
+20260508,anaerobic_e_25,pseudomonas putida,lb,25,anaerobic,yes,low
+20260508,anaerobic_e_25,pseudomonas putida,mb,25,anaerobic,yes,low
+20260508,anaerobic_e_25,pseudomonas putida,nb,25,anaerobic,yes,low
+20260508,anaerobic_e_25,pseudomonas putida,bhi,25,anaerobic,yes,low
+20260508,anaerobic_e_25,pseudomonas putida,mrs,25,anaerobic,yes,low
+20260508,anaerobic_e_25,pseudomonas putida,thy,25,anaerobic,yes,low
+20260508,anaerobic_e_25,pseudomonas putida,tsb,25,anaerobic,yes,low
+20260508,anaerobic_e_25,pseudomonas putida,gifu,25,anaerobic,no,high
+20260508,anaerobic_e_25,pseudomonas putida,mrc,25,anaerobic,no,high
+20260508,anaerobic_e_25,pseudomonas putida,cdm,25,anaerobic,yes,low
+20260508,anaerobic_e_25,pseudomonas putida,m9,25,anaerobic,yes,low
+20260508,anaerobic_e_25,pseudomonas putida,water,25,anaerobic,no,high
+20260508,anaerobic_e_25,streptococcus thermophilus,lb,25,anaerobic,no,high
+20260508,anaerobic_e_25,streptococcus thermophilus,mb,25,anaerobic,no,high
+20260508,anaerobic_e_25,streptococcus thermophilus,nb,25,anaerobic,no,high
+20260508,anaerobic_e_25,streptococcus thermophilus,bhi,25,anaerobic,yes,high
+20260508,anaerobic_e_25,streptococcus thermophilus,mrs,25,anaerobic,yes,high
+20260508,anaerobic_e_25,streptococcus thermophilus,thy,25,anaerobic,yes,high
+20260508,anaerobic_e_25,streptococcus thermophilus,tsb,25,anaerobic,yes,high
+20260508,anaerobic_e_25,streptococcus thermophilus,gifu,25,anaerobic,no,high
+20260508,anaerobic_e_25,streptococcus thermophilus,mrc,25,anaerobic,yes,high
+20260508,anaerobic_e_25,streptococcus thermophilus,cdm,25,anaerobic,yes,high
+20260508,anaerobic_e_25,streptococcus thermophilus,m9,25,anaerobic,yes,low
+20260508,anaerobic_e_25,streptococcus thermophilus,water,25,anaerobic,no,high
+20260508,anaerobic_f_25,acetobacter pasteurianus,lb,25,anaerobic,no,low
+20260508,anaerobic_f_25,acetobacter pasteurianus,mb,25,anaerobic,yes,low
+20260508,anaerobic_f_25,acetobacter pasteurianus,nb,25,anaerobic,no,low
+20260508,anaerobic_f_25,acetobacter pasteurianus,bhi,25,anaerobic,yes,low
+20260508,anaerobic_f_25,acetobacter pasteurianus,mrs,25,anaerobic,yes,low
+20260508,anaerobic_f_25,acetobacter pasteurianus,thy,25,anaerobic,yes,low
+20260508,anaerobic_f_25,acetobacter pasteurianus,tsb,25,anaerobic,yes,low
+20260508,anaerobic_f_25,acetobacter pasteurianus,gifu,25,anaerobic,no,low
+20260508,anaerobic_f_25,acetobacter pasteurianus,mrc,25,anaerobic,yes,low
+20260508,anaerobic_f_25,acetobacter pasteurianus,cdm,25,anaerobic,no,low
+20260508,anaerobic_f_25,acetobacter pasteurianus,m9,25,anaerobic,no,low
+20260508,anaerobic_f_25,acetobacter pasteurianus,water,25,anaerobic,no,low
+20260508,anaerobic_f_25,acinetobacter baylyi,lb,25,anaerobic,no,medium
+20260508,anaerobic_f_25,acinetobacter baylyi,mb,25,anaerobic,no,medium
+20260508,anaerobic_f_25,acinetobacter baylyi,nb,25,anaerobic,no,medium
+20260508,anaerobic_f_25,acinetobacter baylyi,bhi,25,anaerobic,no,medium
+20260508,anaerobic_f_25,acinetobacter baylyi,mrs,25,anaerobic,no,medium
+20260508,anaerobic_f_25,acinetobacter baylyi,thy,25,anaerobic,no,medium
+20260508,anaerobic_f_25,acinetobacter baylyi,tsb,25,anaerobic,no,medium
+20260508,anaerobic_f_25,acinetobacter baylyi,gifu,25,anaerobic,no,medium
+20260508,anaerobic_f_25,acinetobacter baylyi,mrc,25,anaerobic,no,medium
+20260508,anaerobic_f_25,acinetobacter baylyi,cdm,25,anaerobic,no,medium
+20260508,anaerobic_f_25,acinetobacter baylyi,m9,25,anaerobic,no,medium
+20260508,anaerobic_f_25,acinetobacter baylyi,water,25,anaerobic,no,medium
+20260508,anaerobic_f_25,cupriavidus necator,lb,25,anaerobic,no,medium
+20260508,anaerobic_f_25,cupriavidus necator,mb,25,anaerobic,no,medium
+20260508,anaerobic_f_25,cupriavidus necator,nb,25,anaerobic,no,medium
+20260508,anaerobic_f_25,cupriavidus necator,bhi,25,anaerobic,no,medium
+20260508,anaerobic_f_25,cupriavidus necator,mrs,25,anaerobic,yes,low
+20260508,anaerobic_f_25,cupriavidus necator,thy,25,anaerobic,no,medium
+20260508,anaerobic_f_25,cupriavidus necator,tsb,25,anaerobic,no,medium
+20260508,anaerobic_f_25,cupriavidus necator,gifu,25,anaerobic,no,medium
+20260508,anaerobic_f_25,cupriavidus necator,mrc,25,anaerobic,no,medium
+20260508,anaerobic_f_25,cupriavidus necator,cdm,25,anaerobic,no,medium
+20260508,anaerobic_f_25,cupriavidus necator,m9,25,anaerobic,no,medium
+20260508,anaerobic_f_25,cupriavidus necator,water,25,anaerobic,no,medium
+20260508,anaerobic_f_25,gluconobacter oxydans,lb,25,anaerobic,no,medium
+20260508,anaerobic_f_25,gluconobacter oxydans,mb,25,anaerobic,no,medium
+20260508,anaerobic_f_25,gluconobacter oxydans,nb,25,anaerobic,no,medium
+20260508,anaerobic_f_25,gluconobacter oxydans,bhi,25,anaerobic,no,medium
+20260508,anaerobic_f_25,gluconobacter oxydans,mrs,25,anaerobic,yes,medium
+20260508,anaerobic_f_25,gluconobacter oxydans,thy,25,anaerobic,no,medium
+20260508,anaerobic_f_25,gluconobacter oxydans,tsb,25,anaerobic,no,medium
+20260508,anaerobic_f_25,gluconobacter oxydans,gifu,25,anaerobic,no,medium
+20260508,anaerobic_f_25,gluconobacter oxydans,mrc,25,anaerobic,no,medium
+20260508,anaerobic_f_25,gluconobacter oxydans,cdm,25,anaerobic,yes,medium
+20260508,anaerobic_f_25,gluconobacter oxydans,m9,25,anaerobic,no,medium
+20260508,anaerobic_f_25,gluconobacter oxydans,water,25,anaerobic,no,medium
+20260508,anaerobic_f_25,lactiplantibacillus plantarum,lb,25,anaerobic,yes,low
+20260508,anaerobic_f_25,lactiplantibacillus plantarum,mb,25,anaerobic,no,high
+20260508,anaerobic_f_25,lactiplantibacillus plantarum,nb,25,anaerobic,no,high
+20260508,anaerobic_f_25,lactiplantibacillus plantarum,bhi,25,anaerobic,yes,high
+20260508,anaerobic_f_25,lactiplantibacillus plantarum,mrs,25,anaerobic,yes,high
+20260508,anaerobic_f_25,lactiplantibacillus plantarum,thy,25,anaerobic,yes,high
+20260508,anaerobic_f_25,lactiplantibacillus plantarum,tsb,25,anaerobic,yes,high
+20260508,anaerobic_f_25,lactiplantibacillus plantarum,gifu,25,anaerobic,yes,high
+20260508,anaerobic_f_25,lactiplantibacillus plantarum,mrc,25,anaerobic,yes,high
+20260508,anaerobic_f_25,lactiplantibacillus plantarum,cdm,25,anaerobic,yes,high
+20260508,anaerobic_f_25,lactiplantibacillus plantarum,m9,25,anaerobic,no,high
+20260508,anaerobic_f_25,lactiplantibacillus plantarum,water,25,anaerobic,no,high
+20260508,anaerobic_f_25,pediococcus acidilactici,lb,25,anaerobic,yes,high
+20260508,anaerobic_f_25,pediococcus acidilactici,mb,25,anaerobic,yes,high
+20260508,anaerobic_f_25,pediococcus acidilactici,nb,25,anaerobic,yes,low
+20260508,anaerobic_f_25,pediococcus acidilactici,bhi,25,anaerobic,yes,high
+20260508,anaerobic_f_25,pediococcus acidilactici,mrs,25,anaerobic,yes,high
+20260508,anaerobic_f_25,pediococcus acidilactici,thy,25,anaerobic,yes,high
+20260508,anaerobic_f_25,pediococcus acidilactici,tsb,25,anaerobic,yes,high
+20260508,anaerobic_f_25,pediococcus acidilactici,gifu,25,anaerobic,yes,high
+20260508,anaerobic_f_25,pediococcus acidilactici,mrc,25,anaerobic,yes,high
+20260508,anaerobic_f_25,pediococcus acidilactici,cdm,25,anaerobic,yes,high
+20260508,anaerobic_f_25,pediococcus acidilactici,m9,25,anaerobic,no,high
+20260508,anaerobic_f_25,pediococcus acidilactici,water,25,anaerobic,no,high
+20260508,anaerobic_f_25,priestia megaterium,lb,25,anaerobic,no,high
+20260508,anaerobic_f_25,priestia megaterium,mb,25,anaerobic,no,high
+20260508,anaerobic_f_25,priestia megaterium,nb,25,anaerobic,no,high
+20260508,anaerobic_f_25,priestia megaterium,bhi,25,anaerobic,no,high
+20260508,anaerobic_f_25,priestia megaterium,mrs,25,anaerobic,no,high
+20260508,anaerobic_f_25,priestia megaterium,thy,25,anaerobic,no,high
+20260508,anaerobic_f_25,priestia megaterium,tsb,25,anaerobic,no,high
+20260508,anaerobic_f_25,priestia megaterium,gifu,25,anaerobic,no,high
+20260508,anaerobic_f_25,priestia megaterium,mrc,25,anaerobic,no,high
+20260508,anaerobic_f_25,priestia megaterium,cdm,25,anaerobic,no,high
+20260508,anaerobic_f_25,priestia megaterium,m9,25,anaerobic,no,high
+20260508,anaerobic_f_25,priestia megaterium,water,25,anaerobic,no,high
+20260508,anaerobic_g_25,acetobacter aceti,lb,25,anaerobic,no,high
+20260508,anaerobic_g_25,acetobacter aceti,mb,25,anaerobic,no,high
+20260508,anaerobic_g_25,acetobacter aceti,nb,25,anaerobic,no,high
+20260508,anaerobic_g_25,acetobacter aceti,bhi,25,anaerobic,no,high
+20260508,anaerobic_g_25,acetobacter aceti,mrs,25,anaerobic,no,high
+20260508,anaerobic_g_25,acetobacter aceti,thy,25,anaerobic,no,high
+20260508,anaerobic_g_25,acetobacter aceti,tsb,25,anaerobic,no,high
+20260508,anaerobic_g_25,acetobacter aceti,gifu,25,anaerobic,no,high
+20260508,anaerobic_g_25,acetobacter aceti,mrc,25,anaerobic,no,high
+20260508,anaerobic_g_25,acetobacter aceti,cdm,25,anaerobic,no,high
+20260508,anaerobic_g_25,acetobacter aceti,m9,25,anaerobic,no,high
+20260508,anaerobic_g_25,acetobacter aceti,water,25,anaerobic,no,high
+20260508,anaerobic_g_25,arthrobacter globiformis,lb,25,anaerobic,no,medium
+20260508,anaerobic_g_25,arthrobacter globiformis,mb,25,anaerobic,no,medium
+20260508,anaerobic_g_25,arthrobacter globiformis,nb,25,anaerobic,no,medium
+20260508,anaerobic_g_25,arthrobacter globiformis,bhi,25,anaerobic,no,medium
+20260508,anaerobic_g_25,arthrobacter globiformis,mrs,25,anaerobic,no,medium
+20260508,anaerobic_g_25,arthrobacter globiformis,thy,25,anaerobic,no,medium
+20260508,anaerobic_g_25,arthrobacter globiformis,tsb,25,anaerobic,no,medium
+20260508,anaerobic_g_25,arthrobacter globiformis,gifu,25,anaerobic,no,medium
+20260508,anaerobic_g_25,arthrobacter globiformis,mrc,25,anaerobic,no,medium
+20260508,anaerobic_g_25,arthrobacter globiformis,cdm,25,anaerobic,no,medium
+20260508,anaerobic_g_25,arthrobacter globiformis,m9,25,anaerobic,no,medium
+20260508,anaerobic_g_25,arthrobacter globiformis,water,25,anaerobic,no,medium
+20260508,anaerobic_g_25,deinococcus radiodurans,lb,25,anaerobic,no,high
+20260508,anaerobic_g_25,deinococcus radiodurans,mb,25,anaerobic,no,high
+20260508,anaerobic_g_25,deinococcus radiodurans,nb,25,anaerobic,no,high
+20260508,anaerobic_g_25,deinococcus radiodurans,bhi,25,anaerobic,no,high
+20260508,anaerobic_g_25,deinococcus radiodurans,mrs,25,anaerobic,yes,low
+20260508,anaerobic_g_25,deinococcus radiodurans,thy,25,anaerobic,no,high
+20260508,anaerobic_g_25,deinococcus radiodurans,tsb,25,anaerobic,no,high
+20260508,anaerobic_g_25,deinococcus radiodurans,gifu,25,anaerobic,no,high
+20260508,anaerobic_g_25,deinococcus radiodurans,mrc,25,anaerobic,no,high
+20260508,anaerobic_g_25,deinococcus radiodurans,cdm,25,anaerobic,no,high
+20260508,anaerobic_g_25,deinococcus radiodurans,m9,25,anaerobic,no,high
+20260508,anaerobic_g_25,deinococcus radiodurans,water,25,anaerobic,no,high
+20260508,anaerobic_g_25,kocuria rhizophila,lb,25,anaerobic,yes,low
+20260508,anaerobic_g_25,kocuria rhizophila,mb,25,anaerobic,yes,low
+20260508,anaerobic_g_25,kocuria rhizophila,nb,25,anaerobic,yes,low
+20260508,anaerobic_g_25,kocuria rhizophila,bhi,25,anaerobic,yes,low
+20260508,anaerobic_g_25,kocuria rhizophila,mrs,25,anaerobic,yes,low
+20260508,anaerobic_g_25,kocuria rhizophila,thy,25,anaerobic,yes,low
+20260508,anaerobic_g_25,kocuria rhizophila,tsb,25,anaerobic,yes,low
+20260508,anaerobic_g_25,kocuria rhizophila,gifu,25,anaerobic,no,low
+20260508,anaerobic_g_25,kocuria rhizophila,mrc,25,anaerobic,no,low
+20260508,anaerobic_g_25,kocuria rhizophila,cdm,25,anaerobic,yes,medium
+20260508,anaerobic_g_25,kocuria rhizophila,m9,25,anaerobic,yes,low
+20260508,anaerobic_g_25,kocuria rhizophila,water,25,anaerobic,no,high
+20260508,anaerobic_g_25,lactobacillus acidophilus,lb,25,anaerobic,no,low
+20260508,anaerobic_g_25,lactobacillus acidophilus,mb,25,anaerobic,no,low
+20260508,anaerobic_g_25,lactobacillus acidophilus,nb,25,anaerobic,no,low
+20260508,anaerobic_g_25,lactobacillus acidophilus,bhi,25,anaerobic,no,low
+20260508,anaerobic_g_25,lactobacillus acidophilus,mrs,25,anaerobic,yes,high
+20260508,anaerobic_g_25,lactobacillus acidophilus,thy,25,anaerobic,no,low
+20260508,anaerobic_g_25,lactobacillus acidophilus,tsb,25,anaerobic,no,low
+20260508,anaerobic_g_25,lactobacillus acidophilus,gifu,25,anaerobic,no,low
+20260508,anaerobic_g_25,lactobacillus acidophilus,mrc,25,anaerobic,no,low
+20260508,anaerobic_g_25,lactobacillus acidophilus,cdm,25,anaerobic,no,low
+20260508,anaerobic_g_25,lactobacillus acidophilus,m9,25,anaerobic,no,low
+20260508,anaerobic_g_25,lactobacillus acidophilus,water,25,anaerobic,no,high
+20260508,anaerobic_g_25,micrococcus luteus,lb,25,anaerobic,no,low
+20260508,anaerobic_g_25,micrococcus luteus,mb,25,anaerobic,no,low
+20260508,anaerobic_g_25,micrococcus luteus,nb,25,anaerobic,no,low
+20260508,anaerobic_g_25,micrococcus luteus,bhi,25,anaerobic,no,low
+20260508,anaerobic_g_25,micrococcus luteus,mrs,25,anaerobic,yes,low
+20260508,anaerobic_g_25,micrococcus luteus,thy,25,anaerobic,yes,low
+20260508,anaerobic_g_25,micrococcus luteus,tsb,25,anaerobic,no,low
+20260508,anaerobic_g_25,micrococcus luteus,gifu,25,anaerobic,no,low
+20260508,anaerobic_g_25,micrococcus luteus,mrc,25,anaerobic,no,low
+20260508,anaerobic_g_25,micrococcus luteus,cdm,25,anaerobic,no,low
+20260508,anaerobic_g_25,micrococcus luteus,m9,25,anaerobic,no,low
+20260508,anaerobic_g_25,micrococcus luteus,water,25,anaerobic,no,high
+20260508,anaerobic_g_25,paracoccus denitrificans,lb,25,anaerobic,yes,high
+20260508,anaerobic_g_25,paracoccus denitrificans,mb,25,anaerobic,yes,high
+20260508,anaerobic_g_25,paracoccus denitrificans,nb,25,anaerobic,no,low
+20260508,anaerobic_g_25,paracoccus denitrificans,bhi,25,anaerobic,yes,high
+20260508,anaerobic_g_25,paracoccus denitrificans,mrs,25,anaerobic,yes,high
+20260508,anaerobic_g_25,paracoccus denitrificans,thy,25,anaerobic,yes,high
+20260508,anaerobic_g_25,paracoccus denitrificans,tsb,25,anaerobic,yes,high
+20260508,anaerobic_g_25,paracoccus denitrificans,gifu,25,anaerobic,yes,high
+20260508,anaerobic_g_25,paracoccus denitrificans,mrc,25,anaerobic,yes,high
+20260508,anaerobic_g_25,paracoccus denitrificans,cdm,25,anaerobic,yes,high
+20260508,anaerobic_g_25,paracoccus denitrificans,m9,25,anaerobic,no,low
+20260508,anaerobic_g_25,paracoccus denitrificans,water,25,anaerobic,no,high
+20260508,anaerobic_h_25,azotobacter vinelandii,lb,25,anaerobic,no,high
+20260508,anaerobic_h_25,azotobacter vinelandii,mb,25,anaerobic,no,high
+20260508,anaerobic_h_25,azotobacter vinelandii,nb,25,anaerobic,no,high
+20260508,anaerobic_h_25,azotobacter vinelandii,bhi,25,anaerobic,no,medium
+20260508,anaerobic_h_25,azotobacter vinelandii,mrs,25,anaerobic,no,high
+20260508,anaerobic_h_25,azotobacter vinelandii,thy,25,anaerobic,no,high
+20260508,anaerobic_h_25,azotobacter vinelandii,tsb,25,anaerobic,no,medium
+20260508,anaerobic_h_25,azotobacter vinelandii,gifu,25,anaerobic,no,high
+20260508,anaerobic_h_25,azotobacter vinelandii,mrc,25,anaerobic,no,high
+20260508,anaerobic_h_25,azotobacter vinelandii,cdm,25,anaerobic,no,high
+20260508,anaerobic_h_25,azotobacter vinelandii,m9,25,anaerobic,no,high
+20260508,anaerobic_h_25,azotobacter vinelandii,water,25,anaerobic,no,high
+20260508,anaerobic_h_25,caulobacter vibrioides,lb,25,anaerobic,no,high
+20260508,anaerobic_h_25,caulobacter vibrioides,mb,25,anaerobic,no,high
+20260508,anaerobic_h_25,caulobacter vibrioides,nb,25,anaerobic,no,high
+20260508,anaerobic_h_25,caulobacter vibrioides,bhi,25,anaerobic,no,high
+20260508,anaerobic_h_25,caulobacter vibrioides,mrs,25,anaerobic,no,high
+20260508,anaerobic_h_25,caulobacter vibrioides,thy,25,anaerobic,no,high
+20260508,anaerobic_h_25,caulobacter vibrioides,tsb,25,anaerobic,no,high
+20260508,anaerobic_h_25,caulobacter vibrioides,gifu,25,anaerobic,no,high
+20260508,anaerobic_h_25,caulobacter vibrioides,mrc,25,anaerobic,no,high
+20260508,anaerobic_h_25,caulobacter vibrioides,cdm,25,anaerobic,no,high
+20260508,anaerobic_h_25,caulobacter vibrioides,m9,25,anaerobic,no,high
+20260508,anaerobic_h_25,caulobacter vibrioides,water,25,anaerobic,no,high
+20260508,anaerobic_h_25,clostridium sporogenes,lb,25,anaerobic,yes,high
+20260508,anaerobic_h_25,clostridium sporogenes,mb,25,anaerobic,yes,high
+20260508,anaerobic_h_25,clostridium sporogenes,nb,25,anaerobic,yes,medium
+20260508,anaerobic_h_25,clostridium sporogenes,bhi,25,anaerobic,yes,high
+20260508,anaerobic_h_25,clostridium sporogenes,mrs,25,anaerobic,yes,high
+20260508,anaerobic_h_25,clostridium sporogenes,thy,25,anaerobic,yes,high
+20260508,anaerobic_h_25,clostridium sporogenes,tsb,25,anaerobic,yes,high
+20260508,anaerobic_h_25,clostridium sporogenes,gifu,25,anaerobic,yes,high
+20260508,anaerobic_h_25,clostridium sporogenes,mrc,25,anaerobic,yes,high
+20260508,anaerobic_h_25,clostridium sporogenes,cdm,25,anaerobic,yes,high
+20260508,anaerobic_h_25,clostridium sporogenes,m9,25,anaerobic,no,high
+20260508,anaerobic_h_25,clostridium sporogenes,water,25,anaerobic,no,high
+20260508,anaerobic_h_25,empty,lb,25,anaerobic,no,low
+20260508,anaerobic_h_25,empty,mb,25,anaerobic,no,low
+20260508,anaerobic_h_25,empty,nb,25,anaerobic,no,low
+20260508,anaerobic_h_25,empty,bhi,25,anaerobic,no,low
+20260508,anaerobic_h_25,empty,mrs,25,anaerobic,no,low
+20260508,anaerobic_h_25,empty,thy,25,anaerobic,no,low
+20260508,anaerobic_h_25,empty,tsb,25,anaerobic,no,low
+20260508,anaerobic_h_25,empty,gifu,25,anaerobic,no,low
+20260508,anaerobic_h_25,empty,mrc,25,anaerobic,no,low
+20260508,anaerobic_h_25,empty,cdm,25,anaerobic,no,low
+20260508,anaerobic_h_25,empty,m9,25,anaerobic,no,low
+20260508,anaerobic_h_25,empty,water,25,anaerobic,no,low
+20260508,anaerobic_h_25,komagataeibacter xylinus,lb,25,anaerobic,no,medium
+20260508,anaerobic_h_25,komagataeibacter xylinus,mb,25,anaerobic,no,medium
+20260508,anaerobic_h_25,komagataeibacter xylinus,nb,25,anaerobic,no,medium
+20260508,anaerobic_h_25,komagataeibacter xylinus,bhi,25,anaerobic,no,medium
+20260508,anaerobic_h_25,komagataeibacter xylinus,mrs,25,anaerobic,no,medium
+20260508,anaerobic_h_25,komagataeibacter xylinus,thy,25,anaerobic,no,medium
+20260508,anaerobic_h_25,komagataeibacter xylinus,tsb,25,anaerobic,no,medium
+20260508,anaerobic_h_25,komagataeibacter xylinus,gifu,25,anaerobic,no,medium
+20260508,anaerobic_h_25,komagataeibacter xylinus,mrc,25,anaerobic,no,medium
+20260508,anaerobic_h_25,komagataeibacter xylinus,cdm,25,anaerobic,no,medium
+20260508,anaerobic_h_25,komagataeibacter xylinus,m9,25,anaerobic,no,medium
+20260508,anaerobic_h_25,komagataeibacter xylinus,water,25,anaerobic,no,medium
