@@ -124,8 +124,9 @@ def main(argv=None) -> int:
 
     log.info(
         "building from cache %s (target=%s, %d output columns, "
-        "temperature_range_expansion=%s)",
-        cache_dir, target, len(fieldnames), cfg.temperature_range_expansion,
+        "temperature_range_expansion=%s, dedup_w_negatives=%s)",
+        cache_dir, target, len(fieldnames),
+        cfg.temperature_range_expansion, cfg.dedup_w_negatives,
     )
     log.info("output columns: %s", fieldnames)
 
@@ -139,6 +140,7 @@ def main(argv=None) -> int:
         limit=args.limit,
         show_progress=not (args.no_progress or args.quiet),
         temperature_range_expansion=cfg.temperature_range_expansion,
+        dedup_w_negatives=cfg.dedup_w_negatives,
     )
 
     print(

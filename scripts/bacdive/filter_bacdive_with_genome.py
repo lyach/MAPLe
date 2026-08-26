@@ -21,8 +21,12 @@ DEFAULT_MAP = EXT / "bacdive_genome_map.csv"
 # DEFAULT_OUT = EXT / "bacdive_growth_52k.parquet"
 
 # 107k BacDive (without temperature range expansion)
-DEFAULT_PARQUET = EXT / "bacdive_growth_107k.parquet"
-DEFAULT_OUT = EXT / "bacdive_growth_40k.parquet"
+# DEFAULT_PARQUET = EXT / "bacdive_growth_107k.parquet"
+# DEFAULT_OUT = EXT / "bacdive_growth_40k.parquet"
+
+# 132k BacDive (with temperature range expansion and keep negative labels)
+DEFAULT_PARQUET = EXT / "bacdive_growth_132k_dedup_w_negs.parquet"
+DEFAULT_OUT = EXT / "bacdive_growth_52k_dedup_w_negs.parquet"
 
 
 def blank(series: pd.Series) -> pd.Series:

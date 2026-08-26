@@ -190,9 +190,10 @@ class TargetSpec:
 
     ``isolate_col`` / ``id_col`` / ``name_col`` / ``extra_key_cols`` define the
     de-duplication key: rows sharing the same
-    ``(isolate, unit, extra...)`` are collapsed, with the positive
-    ``growth_class`` winning on conflict. ``unit_col`` is the column counted
-    as "unique units" in the run summary.
+    ``(isolate, unit, extra...)`` are collapsed. By default the positive
+    ``growth_class`` wins on conflict; ``dedup_w_negatives=True`` keeps both
+    labels instead. ``unit_col`` is the column counted as "unique units" in
+    the run summary.
     """
 
     name: str
@@ -312,6 +313,7 @@ class BuildFromCacheConfig:
     output_file: Path
     output_writer: str = "to_parquet"
     temperature_range_expansion: bool = True
+    dedup_w_negatives: bool = False
 
     def to_target_spec(self) -> TargetSpec:
         """``TargetSpec`` with the selected output columns."""
@@ -388,6 +390,9 @@ def load_build_from_cache_config(path: Path | None = None) -> BuildFromCacheConf
     temperature_range_expansion:
         If true, a culture-temp range (``"30-37"``) emits three rows
         (min, max, mean) instead of one midpoint. Default false.
+    dedup_w_negatives:
+        If true, a (isolate, unit) pair with both growth labels keeps both
+        rows instead of resolving the conflict to positive. Default false.
     """
     path = path or BUILD_FROM_CACHE_YAML
     data = _load_yaml(path)
@@ -458,6 +463,11 @@ def load_build_from_cache_config(path: Path | None = None) -> BuildFromCacheConf
         "temperature_range_expansion",
         default=False,
     )
+    dedup_w_negatives = _as_bool(
+        data.get("dedup_w_negatives"),
+        "dedup_w_negatives",
+        default=False,
+    )
 
     return BuildFromCacheConfig(
         target=target,
@@ -467,4 +477,5 @@ def load_build_from_cache_config(path: Path | None = None) -> BuildFromCacheConf
         output_file=output_file,
         output_writer=writer,
         temperature_range_expansion=expand,
+        dedup_w_negatives=dedup_w_negatives,
     )
