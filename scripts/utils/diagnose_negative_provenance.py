@@ -16,8 +16,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
-PARQUET = ROOT / "data" / "external" / "bacdive_growth_40k.parquet"
-FIG_DIR = ROOT / "reports" / "diagnose_negative_provenance"
+PARQUET = ROOT / "data" / "external" / "bacdive_growth_52k_dedup_w_negs.parquet"
+FIG_DIR = ROOT / "reports" / "diagnose_negative_provenance_52k_dedup_w_negs"
 
 pd.set_option("display.width", 220)
 pd.set_option("display.max_columns", 80)
@@ -80,21 +80,38 @@ def _pair_label(strain: str, medium: str) -> str:
     return f"{_short(strain_s, 28)}  |  {_short(medium, 22)}"
 
 
+def _even_take(df: pd.DataFrame, k: int) -> pd.DataFrame:
+    if k <= 0 or len(df) == 0:
+        return df.iloc[0:0]
+    k = min(k, len(df))
+    idx = (pd.Series(range(k)) * (len(df) - 1) / max(k - 1, 1)
+           ).round().astype(int).drop_duplicates()
+    return df.iloc[idx]
+
+
+def _by_growth_mid(df: pd.DataFrame) -> pd.DataFrame:
+    return df.assign(mid=lambda d: (d.min_1 + d.max_1) / 2).sort_values(
+        ["mid", "min_1", "max_1"])
+
+
 def plot_neg_outside_growth_range(conf: pd.DataFrame, ok: pd.DataFrame) -> None:
-    """Show that no-growth temps sit outside each conflicted pair's growth range."""
+    """Strip of conflicted pairs, half with no-growth inside the growth range."""
     colder = ok["min_0"] < ok["min_1"]
     hotter = ok["max_0"] > ok["max_1"]
     inside = ~(colder | hotter)
-    n_out = int((colder | hotter).sum())
+    outside = colder | hotter
+    n_out = int(outside.sum())
+    n_in = int(inside.sum())
     n = len(ok)
     pct = 100 * n_out / n if n else 0.0
 
-    order = ok.assign(mid=lambda d: (d.min_1 + d.max_1) / 2).sort_values(
-        ["mid", "min_1", "max_1"])
-    n_show = min(20, len(order))
-    take = (pd.Series(range(n_show)) * (len(order) - 1) / max(n_show - 1, 1)
-            ).round().astype(int).drop_duplicates()
-    sample = order.iloc[take]
+    n_show = min(20, n)
+    n_in_show = min(n_show // 2, n_in)
+    n_out_show = min(n_show - n_in_show, n_out)
+    n_in_show = min(n_show - n_out_show, n_in)
+    sample_out = _even_take(_by_growth_mid(ok.loc[outside]), n_out_show)
+    sample_in = _even_take(_by_growth_mid(ok.loc[inside]), n_in_show)
+    sample = pd.concat([sample_out, sample_in])
     rank = pd.Series(range(len(sample)), index=sample.index)
     rows = conf.dropna(subset=["temp_num"]).copy()
     rows["rank"] = rows.set_index(["bacdive_id", "media_name"]).index.map(rank)
@@ -139,10 +156,13 @@ def plot_neg_outside_growth_range(conf: pd.DataFrame, ok: pd.DataFrame) -> None:
                      label="no-growth")
     ax_strip.set_xlabel("temperature (°C)")
     ax_strip.set_title(
-        f"showing {len(sample):,} of {n:,} pairs — orange (no-growth) never sits on the blue range")
+        f"showing {n_in_show} inside + {n_out_show} outside of {n:,} pairs "
+        f"(n_inside={n_in:,} total)")
     ax_strip.set_yticks(y)
     ax_strip.set_yticklabels(yticklabels, fontsize=8)
     ax_strip.set_ylim(-0.8, len(sample) - 0.2)
+    if n_out_show and n_in_show:
+        ax_strip.axhline(n_out_show - 0.5, color="0.4", ls=":", lw=0.9, zorder=0)
     ax_strip.legend(frameon=False, loc="upper right", markerscale=1.1)
     ax_strip.invert_yaxis()
 
