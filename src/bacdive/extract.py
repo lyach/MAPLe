@@ -42,6 +42,10 @@ _GROWTH_MAP = {
     "negative": 0,
 }
 
+# Provenance of ``growth_class`` on a medium_growth row.
+_GROWTH_SOURCE_MEDIUM = "culture medium"
+_GROWTH_SOURCE_TEMP = "culture temp"
+
 # metabolite "utilization activity" -> binary label
 _UTILIZATION_MAP = {
     "+": 1,
@@ -521,7 +525,8 @@ def record_to_medium_rows(
     ``growth`` label; a medium whose ref matches more than one temperature is
     expanded into one row per (medium, temperature) pair. A matched
     temperature entry's own ``growth`` flag overrides the medium's growth
-    label for that row.
+    label for that row; ``growth_source`` is ``"culture temp"`` in that case
+    and ``"culture medium"`` when the medium's own flag is kept.
 
     ``temperature_range_expansion``: If true (default), it emits min, max, and mean as
     three rows (and those extra points can themselves trigger @ref matching).
@@ -598,6 +603,9 @@ def record_to_medium_rows(
             row["media_name_full"] = medium.get("name", "") or ""
             row["medium_link"] = link or ""
             row["growth_class"] = label if temp_label is None else temp_label
+            row["growth_source"] = (
+                _GROWTH_SOURCE_MEDIUM if temp_label is None else _GROWTH_SOURCE_TEMP
+            )
             row["refs"] = ref
             row.update(feats)
             # always set, so non-CIP rows carry "" like every other blank

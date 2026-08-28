@@ -90,6 +90,13 @@ def _dedupe(
     df = df.copy()
     df["_isolate_key"] = df[spec.isolate_col].astype(str).str.strip().str.lower()
     df["_unit_key"] = df.apply(lambda r: _unit_key(r, spec), axis=1)
+    # Prefer a culture-temp provenance among same-label rows
+    if "growth_source" in df.columns:
+        df = df.assign(
+            _src_rank=(df["growth_source"] != "culture temp").astype(int)
+        ).sort_values(
+            ["growth_class", "_src_rank"], ascending=[False, True],
+        ).drop(columns="_src_rank")
 
     unit_grp = df.groupby(["_isolate_key", "_unit_key"], sort=False)
     n_conflicts = int((unit_grp["growth_class"].nunique() > 1).sum())
@@ -470,6 +477,12 @@ def _log_summary(
             f"unique {spec.unit_col:<11}: {df[spec.unit_col].nunique()}",
             f"growth_class      : {pos} positive / {neg} negative",
         ]
+        if "growth_source" in df.columns:
+            src = df["growth_source"].fillna("").astype(str).value_counts()
+            lines.append(
+                "growth_source     : "
+                + ", ".join(f"{k or 'blank'} {int(v)}" for k, v in src.items())
+            )
     summary = "\n".join(lines)
     print(summary)
     log.info("run summary:\n%s", summary)

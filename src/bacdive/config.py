@@ -120,6 +120,7 @@ _MEDIUM_ID_COLS = [
     "medium_link",
     "cip_medium_number",
     "cip_medium_link",
+    "growth_source",
     # target
     "growth_class",
 ]
