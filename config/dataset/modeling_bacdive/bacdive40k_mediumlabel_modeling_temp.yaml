@@ -1,0 +1,15 @@
+# Modeling dataset config — BacDive growth (strain x medium)
+# Used by run_experiment.py (featurization + targets).
+
+# ================ FILE ================
+modeling_dataset_path: "data/external/bacdive_growth_40k_mediumlabel.parquet"
+
+# ================ FEATURIZATION ================
+features:
+  temperature:
+    - to_numeric
+    - 'OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)'
+
+# ================ TARGETS ================
+targets:
+  - growth_class

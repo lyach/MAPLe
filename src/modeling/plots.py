@@ -846,6 +846,11 @@ def plot_threshold_sweep(
 
 
 # ---------------------------------------------------------------------------
+# BacDive
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
 # Pathway-matrix analysis plots (docs/plans/pathway_features.md "Analysis")
 # ---------------------------------------------------------------------------
 
@@ -1186,3 +1191,5 @@ def plot_loso_vs_n_components(
         fig.suptitle(fig_title, fontsize=13, fontweight="bold")
 
     return fig
+
+plot_

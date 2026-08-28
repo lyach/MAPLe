@@ -44,4 +44,4 @@ temperature_range_expansion: False
 
 dedup_w_negatives: True
 
-output_file: data/external/bacdive_growth_107k_dedup_w_negs.parquet
+output_file: data/external/bacdive_growth_107k.parquet

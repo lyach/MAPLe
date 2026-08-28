@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare the internal plate-reader benchmark against the BacDive 52k table.
+"""Compare the internal plate-reader benchmark against the BacDive dataset.
 
 The two datasets are meant to play different roles in the paper: BacDive
 supplies breadth (11.9k genomes, 2.4k media) with a label whose negatives come
@@ -37,8 +37,8 @@ from sklearn.model_selection import GroupKFold, StratifiedKFold
 
 ROOT = Path(__file__).resolve().parents[2]
 EXP_CSV = ROOT / "data" / "processed" / "aero_anaero_tidy_curves_filtered.csv"
-BD_PARQUET = ROOT / "data" / "external" / "bacdive_growth_52k_dedup_w_negs.parquet"
-FIG_DIR = ROOT / "reports" / "compare_exp_bacdive"
+BD_PARQUET = ROOT / "data" / "external" / "bacdive_growth_40k_medium_labels.parquet"
+FIG_DIR = ROOT / "reports" / "compare_exp_bacdive_40k_medium_labels"
 
 pd.set_option("display.width", 220)
 pd.set_option("display.max_columns", 80)
@@ -282,14 +282,14 @@ def overview(exp: pd.DataFrame, bd: pd.DataFrame) -> pd.DataFrame:
     tab = pd.DataFrame([
         row("internal (plate reader)", exp, "strain_name",
             exp.atmosphere.nunique(), exp.temp_num.nunique()),
-        row("BacDive 52k", bd, "bacdive_id", 0, int(bd.temp_num.nunique())),
+        row("BacDive", bd, "bacdive_id", 0, int(bd.temp_num.nunique())),
     ])
     print("\n=== T1: dataset overview ===")
     print(tab.to_string(index=False))
     _write_table(tab, "t1_overview.csv")
 
     fig, axes = plt.subplots(1, 3, figsize=(13, 3.6))
-    names = ["internal", "BacDive 52k"]
+    names = ["internal", "BacDive"]
     ax = axes[0]
     pos = [float(exp.growth_class.mean()), float(bd.growth_class.mean())]
     ax.bar(names, pos, color=[EXP_COLOR, BD_COLOR])
@@ -319,7 +319,7 @@ def overview(exp: pd.DataFrame, bd: pd.DataFrame) -> pd.DataFrame:
     ax.set_title("Design density")
     for i, v in enumerate(dens):
         ax.text(i, v * 1.15, f"{v:.2g}%", ha="center")
-    fig.suptitle("Internal benchmark vs BacDive 52k")
+    fig.suptitle("Internal benchmark vs BacDive")
     _save(fig, "f1_overview.png")
     return tab
 
@@ -343,7 +343,7 @@ def condition_space(exp: pd.DataFrame, bd: pd.DataFrame) -> None:
         s = bd.loc[bd.growth_class == lab, "temp_num"].dropna()
         ax.hist(s, bins=np.arange(-6, 92, 1), color=LABEL_COLOR[lab],
                 edgecolor="white", linewidth=0.4)
-        ax.set_title(f"BacDive 52k — growth_class={lab}  n={len(s):,}")
+        ax.set_title(f"BacDive — growth_class={lab}  n={len(s):,}")
         ax.set_xlabel("temperature (°C)"); ax.set_ylabel("rows")
         ax.set_xlim(0, 90)
     fig.suptitle("Where the no-growth labels live in temperature space\n"
@@ -353,7 +353,7 @@ def condition_space(exp: pd.DataFrame, bd: pd.DataFrame) -> None:
 
     print("\n=== T4: condition space ===")
     rows = []
-    for name, d in [("internal", exp), ("BacDive 52k", bd)]:
+    for name, d in [("internal", exp), ("BacDive", bd)]:
         for lab in (1, 0):
             s = d.loc[d.growth_class == lab, "temp_num"].dropna()
             rows.append({
@@ -411,7 +411,7 @@ def identifiability(exp: pd.DataFrame, bd: pd.DataFrame) -> pd.DataFrame:
             denom = 0
     else:
         denom = 0
-    rows.append({"dataset": "BacDive 52k", "test": "dual-label (strain, medium) cells",
+    rows.append({"dataset": "BacDive", "test": "dual-label (strain, medium) cells",
                  "n_cells": len(both),
                  "detail": f"{sep}/{denom} separated by temperature alone",
                  "frac": round(sep / denom, 4) if denom else np.nan})
@@ -420,7 +420,7 @@ def identifiability(exp: pd.DataFrame, bd: pd.DataFrame) -> pd.DataFrame:
     g2 = bd.groupby(["bacdive_id", "temp_num"]).agg(
         n_media=("media_name", "nunique"), uniq=("growth_class", "nunique"))
     multi = g2[g2.n_media > 1]
-    rows.append({"dataset": "BacDive 52k",
+    rows.append({"dataset": "BacDive",
                  "test": "(strain, temperature) cells with >1 medium",
                  "n_cells": len(multi),
                  "detail": f"{int((multi.uniq > 1).sum())} show a medium-driven label flip",
@@ -565,7 +565,7 @@ def factor_power(exp: pd.DataFrame, bd: pd.DataFrame) -> pd.DataFrame:
         else:
             mcc_r, ap_r = _cv_score(X, yb, None)
             mcc_g, ap_g = _cv_score(X, yb, bd.family.to_numpy())
-        rows.append({"dataset": "BacDive 52k", "features": label,
+        rows.append({"dataset": "BacDive", "features": label,
                      "MCC_random": mcc_r, "AP_nogrowth_random": ap_r,
                      "MCC_strain_grouped": mcc_g, "AP_nogrowth_strain_grouped": ap_g})
 
@@ -576,7 +576,7 @@ def factor_power(exp: pd.DataFrame, bd: pd.DataFrame) -> pd.DataFrame:
     _write_table(tab, "t6_factor_power.csv")
 
     for ds, fname in [("internal", "f4_factor_power_internal.png"),
-                      ("BacDive 52k", "f5_factor_power_bacdive.png")]:
+                      ("BacDive", "f5_factor_power_bacdive.png")]:
         sub = tab[tab.dataset == ds]
         fig, ax = plt.subplots(figsize=(9, 4))
         idx = np.arange(len(sub))
@@ -621,7 +621,7 @@ def overlap(exp: pd.DataFrame, bd: pd.DataFrame) -> None:
     per["n_bacdive_same_genus"] = per.genus.str.lower().map(n_by_genus).fillna(0).astype(int)
     per["pos_rate"] = per.pos_rate.round(3)
 
-    print("\n=== T2: per-strain overlap with BacDive 52k ===")
+    print("\n=== T2: per-strain overlap with BacDive ===")
     print(per.drop(columns=["acc_core", "species_key"]).to_string(index=False))
     _write_table(per, "t2_strain_overlap.csv")
 
@@ -691,7 +691,7 @@ def overlap(exp: pd.DataFrame, bd: pd.DataFrame) -> None:
     ax.bar(["species", "genus", "family", "same\nassembly"], counts, color=BD_COLOR)
     ax.axhline(len(per), ls="--", c="grey", lw=1)
     ax.set_ylabel(f"internal strains (of {len(per)})")
-    ax.set_title("Overlap level with BacDive 52k")
+    ax.set_title("Overlap level with BacDive")
     for i, v in enumerate(counts):
         ax.text(i, v + 0.4, str(v), ha="center")
     _save(fig, "f6_taxonomic_overlap.png")
