@@ -483,6 +483,21 @@ def _log_summary(
                 "growth_source     : "
                 + ", ".join(f"{k or 'blank'} {int(v)}" for k, v in src.items())
             )
+            if "growth_override" in df.columns:
+                ov = pd.to_numeric(df["growth_override"], errors="coerce").fillna(0)
+                n_ov = int((ov == 1).sum())
+                n_temp = int((df["growth_source"] == "culture temp").sum())
+                n_agreed = n_temp - n_ov
+                lines.append(
+                    f"growth_override   : {n_ov} temp≠medium "
+                    f"({n_agreed} culture-temp rows agree with the medium)"
+                )
+            if "temp_join" in df.columns:
+                join = df["temp_join"].fillna("").astype(str).value_counts()
+                lines.append(
+                    "temp_join         : "
+                    + ", ".join(f"{k or 'blank'} {int(v)}" for k, v in join.items())
+                )
     summary = "\n".join(lines)
     print(summary)
     log.info("run summary:\n%s", summary)

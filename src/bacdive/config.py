@@ -121,6 +121,10 @@ _MEDIUM_ID_COLS = [
     "cip_medium_number",
     "cip_medium_link",
     "growth_source",
+    "growth_override",
+    "medium_growth_class",
+    "temp_growth_class",
+    "temp_join",
     # target
     "growth_class",
 ]
