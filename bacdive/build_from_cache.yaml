@@ -43,4 +43,10 @@ medium_features:
 
 temperature_range_expansion: True
 
-output_file: data/external/bacdive_growth.parquet
+# Named for what it actually is, not what a user might type: full-schema
+# builds are bacdive_growth_full[_texpand].parquet (see config.py), so this
+# restricted-schema, expanded build is bacdive_growth_texpand.parquet.
+# Whatever is written here still gets re-stamped with "_texpand" if this
+# doesn't already end that way (config.stamp_temperature_expansion) --
+# so even a stale value here can't collide with an unexpanded build's name.
+output_file: data/external/bacdive_growth_texpand.parquet

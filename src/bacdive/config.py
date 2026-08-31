@@ -36,6 +36,10 @@ BUILD_FROM_CACHE_YAML = ROOT / "bacdive" / "build_from_cache.yaml"
 EXTERNAL_DIR = ROOT / "data" / "external"
 CACHE_DIR = EXTERNAL_DIR / "bacdive_cache"          # one <bacdive_id>.json per record
 FAILURES_CSV = EXTERNAL_DIR / "bacdive_failures.csv"  # taxa that returned nothing / errored
+# External recipes recovered by scripts/bacdive/fetch_media_recipes.py for
+# entries BacDive's own record left composition_raw blank on (see
+# pipeline._backfill_composition). Missing is fine -- backfill is skipped.
+MEDIA_RECIPE_MANIFEST = EXTERNAL_DIR / "media_recipe_manifest.csv"
 
 # --- logs ---
 LOGS_DIR = ROOT / "logs"
@@ -143,6 +147,10 @@ _MEDIUM_FEATURES = [
     "has_nacl",
     "complexity",
     "composition_raw",
+    # provenance of composition_raw: record (BacDive's own entry) |
+    # cip_catalogue | mediadive (external backfill) | name_match (borrowed
+    # from another entry sharing this media_name) | "" (still unresolved)
+    "composition_source",
     "refs",
     "reference",
 ]
@@ -213,7 +221,14 @@ class TargetSpec:
 TARGETS: dict[str, TargetSpec] = {
     "medium_growth": TargetSpec(
         name="medium_growth",
-        output_file=EXTERNAL_DIR / "bacdive_growth.parquet",
+        # This is the FULL schema's own name -- both the live-API path
+        # (get_bacdive_dataset.py, always full schema, no --out) and
+        # build_bacdive_from_cache.py's --full-schema fall back to it. A
+        # cache-only build using a YAML-restricted column subset instead
+        # (e.g. bacdive/build_from_cache.yaml) always sets its OWN
+        # output_file explicitly, so it never resolves to this default --
+        # the two schemas can't collide on one name.
+        output_file=EXTERNAL_DIR / "bacdive_growth_full.parquet",
         fieldnames=_MEDIUM_GROWTH_FIELDNAMES,
         categorical_features=_STRAIN_CATEGORICALS,
         # grain: one row per (bacdive_id, media_name, temperature, oxygen_tolerance)
@@ -234,6 +249,36 @@ TARGETS: dict[str, TargetSpec] = {
         positive_only=False,
     ),
 }
+
+def stamp_temperature_expansion(path: Path, expanded: bool) -> Path:
+    """Stamp a resolved ``temperature_range_expansion`` onto an output path.
+
+    This flag changes row *count*, not just which feature columns are kept
+    (a temperature range like "10-41" becomes one midpoint row, or three --
+    min, max, mean), so two builds differing only in this flag must never be
+    able to land on the same filename. The stamp is derived from the
+    resolved config value actually passed to the pipeline, not from
+    whatever path a caller happens to type -- a CLI ``--out`` override can
+    no longer silently mask a mismatched setting, the way ``--out
+    bacdive_growth_api_107k.parquet`` combined with the YAML's
+    ``temperature_range_expansion: true`` overwrote that (unexpanded) file
+    with expanded (132,821-row) data on 2026-08-24.
+
+    Symmetric and idempotent regardless of what ``path`` already carries:
+    ``expanded=True`` ensures the stem ends in ``_texpand`` (adding it only
+    if missing); ``expanded=False`` ensures it does NOT (stripping it if
+    present) -- so a YAML ``output_file`` written with the suffix already
+    baked in (e.g. because that YAML's own default is expanded) still
+    resolves correctly if a caller overrides to unexpanded, rather than
+    keeping a stale "_texpand" that no longer describes the data.
+    """
+    has_suffix = path.stem.endswith("_texpand")
+    if expanded == has_suffix:
+        return path
+    if expanded:
+        return path.with_name(f"{path.stem}_texpand{path.suffix}")
+    return path.with_name(f"{path.stem[: -len('_texpand')]}{path.suffix}")
+
 
 DEFAULT_TARGET = "medium_growth"
 # Back-compat aliases

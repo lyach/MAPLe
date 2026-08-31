@@ -30,14 +30,149 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
 from src.bacdive import config
 from src.bacdive.config import TargetSpec
 from src.bacdive.extract import record_to_rows
+from src.bacdive.media import looks_like_recipe, media_features
 
 log = logging.getLogger("bacdive.pipeline")
+
+
+def _blank(series: pd.Series) -> pd.Series:
+    return series.isna() | (series.astype(str).str.strip() == "")
+
+
+def _load_recipe_manifest(path: Path) -> pd.DataFrame:
+    """Successfully-resolved rows of the external recipe manifest.
+
+    Built by ``scripts/bacdive/fetch_media_recipes.py`` from the CIP/Pasteur
+    catalogue and MediaDive (by link or by exact name match); see that
+    script's docstring. Returns an empty frame (not an error) when the
+    manifest hasn't been generated yet.
+    """
+    cols = ["source", "link", "query_name", "composition_raw"]
+    if not path.exists():
+        return pd.DataFrame(columns=cols)
+    manifest = pd.read_csv(path, dtype=str, keep_default_na=False)
+    return manifest[manifest["status"] == "ok"][cols]
+
+
+def _apply_composition(
+    df: pd.DataFrame, mask: pd.Series, composition: pd.Series, source: str,
+) -> None:
+    """Fill ``composition_raw``/``composition_source`` and recompute the
+    derived media features (``n_ingredients``, ``has_*``, ``complexity``)
+    for the rows in ``mask``, in place.
+
+    Only the composition-text-derived columns are touched -- ``mediadive_id``
+    stays whatever this row's own ``medium_link`` produced, never borrowed
+    from wherever the backfilled text came from.
+    """
+    for idx in df.index[mask]:
+        feats = media_features(
+            name=df.at[idx, "media_name_full"] or df.at[idx, "media_name"],
+            link=df.at[idx, "medium_link"],
+            composition=composition.loc[idx],
+        )
+        for col in ("n_ingredients", "has_yeast_extract", "has_peptone",
+                    "has_agar", "has_blood_components", "has_nacl",
+                    "complexity", "composition_raw"):
+            df.at[idx, col] = feats[col]
+        df.at[idx, "composition_source"] = source
+
+
+def _backfill_composition(
+    df: pd.DataFrame, manifest_path: Path = config.MEDIA_RECIPE_MANIFEST,
+) -> pd.DataFrame:
+    """Fill blank ``composition_raw`` from four sources BacDive's own record
+    doesn't carry, most-authoritative first:
+
+    1. The external recipe manifest, matched by the medium's own
+       ``cip_medium_link`` / ``medium_link`` -- an authoritative recipe for
+       *this exact* medium (CIP/Pasteur catalogue pages, or MediaDive
+       records reached via the numeric id in a DSMZ PDF link).
+    2. The same manifest, matched by ``media_name`` instead -- media with no
+       link at all, resolved by an EXACT (not fuzzy) name match against
+       MediaDive's catalogue; see fetch_media_recipes.py on why fuzzy
+       matching is deliberately not attempted.
+    3. The same manifest again, ``source=manual_review`` -- a human/LLM
+       reasoning pass's confirmed choice among fuzzy-matched MediaDive
+       candidates (prepare_media_name_review.py +
+       apply_media_name_review.py), for names the exact-match step above
+       couldn't resolve on its own.
+    4. Another entry sharing the same ``media_name`` that does have a
+       composition -- the same medium, reported by a different publication.
+       Only text shaped like a real recipe (``media.looks_like_recipe``) is
+       eligible, and the most common such text among the name's siblings is
+       used, so a one-off modifier note (e.g. "supplemented with 2.5% NaCl")
+       never gets picked over the medium's real recipe.
+
+    Every row keeps a ``composition_source`` marking which of these (if any)
+    supplied its text; rows BacDive's own record already answered are
+    marked "record" and left untouched.
+    """
+    if "composition_raw" not in df.columns or df.empty:
+        return df
+
+    df = df.copy()
+    comp_blank = _blank(df["composition_raw"])
+    df["composition_source"] = np.where(comp_blank, "", "record")
+
+    manifest = _load_recipe_manifest(manifest_path)
+    if not manifest.empty:
+        by_link = manifest[manifest["source"].isin(["cip", "mediadive"])]
+        for link_col, source in (("cip_medium_link", "cip_catalogue"),
+                                  ("medium_link", "mediadive")):
+            if link_col not in df.columns:
+                continue
+            comp_blank = _blank(df["composition_raw"])
+            recipe_by_link = by_link.set_index("link")["composition_raw"]
+            matched_link = df[link_col].isin(recipe_by_link.index)
+            mask = comp_blank & matched_link
+            if mask.any():
+                composition = df.loc[mask, link_col].map(recipe_by_link)
+                _apply_composition(df, mask, composition, source)
+
+        # mediadive_by_name: an exact (non-fuzzy) name match, made automatically
+        # by fetch_media_recipes.py. manual_review: a human/LLM-reasoned match
+        # from prepare_media_name_review.py's candidate worksheet, applied via
+        # apply_media_name_review.py. Both key off media_name the same way;
+        # kept as separate composition_source values for provenance.
+        for source in ("mediadive_by_name", "manual_review"):
+            by_name = manifest[manifest["source"] == source]
+            if by_name.empty or "media_name" not in df.columns:
+                continue
+            comp_blank = _blank(df["composition_raw"])
+            recipe_by_name = by_name.set_index("query_name")["composition_raw"]
+            matched_name = df["media_name"].astype(str).str.strip().isin(recipe_by_name.index)
+            mask = comp_blank & matched_name
+            if mask.any():
+                composition = df.loc[mask, "media_name"].astype(str).str.strip().map(recipe_by_name)
+                _apply_composition(df, mask, composition, source)
+
+    comp_blank = _blank(df["composition_raw"])
+    if comp_blank.any():
+        name_norm = df["media_name"].astype(str).str.strip().str.lower()
+        recipe_rows = df.loc[~comp_blank, "composition_raw"]
+        recipe_rows = recipe_rows[recipe_rows.map(looks_like_recipe)]
+        if not recipe_rows.empty:
+            # most common recipe-shaped text per name -- not just the first
+            # -- so an outlier variant doesn't win over the usual recipe.
+            canonical = (
+                recipe_rows.groupby(name_norm.loc[recipe_rows.index])
+                .agg(lambda s: s.value_counts().idxmax())
+            )
+            matched_name = name_norm.isin(canonical.index)
+            mask = comp_blank & matched_name
+            if mask.any():
+                composition = name_norm.loc[mask].map(canonical)
+                _apply_composition(df, mask, composition, "name_match")
+
+    return df
 
 
 @dataclass
@@ -263,6 +398,7 @@ def run(
     df = pd.DataFrame(rows)
     if not df.empty:
         df = _dedupe(df, spec)
+        df = _backfill_composition(df)
         # enforce column order / presence
         for col in spec.fieldnames:
             if col not in df.columns:
@@ -372,6 +508,7 @@ def run_from_cache(
     df = pd.DataFrame(rows)
     if not df.empty:
         df = _dedupe(df, spec)
+        df = _backfill_composition(df)
         for col in spec.fieldnames:
             if col not in df.columns:
                 df[col] = ""

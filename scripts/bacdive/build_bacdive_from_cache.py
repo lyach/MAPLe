@@ -5,15 +5,19 @@ build_bacdive_from_cache.py
 Rebuild a BacDive modeling table from ``data/external/bacdive_cache/*.json``
 without calling the BacDive API.
 
-Reads target + output feature subsets from ``bacdive/build_from_cache.yaml``
-(see also ``src/bacdive/config.py``). Extraction / dedupe match
-``get_bacdive_dataset.py``; only the fetch step is skipped.
+Defaults to the target's complete column set (``--full-schema``, itself
+default-on); pass ``--no-full-schema`` to use whatever subset
+``bacdive/build_from_cache.yaml``'s ``strain_features``/``medium_features``
+currently restrict to instead (see also ``src/bacdive/config.py``).
+Extraction / dedupe match ``get_bacdive_dataset.py``; only the fetch step is
+skipped.
 
 USAGE:
-    python scripts/build_bacdive_from_cache.py
-    python scripts/build_bacdive_from_cache.py --config bacdive/build_from_cache.yaml
-    python scripts/build_bacdive_from_cache.py --target metabolite_utilization
-    python scripts/build_bacdive_from_cache.py --limit 100
+    python scripts/bacdive/build_bacdive_from_cache.py
+    python scripts/bacdive/build_bacdive_from_cache.py --no-temperature-range-expansion
+    python scripts/bacdive/build_bacdive_from_cache.py --no-full-schema
+    python scripts/bacdive/build_bacdive_from_cache.py --target metabolite_utilization
+    python scripts/bacdive/build_bacdive_from_cache.py --limit 100
 """
 
 from __future__ import annotations
@@ -23,7 +27,7 @@ import logging
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.bacdive import config, pipeline
 from src.strain_metadata.logging_setup import setup_logging
@@ -41,8 +45,24 @@ def parse_args(argv=None) -> argparse.Namespace:
     )
     p.add_argument(
         "--target", choices=sorted(config.TARGETS), default=None,
-        help="Override target from the YAML config (uses that target's full "
-             "default schema when it differs from the YAML target)",
+        help="Override target from the YAML config",
+    )
+    p.add_argument(
+        "--full-schema", action=argparse.BooleanOptionalAction, default=True,
+        help="Use the target's complete default column set "
+             "(config.TARGETS[target].fieldnames) -- the default. Pass "
+             "--no-full-schema to use whatever subset the YAML config's "
+             "strain_features/medium_features currently restrict to "
+             "instead. Without --out, --full-schema defaults to "
+             "config.TARGETS[target].output_file rather than the YAML's "
+             "own output_file, so a full-schema build can never collide "
+             "with a YAML-restricted one on the same filename. Note: "
+             "--target alone does NOT get you the YAML's column subset "
+             "when it happens to equal the YAML's own target (as "
+             "medium_growth normally does) -- that combination still "
+             "uses --full-schema's default. Pass --no-full-schema "
+             "explicitly whenever you want the YAML's current "
+             "restrictions instead.",
     )
     p.add_argument(
         "--out", type=Path, default=None,
@@ -51,6 +71,15 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument(
         "--cache-dir", type=Path, default=None,
         help="Override cache dir from the YAML config",
+    )
+    p.add_argument(
+        "--temperature-range-expansion", action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Override temperature_range_expansion from the YAML config. "
+             "Changes row count (a range like \"10-41\" becomes 1 midpoint "
+             "row, or 3 min/max/mean rows), so the resolved value is always "
+             "stamped onto the output filename -- see "
+             "config.stamp_temperature_expansion.",
     )
     p.add_argument(
         "--limit", type=int, default=None,
@@ -87,26 +116,36 @@ def main(argv=None) -> int:
     cache_dir = args.cache_dir or cfg.cache_dir
     if not cache_dir.is_absolute():
         cache_dir = config.ROOT / cache_dir
+    expansion = (
+        cfg.temperature_range_expansion
+        if args.temperature_range_expansion is None
+        else args.temperature_range_expansion
+    )
 
-    if target == cfg.target:
-        fieldnames = cfg.fieldnames
-        categorical_features = cfg.categorical_features
-        output_file = args.out or cfg.output_file
-        output_writer = cfg.output_writer
-    else:
-        log.warning(
-            "CLI --target %r differs from YAML target %r; "
-            "using the full default schema for %r",
-            target, cfg.target, target,
-        )
+    use_full_schema = args.full_schema or target != cfg.target
+    if use_full_schema:
+        if not args.full_schema:
+            log.warning(
+                "CLI --target %r differs from YAML target %r; "
+                "using the full default schema for %r",
+                target, cfg.target, target,
+            )
         base = config.TARGETS[target]
         fieldnames = list(base.fieldnames)
         categorical_features = list(base.categorical_features)
         output_file = args.out or base.output_file
-        output_writer = cfg.output_writer
+    else:
+        fieldnames = cfg.fieldnames
+        categorical_features = cfg.categorical_features
+        output_file = args.out or cfg.output_file
+    output_writer = cfg.output_writer
 
     if not output_file.is_absolute():
         output_file = config.ROOT / output_file
+    # Stamped from the resolved `expansion`, not the raw path above -- so an
+    # --out (or YAML output_file) that doesn't already name its expansion
+    # setting can never collide with the other setting's output.
+    output_file = config.stamp_temperature_expansion(output_file, expansion)
 
     if not cache_dir.is_dir():
         log.error("cache dir not found: %s", cache_dir)
@@ -114,8 +153,8 @@ def main(argv=None) -> int:
 
     log.info(
         "building from cache %s (target=%s, %d output columns, "
-        "temperature_range_expansion=%s)",
-        cache_dir, target, len(fieldnames), cfg.temperature_range_expansion,
+        "temperature_range_expansion=%s) -> %s",
+        cache_dir, target, len(fieldnames), expansion, output_file,
     )
     log.info("output columns: %s", fieldnames)
 
@@ -128,7 +167,7 @@ def main(argv=None) -> int:
         cache_dir=cache_dir,
         limit=args.limit,
         show_progress=not (args.no_progress or args.quiet),
-        temperature_range_expansion=cfg.temperature_range_expansion,
+        temperature_range_expansion=expansion,
     )
 
     print(

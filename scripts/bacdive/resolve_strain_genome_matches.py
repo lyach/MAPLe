@@ -2,7 +2,7 @@
 """Resolve BacDive strains that have no ``genome_accession`` to a genome
 assembly, using only *strain-precise* evidence.
 
-Reads data/external/bacdive_growth_api_107k.parquet, takes every strain with an empty
+Reads data/external/bacdive_growth_full.parquet, takes every strain with an empty
 ``genome_accession``, and matches the strain-identity columns extract.py emits
 against NCBI's assembly_summary files plus the culture-collection -> BioSample
 -> assembly map built by scratch/biosample_match.py.
@@ -69,7 +69,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[2]
 SCRATCH = Path(os.environ.get("BACDIVE_SCRATCH", "/home/pavan/scratch"))
 
-DEFAULT_INPUT = ROOT / "data" / "external" / "bacdive_growth_api_107k.parquet"
+DEFAULT_INPUT = ROOT / "data" / "external" / "bacdive_growth_full.parquet"
 DEFAULT_OUTPUT = ROOT / "data" / "external" / "genome_strain_matches.csv"
 
 SUMMARY_GENBANK = SCRATCH / "assembly_summary_genbank.txt"

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Downloads genome + CDS FASTA files from NCBI for every unique
-``genome_accession`` in data/external/bacdive_growth_api_107k.parquet.
+``genome_accession`` in data/external/bacdive_growth_full.parquet.
 
 For each accession (e.g. "GCA_900699165") this:
   1. Resolves it to NCBI's current *versioned* accession (e.g.
@@ -54,7 +54,7 @@ from src.strain_metadata.logging_setup import setup_logging
 log = logging.getLogger("download_bacdive_genomes")
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_INPUT = ROOT / "data" / "external" / "bacdive_growth_api_107k.parquet"
+DEFAULT_INPUT = ROOT / "data" / "external" / "bacdive_growth_full.parquet"
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "external" / "bacdive_genomes"
 DEFAULT_MANIFEST = ROOT / "data" / "external" / "bacdive_genome_manifest.csv"
 

@@ -109,6 +109,21 @@ _DEFINED_MARKERS: tuple[str, ...] = (
 
 _MEDIADIVE_RE = re.compile(r"mediadive\.dsmz\.de/medium/(\d+)", re.IGNORECASE)
 
+# A real recipe clause names a mass/volume for at least one ingredient
+# ("39 g", "1000 ml"). Short free-text notes attached to a standard medium's
+# name ("supplemented with 2.5% NaCl (w/v)") describe a modifier, not a
+# recipe, and should never be mistaken for one when backfilling.
+_QUANTITY_UNIT_RE = re.compile(r"\d+(\.\d+)?\s*(g|mg|kg|ml|mL|l|L)\b")
+
+
+def looks_like_recipe(composition: str | None) -> bool:
+    """True if ``composition`` names at least one ingredient's mass/volume.
+
+    Used to gate backfilling ``composition_raw`` from another entry: only
+    text shaped like an actual recipe should ever be reused as one.
+    """
+    return bool(composition) and bool(_QUANTITY_UNIT_RE.search(str(composition)))
+
 
 def parse_mediadive_id(link: str | None) -> str:
     """Extract the numeric MediaDive medium id from a ``link`` URL.
