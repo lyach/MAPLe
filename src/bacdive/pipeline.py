@@ -202,11 +202,22 @@ def _unit_key(row: pd.Series, spec: TargetSpec) -> str:
     return key
 
 
-def _dedupe(df: pd.DataFrame, spec: TargetSpec) -> pd.DataFrame:
+def _dedupe(
+    df: pd.DataFrame,
+    spec: TargetSpec,
+    *,
+    dedup_w_negatives: bool = False,
+) -> pd.DataFrame:
     """Collapse duplicate (isolate, unit) rows coming from multiple refs.
 
-    On a ``growth_class`` conflict the positive label wins (max); all other
-    columns take the first non-null value. Conflicts are logged.
+    Same-label duplicates always collapse (``first`` for non-label columns).
+    On a ``growth_class`` conflict:
+
+    * ``dedup_w_negatives=False`` (default) -- positive wins (``max``). This
+      deletes an explicit no-growth at the same ``(isolate, unit)``.
+    * ``dedup_w_negatives=True`` -- keep both labels. Duplicate yes rows still
+      merge, duplicate no rows still merge, but a culture-temp negative is not
+      overwritten by a colliding positive.
     """
     if df.empty:
         return df
@@ -214,10 +225,30 @@ def _dedupe(df: pd.DataFrame, spec: TargetSpec) -> pd.DataFrame:
     df = df.copy()
     df["_isolate_key"] = df[spec.isolate_col].astype(str).str.strip().str.lower()
     df["_unit_key"] = df.apply(lambda r: _unit_key(r, spec), axis=1)
+    # Prefer a culture-temp provenance among same-label rows
+    if "growth_source" in df.columns:
+        df = df.assign(
+            _src_rank=(df["growth_source"] != "culture temp").astype(int)
+        ).sort_values(
+            ["growth_class", "_src_rank"], ascending=[False, True],
+        ).drop(columns="_src_rank")
 
-    grp = df.groupby(["_isolate_key", "_unit_key"], sort=False)
+    unit_grp = df.groupby(["_isolate_key", "_unit_key"], sort=False)
+    n_conflicts = int((unit_grp["growth_class"].nunique() > 1).sum())
 
-    n_conflicts = int((grp["growth_class"].nunique() > 1).sum())
+    if dedup_w_negatives:
+        if n_conflicts:
+            log.warning(
+                "%d (isolate, unit) pairs had conflicting labels -- "
+                "keeping both (dedup_w_negatives); same-label duplicates collapsed.",
+                n_conflicts,
+            )
+        group_cols = ["_isolate_key", "_unit_key", "growth_class"]
+        grp = df.groupby(group_cols, sort=False)
+        agg = {col: "first" for col in df.columns if col not in group_cols}
+        deduped = grp.agg(agg).reset_index()
+        return deduped.drop(columns=["_isolate_key", "_unit_key"], errors="ignore")
+
     if n_conflicts:
         log.warning(
             "%d (isolate, unit) pairs had conflicting labels -- resolved to positive.",
@@ -228,7 +259,7 @@ def _dedupe(df: pd.DataFrame, spec: TargetSpec) -> pd.DataFrame:
            {"growth_class", "_isolate_key", "_unit_key"}}
     agg["growth_class"] = "max"
 
-    deduped = grp.agg(agg).reset_index(drop=True)
+    deduped = unit_grp.agg(agg).reset_index(drop=True)
     return deduped.drop(columns=["_isolate_key", "_unit_key"], errors="ignore")
 
 
@@ -429,6 +460,7 @@ def run_from_cache(
     limit: Optional[int] = None,
     show_progress: bool = True,
     temperature_range_expansion: bool = False,
+    dedup_w_negatives: bool = False,
 ) -> tuple[int, int, int]:
     """Build a target table from cached JSON records only (no API calls).
 
@@ -438,6 +470,10 @@ def run_from_cache(
     ``fieldnames`` / ``categorical_features`` default to the full target schema
     in ``config.TARGETS``. Pass a subset (as resolved from
     ``build_from_cache.yaml``) to drop unused columns from the output.
+
+    ``dedup_w_negatives``: if true, a (isolate, unit) pair that has both a
+    growth and a no-growth label keeps both rows instead of resolving to
+    positive. Same-label duplicates still collapse.
 
     Returns ``(n_rows, n_records_ok, n_failures)``.
     """
@@ -475,9 +511,9 @@ def run_from_cache(
 
     log.info(
         "cache-only build: target=%s, %d file(s) in %s -> %s "
-        "(temperature_range_expansion=%s)",
+        "(temperature_range_expansion=%s, dedup_w_negatives=%s)",
         target, len(cache_files), cache_dir, output_file,
-        temperature_range_expansion,
+        temperature_range_expansion, dedup_w_negatives,
     )
 
     rows: list[dict] = []
@@ -507,7 +543,7 @@ def run_from_cache(
 
     df = pd.DataFrame(rows)
     if not df.empty:
-        df = _dedupe(df, spec)
+        df = _dedupe(df, spec, dedup_w_negatives=dedup_w_negatives)
         df = _backfill_composition(df)
         for col in spec.fieldnames:
             if col not in df.columns:
@@ -578,6 +614,27 @@ def _log_summary(
             f"unique {spec.unit_col:<11}: {df[spec.unit_col].nunique()}",
             f"growth_class      : {pos} positive / {neg} negative",
         ]
+        if "growth_source" in df.columns:
+            src = df["growth_source"].fillna("").astype(str).value_counts()
+            lines.append(
+                "growth_source     : "
+                + ", ".join(f"{k or 'blank'} {int(v)}" for k, v in src.items())
+            )
+            if "growth_override" in df.columns:
+                ov = pd.to_numeric(df["growth_override"], errors="coerce").fillna(0)
+                n_ov = int((ov == 1).sum())
+                n_temp = int((df["growth_source"] == "culture temp").sum())
+                n_agreed = n_temp - n_ov
+                lines.append(
+                    f"growth_override   : {n_ov} temp≠medium "
+                    f"({n_agreed} culture-temp rows agree with the medium)"
+                )
+            if "temp_join" in df.columns:
+                join = df["temp_join"].fillna("").astype(str).value_counts()
+                lines.append(
+                    "temp_join         : "
+                    + ", ".join(f"{k or 'blank'} {int(v)}" for k, v in join.items())
+                )
     summary = "\n".join(lines)
     print(summary)
     log.info("run summary:\n%s", summary)

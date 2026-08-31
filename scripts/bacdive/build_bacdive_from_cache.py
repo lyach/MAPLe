@@ -82,6 +82,15 @@ def parse_args(argv=None) -> argparse.Namespace:
              "config.stamp_temperature_expansion.",
     )
     p.add_argument(
+        "--dedup-w-negatives", action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Override dedup_w_negatives from the YAML config. When true, "
+             "an (isolate, unit) pair with both a growth and a no-growth "
+             "label keeps both rows instead of resolving to positive. "
+             "Changes row count, so the resolved value is always stamped "
+             "onto the output filename -- see config.stamp_dedup_w_negatives.",
+    )
+    p.add_argument(
         "--limit", type=int, default=None,
         help="Only process the first N cached JSON files (quick test)",
     )
@@ -121,6 +130,11 @@ def main(argv=None) -> int:
         if args.temperature_range_expansion is None
         else args.temperature_range_expansion
     )
+    dedup_w_negatives = (
+        cfg.dedup_w_negatives
+        if args.dedup_w_negatives is None
+        else args.dedup_w_negatives
+    )
 
     use_full_schema = args.full_schema or target != cfg.target
     if use_full_schema:
@@ -142,10 +156,12 @@ def main(argv=None) -> int:
 
     if not output_file.is_absolute():
         output_file = config.ROOT / output_file
-    # Stamped from the resolved `expansion`, not the raw path above -- so an
-    # --out (or YAML output_file) that doesn't already name its expansion
-    # setting can never collide with the other setting's output.
+    # Stamped from the resolved `expansion`/`dedup_w_negatives`, not the raw
+    # path above -- so an --out (or YAML output_file) that doesn't already
+    # name its settings can never collide with a differently-configured
+    # build's output.
     output_file = config.stamp_temperature_expansion(output_file, expansion)
+    output_file = config.stamp_dedup_w_negatives(output_file, dedup_w_negatives)
 
     if not cache_dir.is_dir():
         log.error("cache dir not found: %s", cache_dir)
@@ -153,8 +169,9 @@ def main(argv=None) -> int:
 
     log.info(
         "building from cache %s (target=%s, %d output columns, "
-        "temperature_range_expansion=%s) -> %s",
-        cache_dir, target, len(fieldnames), expansion, output_file,
+        "temperature_range_expansion=%s, dedup_w_negatives=%s) -> %s",
+        cache_dir, target, len(fieldnames), expansion, dedup_w_negatives,
+        output_file,
     )
     log.info("output columns: %s", fieldnames)
 
@@ -168,6 +185,7 @@ def main(argv=None) -> int:
         limit=args.limit,
         show_progress=not (args.no_progress or args.quiet),
         temperature_range_expansion=expansion,
+        dedup_w_negatives=dedup_w_negatives,
     )
 
     print(

@@ -42,6 +42,13 @@ _GROWTH_MAP = {
     "negative": 0,
 }
 
+# Provenance of ``growth_class`` on a medium_growth row.
+_GROWTH_SOURCE_MEDIUM = "culture medium"
+_GROWTH_SOURCE_TEMP = "culture temp"
+_TEMP_JOIN_MATCHED = "matched"
+_TEMP_JOIN_UNMATCHED = "unmatched"
+_TEMP_JOIN_SKIPPED = "skipped_single_temp"
+
 # metabolite "utilization activity" -> binary label
 _UTILIZATION_MAP = {
     "+": 1,
@@ -506,7 +513,7 @@ def _bacdive_id(record: dict) -> str:
 # --------------------------------------------------------------------------
 
 def record_to_medium_rows(
-    record: dict, *, temperature_range_expansion: bool = False,
+    record: dict, *, temperature_range_expansion: bool = True,
 ) -> list[dict]:
     """Flatten one BacDive record into (isolate x medium x temperature) rows.
 
@@ -521,11 +528,24 @@ def record_to_medium_rows(
     ``growth`` label; a medium whose ref matches more than one temperature is
     expanded into one row per (medium, temperature) pair. A matched
     temperature entry's own ``growth`` flag overrides the medium's growth
-    label for that row.
+    label for that row. Provenance columns (always emitted):
 
-    ``temperature_range_expansion``: if false (default), a range such as
-    ``"30-37"`` is one midpoint. If true, it emits min, max, and mean as
+    * ``medium_growth_class`` -- the culture-medium entry's own mapped flag.
+    * ``temp_growth_class`` -- the matched culture-temp flag, or blank.
+    * ``growth_source`` -- which block supplied the *emitted* ``growth_class``
+      (``"culture temp"`` whenever a temp flag was applied, including when it
+      *agrees* with the medium).
+    * ``growth_override`` -- 1 iff the temp flag was applied *and* differs
+      from the medium. This is the unbiased count of labels that culture temp
+      actually changed.
+    * ``temp_join`` -- ``matched`` / ``unmatched`` / ``skipped_single_temp``.
+      Matching is skipped when the record has only one distinct temperature,
+      so those rows stay ``growth_source="culture medium"`` even if a temp
+      entry shares the medium's ``@ref``.
+
+    ``temperature_range_expansion``: If true (default), it emits min, max, and mean as
     three rows (and those extra points can themselves trigger @ref matching).
+    if false, a range such as ``"30-37"`` is one midpoint.
 
     CIP media: BacDive records one CIP medium as two entries -- a
     cross-reference ("CIP Medium 6") holding the catalogue URL, and an
@@ -588,16 +608,49 @@ def record_to_medium_rows(
             composition=composition,
         )
 
-        matched_temps = temps_by_ref.get(ref.strip()) if match_temp_by_ref else None
-        # (None, None) -> keep base["temperature"] and the medium's own label
-        temp_overrides = matched_temps or [(None, None)]
+        ref_key = ref.strip()
+        ref_temps = temps_by_ref.get(ref_key)
+        if match_temp_by_ref:
+            temp_overrides = ref_temps or [(None, None)]
+        else:
+            temp_overrides = [(None, None)]
+
+        skipped_temp_label: Optional[int] = None
+        if not match_temp_by_ref and ref_temps:
+            labs = {lab for _, lab in ref_temps if lab is not None}
+            if len(labs) == 1:
+                skipped_temp_label = next(iter(labs))
 
         for temp_val, temp_label in temp_overrides:
+            used_temp_label = temp_label if match_temp_by_ref else None
+            emitted = label if used_temp_label is None else used_temp_label
+            if match_temp_by_ref:
+                temp_join = (
+                    _TEMP_JOIN_MATCHED if temp_val is not None
+                    else _TEMP_JOIN_UNMATCHED
+                )
+                documented_temp = temp_label
+            else:
+                temp_join = _TEMP_JOIN_SKIPPED
+                documented_temp = skipped_temp_label
+
             row = dict(base)
             row["media_name"] = name
             row["media_name_full"] = medium.get("name", "") or ""
             row["medium_link"] = link or ""
-            row["growth_class"] = label if temp_label is None else temp_label
+            row["growth_class"] = emitted
+            row["medium_growth_class"] = label
+            row["growth_source"] = (
+                _GROWTH_SOURCE_MEDIUM if used_temp_label is None
+                else _GROWTH_SOURCE_TEMP
+            )
+            row["growth_override"] = int(
+                used_temp_label is not None and used_temp_label != label
+            )
+            row["temp_join"] = temp_join
+            row["temp_growth_class"] = (
+                "" if documented_temp is None else str(int(documented_temp))
+            )
             row["refs"] = ref
             row.update(feats)
             # always set, so non-CIP rows carry "" like every other blank

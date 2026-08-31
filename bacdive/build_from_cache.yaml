@@ -43,6 +43,12 @@ medium_features:
 
 temperature_range_expansion: True
 
+# When true, a conflicting (isolate, unit) pair -- one publication says
+# "grows", another says "no growth" at the same strain/medium/temperature --
+# keeps both rows instead of collapsing to the positive. Off by default so
+# existing full-schema builds are unaffected until deliberately turned on.
+dedup_w_negatives: False
+
 # Named for what it actually is, not what a user might type: full-schema
 # builds are bacdive_growth_full[_texpand].parquet (see config.py), so this
 # restricted-schema, expanded build is bacdive_growth_texpand.parquet.

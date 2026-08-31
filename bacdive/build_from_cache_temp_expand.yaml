@@ -1,0 +1,38 @@
+# Rebuild a BacDive modeling table from local cache only (no API).
+# Temperature range expansion is enabled.
+
+target: medium_growth
+
+strain_features:
+  - genus
+  - family
+  - order
+  - phylum
+  - gram_stain
+  - cell_shape
+  - motility
+  - oxygen_tolerance
+  - nutrition_type
+  - spore_formation
+  - gc_content
+  - genome_accession
+  - genome_link
+  - n16s_accession
+  - temperature
+  - ph
+
+# Medium features
+medium_features:
+  - n_ingredients
+  - has_yeast_extract
+  - has_peptone
+  - has_agar
+  - has_blood_components
+  - has_nacl
+  - complexity
+  - composition_raw
+  - refs
+
+temperature_range_expansion: true
+
+output_file: data/external/bacdive_growth_expanded.parquet
