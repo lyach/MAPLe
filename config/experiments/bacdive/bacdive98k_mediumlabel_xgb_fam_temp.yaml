@@ -1,0 +1,24 @@
+# BacDive growth classification + XGBoost
+name: bacdive40k_mediumlabel_xgb_family_temp
+dataset: config/dataset/modeling_bacdive/bacdive40k_mediumlabel_modeling_temp.yaml
+model: config/models/xgboost.yaml
+task: growth_class
+
+cv:
+  strategy: [stratified_grouped]
+  splits_file: data/modeling/splits_bacdive_growth_40k_mediumlabel/family_bacdive_growth_40k_mediumlabel.csv
+  split_on: family
+
+class_weight: balanced
+
+metrics: [auroc, pr_auc_nogrowth, recall_nogrowth, precision_nogrowth, mcc, balanced_accuracy]
+
+interpret:
+  shap: true
+  group_importance: true
+
+seed: 42
+output_dir: reports
+
+wandb:
+  enabled: false

@@ -1,7 +1,0 @@
-# Taxonomic scope + extraction target for the BacDive pipeline.
-
-target: medium_growth
-
-taxa:
-  - Bacillus subtilis
-  - Escherichia 

@@ -56,9 +56,20 @@ FEATURE_GROUPS: dict[str, str] = {
 }
 
 
+def _coerce_numeric(X):
+    """Convert values to float; blank strings and non-numerics become NaN."""
+    df = X if isinstance(X, pd.DataFrame) else pd.DataFrame(X)
+    return df.apply(lambda col: pd.to_numeric(col, errors="coerce"))
+
+
 _PREPROCESS_REGISTRY: dict[str, FunctionTransformer] = {
     "log_transform": FunctionTransformer(
         np.log1p,
+        validate=False,
+        feature_names_out="one-to-one",
+    ),
+    "to_numeric": FunctionTransformer(
+        _coerce_numeric,
         validate=False,
         feature_names_out="one-to-one",
     ),

@@ -1,8 +1,8 @@
 # Rebuild a BacDive modeling table from local cache only (no API).
-# Temperature range expansion is enabled.
 
 target: medium_growth
 
+# Strain info (features selected under dataset config)
 strain_features:
   - genus
   - family
@@ -16,12 +16,19 @@ strain_features:
   - spore_formation
   - gc_content
   - genome_accession
+  - genome_accession_source
   - genome_link
   - n16s_accession
+  - strain_designation
+  - is_type_strain
+  - dsm_number
+  - culture_collection_ids
+  - ncbi_taxid
+  - ncbi_taxid_level
   - temperature
   - ph
 
-# Medium features
+# Medium info (features selected under dataset config)
 medium_features:
   - n_ingredients
   - has_yeast_extract
@@ -33,6 +40,8 @@ medium_features:
   - composition_raw
   - refs
 
-temperature_range_expansion: true
+temperature_range_expansion: True
 
-output_file: data/external/bacdive_growth_expanded.parquet
+dedup_w_negatives: True
+
+output_file: data/external/bacdive_growth_132k.parquet

@@ -2,7 +2,7 @@
 # Used by run_experiment.py (featurization + targets).
 
 # ================ FILE ================
-modeling_dataset_path: "data/external/bacdive_growth_98k.parquet"
+modeling_dataset_path: "data/external/bacdive_growth_40k_mediumlabel.parquet"
 
 # ================ FEATURIZATION ================
 features:
@@ -15,15 +15,6 @@ features:
   motility: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
   oxygen_tolerance: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
   spore_formation: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
-  temperature: "StandardScaler()"
-  # media features (parsed from composition — transfer across unseen media)
-  n_ingredients: "StandardScaler()"
-  has_yeast_extract: "MinMaxScaler()"
-  has_peptone: "MinMaxScaler()"
-  has_agar: "MinMaxScaler()"
-  has_blood_components: "MinMaxScaler()"
-  has_nacl: "MinMaxScaler()"
-  complexity: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
 
 # ================ TARGETS ================
 targets:
