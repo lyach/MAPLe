@@ -24,7 +24,7 @@ INPUT = ROOT / "data" / "processed" / "aero_anaero_tidy_curves.csv"
 FLAGS = ROOT / "data" / "metadata" / "align_dataset" / "align_growth_curve_curation.csv"
 STRAIN_META = ROOT / "data" / "metadata" / "align_dataset" / "align_strains_metadata.csv"
 MEDIA_META = ROOT / "data" / "metadata" / "modeling" / "media_features.csv"
-OUTPUT = ROOT / "data" / "processed" / "align_modeling_growth_no_atm.csv"
+OUTPUT = ROOT / "data" / "processed" / "align_modeling_growth_dedup.csv"
 
 # curation key → tidy CSV column
 FIELD_MAP = {
@@ -248,9 +248,9 @@ def main() -> None:
     out = merge_strain_metadata(out)
     out = merge_media_metadata(out)
     
-    print("\n=== Drop duplicates (strain, media, temperature, growth_class) ===")
-    print(f"Shape before dropping duplicates (strain, media, temperature, growth_class): {out.shape[0]} rows x {out.shape[1]} cols")
-    out = out.drop_duplicates(subset=["strain_name", "media_name", "temperature", "growth_class"])
+    print("\n=== Drop duplicates (strain, media, growth_class) ===")
+    print(f"Shape before dropping duplicates (strain, media, growth_class): {out.shape[0]} rows x {out.shape[1]} cols")
+    out = out.drop_duplicates(subset=["strain_name", "media_name", "growth_class"])
     print(f"Dropped duplicates, shape: {out.shape[0]} rows x {out.shape[1]} cols")
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
