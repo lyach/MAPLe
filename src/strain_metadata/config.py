@@ -43,6 +43,11 @@ OUTPUT_CSV   = EXTERNAL_DIR / "strains_metadata.csv"      # successful rows
 FAILURES_CSV = EXTERNAL_DIR / "failures.csv"              # diagnostic failure report
 PHYLUM_CSV   = EXTERNAL_DIR / "strain_phylum.csv"          # ncbi_taxon_id -> phylum lookup
 
+# --- BacDive parquet entry point ---
+BACDIVE_INPUT_PARQUET = EXTERNAL_DIR / "bacdive_growth_full.parquet"
+BACDIVE_METADATA_CSV  = EXTERNAL_DIR / "bacdive_strains_metadata.csv"
+BACDIVE_FAILURES_CSV  = EXTERNAL_DIR / "bacdive_strain_meta_failures.csv"
+
 # --- logs ---
 LOGS_DIR = ROOT / "logs"                                  # timestamped run logs
 
@@ -88,6 +93,24 @@ OUTPUT_FIELDNAMES = [
     "family",
     "order",
     "phylum",
+    "assembly_level",
+    "genome_size_bp",
+    "gc_content_pct",
+    "num_contigs",
+    "n50",
+    "sequence_hash",
+    "date_retrieved",
+    "resolution_method",
+    "requires_verification",
+]
+
+# NCBI-derived columns merged onto a BacDive parquet. Existing BacDive
+# taxonomy / gc_content columns are left untouched.
+PARQUET_MERGE_FIELDNAMES = [
+    "atcc_number",
+    "ncbi_refseq",
+    "ncbi_assembly_accession",
+    "ncbi_taxon_id",
     "assembly_level",
     "genome_size_bp",
     "gc_content_pct",

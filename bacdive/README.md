@@ -53,24 +53,20 @@ taxa:
 
 ```bash
 python scripts/get_bacdive_dataset.py --taxa bacdive/taxa.yaml
-# override the target from the CLI:
-python scripts/get_bacdive_dataset.py --target metabolite_utilization
-# quick smoke test on the first few records:
-python scripts/get_bacdive_dataset.py --limit 5
 ```
 
 Common outputs (target-dependent CSV name):
-- `data/external/bacdive_growth.csv` / `bacdive_metabolite.csv`
+- `data/external/bacdive_growth.parquet` / `bacdive_metabolite.parquet` — main dataset
 - `data/external/bacdive_failures.csv` — taxa that returned nothing / errored
 - `data/external/bacdive_cache/<id>.json` — raw per-record cache
 - `logs/run_<timestamp>.log` — full run log
 
+2.1. Skipping the BacDive API call
 To rebuild a table from an existing cache (no API), edit
 [`bacdive/build_from_cache.yaml`](build_from_cache.yaml) and run:
 
 ```bash
 python scripts/build_bacdive_from_cache.py
-python scripts/build_bacdive_from_cache.py --limit 100   # smoke test
 ```
 
 3. Feed it into the modeling pipeline:
@@ -122,25 +118,3 @@ The output is a "curves-like" table consumed by `src/modeling/dataset.py`. It
 provides `strain_name` and `growth_class` (plus `media_name` for
 `medium_growth`), which is all the `growth_class` task needs. `loso` CV groups
 on `strain_name`; `lomo` groups on `media_name` (medium_growth only).
-
-## PU-aware handling (`medium_growth`)
-
-**`medium_growth` is positive-only.** BacDive records
-media on which a strain *was cultivated*; explicit `growth = "no"` is almost
-never present. A missing `(strain, medium)` pair means
-"untested", **not** "no growth". The pipeline logs a PU warning
-when a `medium_growth` run comes back with zero negatives.
-
-
-## Other caveats
-
-- **Only `growth_class`-style binary targets are derivable.** BacDive has no
-  growth-curve metrics, so `max_od` / `growth_rate` are not available here.
-- **Conditions are strain-level, not per-datapoint.** `temperature`, `ph`, and
-  `oxygen_tolerance` are recorded in blocks keyed by publication reference, so
-  they are summarised per strain and attached to every row for that strain.
-- **Large media vocabulary.** BacDive uses hundreds of distinct DSMZ/CIP media,
-  so identity one-hot on `media_name` does not transfer under `lomo`; the
-  `medium_growth` config relies on parsed composition features instead.
-- Missing categorical values are written as `"unknown"` so downstream
-  `OneHotEncoder` never sees NaN.

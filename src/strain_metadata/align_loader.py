@@ -29,14 +29,115 @@ from typing import Optional
 log = logging.getLogger("align_loader")
 
 
+# INSDC assembly accessions NCBI's assembly database understands.
+INSDC_ACCESSION_RE = re.compile(r"^GC[AF]_\d+(\.\d+)?$", re.I)
+
+# Culture-collection accession, e.g. "DSM 1313", "ATCC 700813". CIP is
+# omitted on purpose -- NCBI's index drops the number, so a nonsense CIP
+# number returns the same hits as a real one (see resolve_strain_genome_matches).
+_COLLECTION_RE = re.compile(
+    r"\b(DSM|DSMZ|ATCC|LMG|NCTC|JCM|KCTC|NBRC|CCUG|CECT|IAM|VKM|BCRC"
+    r"|NRRL|CGMCC|NCIMB|KACC)\b[ ._-]?(\d[\d.]*)",
+    re.I,
+)
+
+
 @dataclass
 class StrainInput:
-    """One row from align_strains.csv, after parsing. `strain` is kept
-    exactly as written in the source file (including things like the
-    "Genus species; substrain" convention) so it round-trips cleanly into
-    the output CSV unless a name override says otherwise."""
+    """One isolate to resolve against NCBI.
+
+    `strain` is the display / search name (align CSV `Strain`, or BacDive
+    `strain_name`). Optional identifier fields are filled by dataset-specific
+    loaders; the align CSV loader only sets `strain` and `atcc_number`."""
     strain: str
     atcc_number: str = ""
+    strain_id: str = ""
+    genome_accession: str = ""
+    genome_accession_source: str = ""
+    genome_link: str = ""
+    n16s_accession: str = ""
+    strain_designation: str = ""
+    is_type_strain: str = ""
+    dsm_number: str = ""
+    culture_collection_ids: str = ""
+    ncbi_taxid: str = ""
+    ncbi_taxid_level: str = ""
+    organism_name: str = ""
+
+    @property
+    def join_key(self) -> str:
+        """Stable isolate key for caching and parquet joins."""
+        return self.strain_id or self.strain
+
+    def name_for_organism_check(self) -> str:
+        """Binomial (or nearest) used to cross-check NCBI organism names."""
+        return self.organism_name or self.strain
+
+
+def _norm_collection_prefix(prefix: str) -> str:
+    prefix = prefix.upper()
+    return "DSM" if prefix == "DSMZ" else prefix
+
+
+def collection_ids_from_input(strain_input: StrainInput) -> list[tuple[str, str]]:
+    """Unique (PREFIX, number) pairs from atcc_number, dsm_number, and
+    culture_collection_ids. ATCC entries are listed first."""
+    seen: list[tuple[str, str]] = []
+
+    def add(prefix: str, number: str) -> None:
+        prefix = _norm_collection_prefix(prefix)
+        number = (number or "").strip()
+        if not prefix or not number:
+            return
+        key = (prefix, number)
+        if key not in seen:
+            seen.append(key)
+
+    atcc = (strain_input.atcc_number or "").strip()
+    if atcc:
+        match = _COLLECTION_RE.search(atcc)
+        if match:
+            add(match.group(1), match.group(2))
+        else:
+            add("ATCC", atcc)
+
+    dsm = (strain_input.dsm_number or "").strip()
+    if dsm:
+        add("DSM", dsm)
+
+    for chunk in (strain_input.culture_collection_ids or "").split(";"):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        match = _COLLECTION_RE.search(chunk)
+        if match:
+            add(match.group(1), match.group(2))
+
+    seen.sort(key=lambda item: (0 if item[0] == "ATCC" else 1, item[0], item[1]))
+    return seen
+
+
+def inferred_atcc_number(strain_input: StrainInput) -> str:
+    """ATCC catalog number for the output row / report, if one is known."""
+    atcc = (strain_input.atcc_number or "").strip()
+    if atcc:
+        match = _COLLECTION_RE.search(atcc)
+        return match.group(2) if match else atcc
+    for prefix, number in collection_ids_from_input(strain_input):
+        if prefix == "ATCC":
+            return number
+    return ""
+
+
+def recorded_insdc_accession(strain_input: StrainInput) -> str:
+    """GCA_/GCF_ accession recorded on the isolate, or "" if not INSDC."""
+    acc = (strain_input.genome_accession or "").strip()
+    if not INSDC_ACCESSION_RE.match(acc):
+        return ""
+    source = (strain_input.genome_accession_source or "").strip().lower()
+    if source and source != "insdc":
+        return ""
+    return acc
 
 
 # Column-header text we'll accept for the strain-name column, tried in

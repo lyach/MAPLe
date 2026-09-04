@@ -21,6 +21,7 @@ from typing import Optional
 
 from .align_loader import (
     StrainInput,
+    inferred_atcc_number,
     load_align_strains,
     load_name_overrides,
     normalize_strain_name,
@@ -51,6 +52,8 @@ def process_one_strain(
     genus_ranges: Optional[dict],
     force: bool,
     debug: bool,
+    download_sequences: bool = True,
+    include_organism_search: bool = True,
 ) -> tuple[Optional[dict], StrainResolutionReport]:
     """Run the full per-strain workflow. Returns (output_row, report).
     output_row is None only if all resolution strategies failed.
@@ -64,6 +67,7 @@ def process_one_strain(
         forced_accessions=forced_accessions,
         fallback_hints=fallback_hints,
         debug=debug,
+        include_organism_search=include_organism_search,
     )
 
     if resolved is None:
@@ -75,24 +79,28 @@ def process_one_strain(
     gbk_path   = gbk_dir   / f"{accession}.gbk"
     sequence_stats: dict = {}
 
-    if not resolved.ftp_path:
-        log.warning("No FTP path for %s (%s) -- metadata only.", canonical_name, accession)
-    else:
-        already_cached = fasta_path.exists() and gbk_path.exists()
-        if force or not already_cached:
-            log.info("Downloading FASTA + GBK for %s", accession)
-            try:
-                ncbi_client.download_via_ftp(resolved.ftp_path, fasta_path, gbk_path)
-            except Exception as exc:
-                log.error("Download failed for %s: %s", canonical_name, exc)
+    if download_sequences:
+        if not resolved.ftp_path:
+            log.warning("No FTP path for %s (%s) -- metadata only.",
+                        canonical_name, accession)
         else:
-            log.info("Using cached FASTA/GBK for %s", accession)
+            already_cached = fasta_path.exists() and gbk_path.exists()
+            if force or not already_cached:
+                log.info("Downloading FASTA + GBK for %s", accession)
+                try:
+                    ncbi_client.download_via_ftp(resolved.ftp_path, fasta_path, gbk_path)
+                except Exception as exc:
+                    log.error("Download failed for %s: %s", canonical_name, exc)
+            else:
+                log.info("Using cached FASTA/GBK for %s", accession)
 
-        if fasta_path.exists():
-            try:
-                sequence_stats = summarize_fasta(fasta_path)
-            except Exception as exc:
-                log.error("FASTA parse failed for %s: %s", canonical_name, exc)
+            if fasta_path.exists():
+                try:
+                    sequence_stats = summarize_fasta(fasta_path)
+                except Exception as exc:
+                    log.error("FASTA parse failed for %s: %s", canonical_name, exc)
+    else:
+        log.info("Skipping FASTA/GBK download for %s (metadata only)", accession)
 
     # Prefer computed stats; fall back to NCBI-reported figures.
     genome_size_bp = (sequence_stats.get("genome_size_bp")
@@ -105,14 +113,15 @@ def process_one_strain(
     gc_content_pct = sequence_stats.get("gc_content_pct", "")
     sequence_hash  = sequence_stats.get("sequence_hash", "")
 
-    # --- second accuracy layer: validate stats against genus ranges ---
+    validate_name = strain_input.organism_name or canonical_name
     report.validation_warnings = validate_genome_stats(
-        canonical_name, genome_size_bp, gc_content_pct, genus_ranges,
+        validate_name, genome_size_bp, gc_content_pct, genus_ranges,
     )
 
+    atcc = inferred_atcc_number(strain_input) or (strain_input.atcc_number or "")
     row = {
         "strain":                  canonical_name,
-        "atcc_number":             strain_input.atcc_number,
+        "atcc_number":             atcc,
         "ncbi_refseq":             resolved.refseq_accession,
         "ncbi_assembly_accession": resolved.assembly_accession,
         "ncbi_taxon_id":           resolved.taxon_id if resolved.taxon_id is not None else "",
@@ -127,10 +136,11 @@ def process_one_strain(
         "n50":                     n50,
         "sequence_hash":           sequence_hash,
         "date_retrieved":          date.today().isoformat(),
-        # confidence / provenance columns
         "resolution_method":       report.winning_strategy.label() if report.winning_strategy else "",
         "requires_verification":   "yes" if report.requires_verification else "no",
     }
+    if strain_input.strain_id:
+        row["bacdive_id"] = strain_input.strain_id
     return row, report
 
 
@@ -170,42 +180,124 @@ def _enrich_rows_with_lineage(
             row[rank] = ranks.get(rank, "")
 
 
+def _row_needs_lineage(row: dict) -> bool:
+    return not any(row.get(rank) for rank in LINEAGE_RANKS)
+
+
+def _cache_key(row: dict, key_field: str) -> str:
+    return str(row.get(key_field) or row.get("strain") or "").strip()
+
+
+def _load_cached_rows(path: Path, key_field: str) -> tuple[list[dict], set[str]]:
+    """Load previously resolved metadata rows for resume."""
+    if not path.exists():
+        return [], set()
+    with path.open(newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    keys = {_cache_key(r, key_field) for r in rows}
+    keys.discard("")
+    log.info("Resume cache: %d row(s) already in %s", len(rows), path)
+    return rows, keys
+
+
+def _append_metadata_row(path: Path, row: dict, fieldnames: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    new_file = not path.exists() or path.stat().st_size == 0
+    with path.open("a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+        if new_file:
+            writer.writeheader()
+        writer.writerow(row)
+
+
+def _write_metadata_csv(path: Path, rows: list[dict], fieldnames: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def run(
     ncbi_client: NCBIAssemblyClient,
-    input_csv: Path,
-    output_csv: Path,
-    failures_csv: Path,
-    name_overrides_csv: Path,
-    forced_accessions_csv: Path,
-    fallback_hints_csv: Path,
-    fasta_dir: Path,
-    gbk_dir: Path,
+    input_csv: Optional[Path] = None,
+    output_csv: Optional[Path] = None,
+    failures_csv: Optional[Path] = None,
+    name_overrides_csv: Optional[Path] = None,
+    forced_accessions_csv: Optional[Path] = None,
+    fallback_hints_csv: Optional[Path] = None,
+    fasta_dir: Optional[Path] = None,
+    gbk_dir: Optional[Path] = None,
     genus_ranges: Optional[dict] = None,
     force: bool = False,
     limit: Optional[int] = None,
     debug: bool = False,
+    strains: Optional[list[StrainInput]] = None,
+    download_sequences: bool = True,
+    include_organism_search: bool = True,
+    metadata_cache_csv: Optional[Path] = None,
+    extra_output_fields: Optional[list[str]] = None,
+    cache_key_field: str = "bacdive_id",
 ) -> tuple[int, int]:
     """Run the pipeline end-to-end. Writes strains_metadata.csv + failures.csv,
-    prints a summary. Returns (rows_written, num_failures)."""
+    prints a summary. Returns (rows_written, num_failures).
 
-    fasta_dir.mkdir(parents=True, exist_ok=True)
-    gbk_dir.mkdir(parents=True, exist_ok=True)
+    `strains` skips the align CSV loader. `download_sequences=False` fills
+    size/N50 from NCBI assembly Meta only. When `metadata_cache_csv` is set,
+    isolates already present in that file are skipped unless `force` is True.
+    """
 
-    strains           = load_align_strains(input_csv)
+    if strains is None:
+        if input_csv is None:
+            raise ValueError("run() needs either strains= or input_csv=")
+        strains = load_align_strains(input_csv)
+    if output_csv is None:
+        raise ValueError("run() needs output_csv=")
+    if failures_csv is None:
+        raise ValueError("run() needs failures_csv=")
+    if fasta_dir is None or gbk_dir is None:
+        raise ValueError("run() needs fasta_dir= and gbk_dir=")
+
+    if download_sequences:
+        fasta_dir.mkdir(parents=True, exist_ok=True)
+        gbk_dir.mkdir(parents=True, exist_ok=True)
+
     if limit:
         strains = strains[:limit]
-    name_overrides    = load_name_overrides(name_overrides_csv)
-    forced_accessions = load_forced_accessions(forced_accessions_csv)
-    fallback_hints    = load_fallback_hints(fallback_hints_csv)
 
-    rows: list[dict] = []
+    name_overrides    = load_name_overrides(name_overrides_csv) if name_overrides_csv else {}
+    forced_accessions = load_forced_accessions(forced_accessions_csv) if forced_accessions_csv else {}
+    fallback_hints    = load_fallback_hints(fallback_hints_csv) if fallback_hints_csv else {}
+
+    fieldnames = list(OUTPUT_FIELDNAMES)
+    if extra_output_fields:
+        for name in extra_output_fields:
+            if name not in fieldnames:
+                fieldnames.insert(0, name)
+
+    cached_rows: list[dict] = []
+    cached_keys: set[str] = set()
+    if metadata_cache_csv and not force:
+        cached_rows, cached_keys = _load_cached_rows(metadata_cache_csv, cache_key_field)
+    elif metadata_cache_csv and force:
+        # Drop the sidecar so this run starts clean; incremental appends rebuild it.
+        metadata_cache_csv.unlink(missing_ok=True)
+
+    rows: list[dict] = list(cached_rows)
     reports: list[StrainResolutionReport] = []
+    n_skipped = 0
 
     for strain_input in strains:
+        key = strain_input.join_key
+        if key in cached_keys:
+            n_skipped += 1
+            continue
         try:
             row, report = process_one_strain(
                 strain_input, name_overrides, forced_accessions, fallback_hints,
                 ncbi_client, fasta_dir, gbk_dir, genus_ranges, force, debug,
+                download_sequences=download_sequences,
+                include_organism_search=include_organism_search,
             )
         except Exception as exc:
             log.error("Unexpected error processing %r: %s", strain_input.strain, exc)
@@ -218,29 +310,38 @@ def run(
         reports.append(report)
         if row is not None:
             rows.append(row)
+            cached_keys.add(key)
+            if metadata_cache_csv:
+                _append_metadata_row(metadata_cache_csv, row, fieldnames)
 
-    # --- taxonomy lookup (genus / family / order / phylum) ---
-    if rows:
+    if n_skipped:
+        log.info("Skipped %d isolate(s) already in %s", n_skipped, metadata_cache_csv)
+
+    # Taxonomy lookup for rows that still lack lineage ranks (new + stale cache).
+    to_enrich = [r for r in rows if _row_needs_lineage(r)]
+    if to_enrich:
         try:
-            _enrich_rows_with_lineage(rows, email=ncbi_client.email, api_key=ncbi_client.api_key)
+            _enrich_rows_with_lineage(
+                to_enrich, email=ncbi_client.email, api_key=ncbi_client.api_key,
+            )
         except Exception as exc:
             log.error("Taxonomy lineage lookup failed (%s) -- writing blank rank columns", exc)
 
-    # --- write successful rows ---
     output_csv.parent.mkdir(parents=True, exist_ok=True)
-    with output_csv.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=OUTPUT_FIELDNAMES)
-        writer.writeheader()
-        writer.writerows(rows)
+    _write_metadata_csv(output_csv, rows, fieldnames)
     log.info("Wrote %d row(s) to %s", len(rows), output_csv)
 
-    # --- write failure diagnostics (always, even if zero) ---
     num_failures = write_failures_csv(reports, failures_csv)
     if num_failures:
         log.info("Wrote %d failed strain(s) to %s", num_failures, failures_csv)
 
-    # --- print summary to console + log ---
     summary = build_run_summary(reports)
+    if n_skipped:
+        summary = summary.replace(
+            "NCBI RESOLUTION SUMMARY",
+            f"NCBI RESOLUTION SUMMARY\n  Skipped (already cached) : {n_skipped}",
+            1,
+        )
     print(summary)
     log.info("Run summary:\n%s", summary)
 
