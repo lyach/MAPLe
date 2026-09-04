@@ -91,6 +91,8 @@ Existing BacDive columns (`genus`, `family`, `order`, `phylum`, `gc_content`) ar
 
 Unresolved isolates keep empty metadata columns on their growth rows (and appear in the failures CSV).
 
+About two thirds of unique BacDive isolates have **no** `genome_accession`. For those the pipeline searches `dsm_number` / ATCC and BioSample. A miss means NCBI has no assembly for that deposit — it is logged at INFO, not treated as a pipeline error. Isolates that already have an INSDC `GCA_`/`GCF_` accession are processed first so a long run fills those before collection-ID searches.
+
 ### BacDive resolution order
 
 Uses the isolate-identity columns already on the parquet. Organism-name search is **off** (a species hit is not this strain's genome). BV-BRC / IMG accessions and non-strain taxids are skipped. `n16s_accession` is not used.

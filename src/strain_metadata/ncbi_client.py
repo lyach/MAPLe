@@ -17,20 +17,13 @@ from __future__ import annotations
 # html: NCBI's assembly-summary "Meta" field comes back HTML-escaped
 # (e.g. "&lt;Stat...&gt;"); we need to unescape it before reading it.
 import html
-# logging: structured console output.
 import logging
-# re: regex used both for cleaning ATCC numbers and for parsing the
-# "Meta" stats blob.
 import re
-# time: short pauses between requests, to stay under NCBI's rate limits.
+import threading
 import time
-# dataclass/field: lightweight containers for query results.
 from dataclasses import dataclass, field
-# datetime: parsing NCBI's submission/update date strings for ranking.
 from datetime import datetime
-# Path: filesystem paths (used for the FASTA/GBK download targets).
 from pathlib import Path
-# Optional: type hint meaning "this value or None".
 from typing import Optional
 
 # Bio.Entrez is Biopython's wrapper around NCBI's E-utilities web API.
@@ -48,6 +41,27 @@ from .align_loader import (
 )
 
 log = logging.getLogger("ncbi_client")
+
+
+class RateLimiter:
+    """Shared minimum interval between NCBI request *starts*.
+
+    Threads overlap in-flight HTTP time; this lock serializes only the
+    start-to-start gap so we stay under Entrez's 3/s (no key) or 10/s (key).
+    """
+
+    def __init__(self, min_interval: float):
+        self._min_interval = min_interval
+        self._lock = threading.Lock()
+        self._last = 0.0
+
+    def wait(self) -> None:
+        with self._lock:
+            now = time.monotonic()
+            elapsed = now - self._last
+            if elapsed < self._min_interval:
+                time.sleep(self._min_interval - elapsed)
+            self._last = time.monotonic()
 
 
 @dataclass
@@ -189,21 +203,20 @@ class NCBIAssemblyClient:
         # Pause a little longer between requests if we don't have an API
         # key, since the rate limit without one is lower.
         self.request_delay = 0.11 if api_key else 0.34
-
-    # ---- low-level helper -------------------------------------------------
+        self.rate_limiter = RateLimiter(self.request_delay)
 
     def _retry(self, fn, attempts: int = 3, **kwargs):
         """Call one Entrez function (esearch/esummary/elink/epost), parse
         its XML response, and retry with exponential backoff on transient
-        failures (network blips, NCBI's occasional 429s). Always pauses
-        afterwards to respect the rate limit, even on success."""
+        failures (network blips, NCBI's occasional 429s). Starts are paced
+        by the shared RateLimiter so worker threads cannot stampede NCBI."""
         last_exc: Optional[Exception] = None
         for attempt in range(1, attempts + 1):
             try:
+                self.rate_limiter.wait()
                 handle = fn(**kwargs)
                 result = Entrez.read(handle)
                 handle.close()
-                time.sleep(self.request_delay)
                 return result
             except Exception as exc:
                 last_exc = exc
@@ -213,9 +226,6 @@ class NCBIAssemblyClient:
                     attempt, attempts, exc, wait_seconds,
                 )
                 time.sleep(wait_seconds)
-        # All attempts exhausted -- re-raise the most recent error so the
-        # caller can decide how to handle it (we don't want to silently
-        # swallow a real failure).
         raise last_exc
 
     # ── helpers ────────────────────────────────────────────────────────────
@@ -286,7 +296,7 @@ class NCBIAssemblyClient:
                 Strategy.NCBI_ATCC_ASSEMBLY if prefix == "ATCC"
                 else Strategy.NCBI_COLLECTION_ASSEMBLY
             )
-            for query in (f'"{prefix} {number}"', f'"{prefix}:{number}"'):
+            for query in (f'"{prefix} {number}"',):
                 try:
                     uid_list = self._assembly_ids_from_term(query)
                     summaries = self._assembly_summaries_for_ids(uid_list)
@@ -325,7 +335,9 @@ class NCBIAssemblyClient:
 
         expected = strain_input.name_for_organism_check()
         for prefix, number in collections:
-            for bs_query in (f'"{prefix}:{number}"', f'"{prefix} {number}"'):
+            # Unquoted PREFIX:NUMBER is how BioSample indexes culture_collection
+            # (ATCC:15587). Quoted phrases miss records that the unquoted form hits.
+            for bs_query in (f"{prefix}:{number}", f'"{prefix} {number}"'):
                 try:
                     bs_result = self._retry(
                         Entrez.esearch, db="biosample", term=bs_query, retmax=10
@@ -343,6 +355,7 @@ class NCBIAssemblyClient:
                         Strategy.NCBI_BIOSAMPLE_LINK, bs_query,
                         note="0 BioSample results",
                     )
+                    log.debug("BioSample miss: %r", bs_query)
                     continue
 
                 assembly_uid_set: set[str] = set()
@@ -632,10 +645,18 @@ class NCBIAssemblyClient:
             report.add_attempt(Strategy.FALLBACK_HINT, hint,
                                note="NCBI returned no record for this hint accession")
 
-        log.warning(
-            "All resolution strategies failed for strain=%r atcc=%r",
-            strain_input.strain, atcc,
-        )
+        had_insdc = bool(recorded_insdc_accession(strain_input))
+        if had_insdc:
+            log.warning(
+                "Recorded INSDC accession did not resolve for strain=%r acc=%r",
+                strain_input.strain, strain_input.genome_accession,
+            )
+        else:
+            log.info(
+                "No NCBI assembly for strain=%r (no INSDC accession; "
+                "collection/taxid search empty) atcc=%r",
+                strain_input.strain, atcc,
+            )
         return None, report
 
     # ---- downloading sequence data via NCBI FTP -----------------------

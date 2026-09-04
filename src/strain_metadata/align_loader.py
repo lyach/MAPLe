@@ -80,13 +80,18 @@ def _norm_collection_prefix(prefix: str) -> str:
 
 
 def collection_ids_from_input(strain_input: StrainInput) -> list[tuple[str, str]]:
-    """Unique (PREFIX, number) pairs from atcc_number, dsm_number, and
-    culture_collection_ids. ATCC entries are listed first."""
+    """Unique (PREFIX, number) pairs for NCBI search.
+
+    Order: ATCC (from atcc_number), official dsm_number, then other
+    culture_collection_ids. Extra DSM numbers scraped from the BacDive
+    JSON (often related deposits, not this isolate) are dropped when
+    dsm_number is already set. Trailing dots on numbers are stripped.
+    """
     seen: list[tuple[str, str]] = []
 
     def add(prefix: str, number: str) -> None:
         prefix = _norm_collection_prefix(prefix)
-        number = (number or "").strip()
+        number = (number or "").strip().rstrip(".")
         if not prefix or not number:
             return
         key = (prefix, number)
@@ -101,19 +106,22 @@ def collection_ids_from_input(strain_input: StrainInput) -> list[tuple[str, str]
         else:
             add("ATCC", atcc)
 
-    dsm = (strain_input.dsm_number or "").strip()
-    if dsm:
-        add("DSM", dsm)
+    official_dsm = (strain_input.dsm_number or "").strip().rstrip(".")
+    if official_dsm:
+        add("DSM", official_dsm)
 
     for chunk in (strain_input.culture_collection_ids or "").split(";"):
         chunk = chunk.strip()
         if not chunk:
             continue
         match = _COLLECTION_RE.search(chunk)
-        if match:
-            add(match.group(1), match.group(2))
+        if not match:
+            continue
+        prefix = _norm_collection_prefix(match.group(1))
+        if prefix == "DSM" and official_dsm:
+            continue
+        add(match.group(1), match.group(2))
 
-    seen.sort(key=lambda item: (0 if item[0] == "ATCC" else 1, item[0], item[1]))
     return seen
 
 

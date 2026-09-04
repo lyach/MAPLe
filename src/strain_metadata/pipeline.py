@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import csv
 import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
 from typing import Optional
@@ -37,6 +39,7 @@ from .resolution_report import (
 from .sequence_stats import summarize_fasta
 from .taxonomy import LINEAGE_RANKS, fetch_lineage
 from .validation import validate_genome_stats
+from tqdm import tqdm
 
 log = logging.getLogger("pipeline")
 
@@ -71,7 +74,7 @@ def process_one_strain(
     )
 
     if resolved is None:
-        log.warning("FAILED to resolve %s", canonical_name)
+        log.info("No assembly for %s", canonical_name)
         return None, report
 
     accession  = resolved.assembly_accession or resolved.assembly_uid
@@ -238,13 +241,15 @@ def run(
     metadata_cache_csv: Optional[Path] = None,
     extra_output_fields: Optional[list[str]] = None,
     cache_key_field: str = "bacdive_id",
+    workers: int = 1,
 ) -> tuple[int, int]:
     """Run the pipeline end-to-end. Writes strains_metadata.csv + failures.csv,
     prints a summary. Returns (rows_written, num_failures).
 
-    `strains` skips the align CSV loader. `download_sequences=False` fills
-    size/N50 from NCBI assembly Meta only. When `metadata_cache_csv` is set,
-    isolates already present in that file are skipped unless `force` is True.
+    `workers` > 1 overlaps NCBI HTTP latency across isolates. A shared
+    RateLimiter on the client keeps the process under Entrez's cap
+    (3 req/s without an API key, 10 req/s with one), so extra threads
+    wait on the limiter rather than 429'ing NCBI.
     """
 
     if strains is None:
@@ -285,34 +290,70 @@ def run(
 
     rows: list[dict] = list(cached_rows)
     reports: list[StrainResolutionReport] = []
-    n_skipped = 0
+    pending = [s for s in strains if s.join_key not in cached_keys]
+    n_skipped = len(strains) - len(pending)
+    n_ok = 0
+    n_fail = 0
+    workers = max(1, int(workers))
+    if workers > 1:
+        log.info("Resolving %d isolate(s) with %d worker thread(s)", len(pending), workers)
 
-    for strain_input in strains:
-        key = strain_input.join_key
-        if key in cached_keys:
-            n_skipped += 1
-            continue
-        try:
-            row, report = process_one_strain(
-                strain_input, name_overrides, forced_accessions, fallback_hints,
-                ncbi_client, fasta_dir, gbk_dir, genus_ranges, force, debug,
-                download_sequences=download_sequences,
-                include_organism_search=include_organism_search,
-            )
-        except Exception as exc:
-            log.error("Unexpected error processing %r: %s", strain_input.strain, exc)
-            report = StrainResolutionReport(
-                strain=strain_input.strain,
-                atcc_number=strain_input.atcc_number,
-            )
-            row = None
+    def _one(strain_input: StrainInput):
+        return process_one_strain(
+            strain_input, name_overrides, forced_accessions, fallback_hints,
+            ncbi_client, fasta_dir, gbk_dir, genus_ranges, force, debug,
+            download_sequences=download_sequences,
+            include_organism_search=include_organism_search,
+        )
 
-        reports.append(report)
-        if row is not None:
-            rows.append(row)
-            cached_keys.add(key)
-            if metadata_cache_csv:
-                _append_metadata_row(metadata_cache_csv, row, fieldnames)
+    write_lock = threading.Lock()
+    pbar = tqdm(total=len(pending), desc="NCBI resolve", unit="isolate", dynamic_ncols=True)
+
+    def _record(strain_input: StrainInput, row, report) -> None:
+        nonlocal n_ok, n_fail
+        with write_lock:
+            reports.append(report)
+            if row is not None:
+                n_ok += 1
+                rows.append(row)
+                cached_keys.add(strain_input.join_key)
+                if metadata_cache_csv:
+                    _append_metadata_row(metadata_cache_csv, row, fieldnames)
+            else:
+                n_fail += 1
+            pbar.set_postfix(ok=n_ok, fail=n_fail, refresh=False)
+            pbar.update(1)
+
+    if workers == 1:
+        for strain_input in pending:
+            try:
+                row, report = _one(strain_input)
+            except Exception as exc:
+                log.error("Unexpected error processing %r: %s", strain_input.strain, exc)
+                report = StrainResolutionReport(
+                    strain=strain_input.strain,
+                    atcc_number=strain_input.atcc_number,
+                )
+                row = None
+            _record(strain_input, row, report)
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futs = {pool.submit(_one, s): s for s in pending}
+            for fut in as_completed(futs):
+                strain_input = futs[fut]
+                try:
+                    row, report = fut.result()
+                except Exception as exc:
+                    log.error("Unexpected error processing %r: %s",
+                              strain_input.strain, exc)
+                    report = StrainResolutionReport(
+                        strain=strain_input.strain,
+                        atcc_number=strain_input.atcc_number,
+                    )
+                    row = None
+                _record(strain_input, row, report)
+
+    pbar.close()
 
     if n_skipped:
         log.info("Skipped %d isolate(s) already in %s", n_skipped, metadata_cache_csv)

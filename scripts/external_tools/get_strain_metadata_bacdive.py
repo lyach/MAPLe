@@ -19,7 +19,7 @@ Writes:
 
 USAGE:
     python scripts/external_tools/get_strain_metadata_bacdive.py --limit 20 --debug
-    python scripts/external_tools/get_strain_metadata_bacdive.py
+    python scripts/external_tools/get_strain_metadata_bacdive.py --workers 8
     python scripts/external_tools/get_strain_metadata_bacdive.py \\
         --input data/external/bacdive_growth_full.parquet \\
         --output data/external/bacdive_growth_full_strain_meta.parquet
@@ -71,6 +71,10 @@ def parse_args(argv=None) -> argparse.Namespace:
                    help="Show DEBUG detail on the console too (always in the log file)")
     p.add_argument("--quiet", action="store_true",
                    help="Console shows warnings/errors only (full detail still logged)")
+    p.add_argument("--workers", type=int, default=8,
+                   help="Parallel isolate workers (default: 8). NCBI Entrez is "
+                        "still paced at ~10 req/s with an API key / ~3 req/s "
+                        "without; extra workers overlap HTTP latency.")
     p.add_argument("--reset-credentials", action="store_true",
                    help="Forget saved NCBI email/API key and prompt again")
     return p.parse_args(argv)
@@ -111,6 +115,11 @@ def main(argv=None) -> int:
         return 1
 
     ncbi_client = NCBIAssemblyClient(email=email, api_key=api_key)
+    workers = args.workers
+    if not api_key and workers > 3:
+        log.warning("No NCBI API key; capping --workers from %d to 3 (Entrez 3 req/s)",
+                    workers)
+        workers = 3
 
     rows_written, num_failures = pipeline.run(
         ncbi_client=ncbi_client,
@@ -131,6 +140,7 @@ def main(argv=None) -> int:
         metadata_cache_csv=args.metadata_csv,
         extra_output_fields=["bacdive_id"],
         cache_key_field="bacdive_id",
+        workers=workers,
     )
 
     try:

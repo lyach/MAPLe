@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .align_loader import StrainInput
+from .align_loader import StrainInput, recorded_insdc_accession
 from .config import PARQUET_MERGE_FIELDNAMES
 
 log = logging.getLogger("bacdive_loader")
@@ -105,8 +105,13 @@ def load_bacdive_strains(path: Path) -> list[StrainInput]:
             ncbi_taxid_level=_cell(row, "ncbi_taxid_level"),
         ))
 
-    log.info("Loaded %d unique isolate(s) from %s (%d identity column(s))",
-             len(strains), path, len(cols))
+    # Resolve recorded GCA_/GCF_ accessions first
+    strains.sort(key=lambda s: (0 if recorded_insdc_accession(s) else 1, s.strain_id))
+    n_insdc = sum(1 for s in strains if recorded_insdc_accession(s))
+
+    log.info("Loaded %d unique isolate(s) from %s (%d identity column(s), "
+             "%d with INSDC genome_accession -- processed first)",
+             len(strains), path, len(cols), n_insdc)
     return strains
 
 
