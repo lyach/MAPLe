@@ -19,12 +19,12 @@ The taxonomic scope and target are read from bacdive/taxa.yaml (edit it to
 control what is downloaded). The public BacDive v2 API needs no credentials.
 
 USAGE:
-    python scripts/get_bacdive_dataset.py
-    python scripts/get_bacdive_dataset.py --taxa bacdive/taxa.yaml
-    python scripts/get_bacdive_dataset.py --target metabolite_utilization
-    python scripts/get_bacdive_dataset.py --limit 5          # quick smoke test
-    python scripts/get_bacdive_dataset.py --no-progress       # disable tqdm bars
-    python scripts/get_bacdive_dataset.py --max-workers 10 --taxa-workers 8
+    python scripts/bacdive/get_bacdive_dataset.py
+    python scripts/bacdive/get_bacdive_dataset.py --taxa bacdive/all_taxa_medium.yaml
+    python scripts/bacdive/get_bacdive_dataset.py --target metabolite_utilization
+    python scripts/bacdive/get_bacdive_dataset.py --limit 5          # quick smoke test
+    python scripts/bacdive/get_bacdive_dataset.py --no-progress       # disable tqdm bars
+    python scripts/bacdive/get_bacdive_dataset.py --max-workers 10 --taxa-workers 8
 """
 
 from __future__ import annotations
