@@ -24,7 +24,10 @@ INPUT = ROOT / "data" / "processed" / "aero_anaero_tidy_curves.csv"
 FLAGS = ROOT / "data" / "metadata" / "align_dataset" / "align_growth_curve_curation.csv"
 STRAIN_META = ROOT / "data" / "metadata" / "align_dataset" / "align_strains_metadata.csv"
 MEDIA_META = ROOT / "data" / "metadata" / "modeling" / "media_features.csv"
-OUTPUT = ROOT / "data" / "processed" / "align_modeling_growth_dedup.csv"
+OUTPUT = ROOT / "data" / "processed" / "align" / "align_modeling_growth.csv"
+
+# If True, temperature is used as a duplicate key
+TEMP = False
 
 # curation key → tidy CSV column
 FIELD_MAP = {
@@ -38,12 +41,12 @@ GROWTH_MAP = {1: "yes", 0: "no"}
 FLAGS_TO_CLASS = {"yes": 1, "no": 0}
 
 KEEP_COLS = [
-    "exp_id",
-    "date",
-    "well_id",
-    "row",
-    "col",
-    "well_index",
+    # "exp_id",
+    # "date",
+    # "well_id",
+    # "row",
+    # "col",
+    # "well_index",
     "strain_name",
     "media_name",
     "atmosphere",
@@ -242,20 +245,36 @@ def main() -> None:
 
     compare_growth(out, flags_all)
 
-    print("\n=== replace growth / keep cols / merge metadata ===")
+    print("\n=== Replace growth ===")
     out = replace_growth(out, flags_all)
-    out = keep_columns(out)
-    out = merge_strain_metadata(out)
-    out = merge_media_metadata(out)
     
-    print("\n=== Drop duplicates (strain, media, growth_class) ===")
-    print(f"Shape before dropping duplicates (strain, media, growth_class): {out.shape[0]} rows x {out.shape[1]} cols")
-    out = out.drop_duplicates(subset=["strain_name", "media_name", "growth_class"])
-    print(f"Dropped duplicates, shape: {out.shape[0]} rows x {out.shape[1]} cols")
+    print(f"\n=== Keeping columns: {KEEP_COLS} ===")
+    out = keep_columns(out)
+    
+    
+    print("\n=== Drop duplicates ===")
+    print(f"Shape before dropping duplicates: {out.shape[0]} rows x {out.shape[1]} cols, growth class 1: {out[out['growth_class'] == 1].shape[0]}, growth class 0: {out[out['growth_class'] == 0].shape[0]}")
 
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    out.to_csv(OUTPUT, index=False)
-    print(f"\nOutput: {OUTPUT}")
+    output_path = OUTPUT
+    if TEMP:
+        dup_cols = ["strain_name", "media_name", "temperature", "atmosphere"]
+        print(f"Dropping duplicates on {dup_cols}")
+        out = out.sort_values(by=dup_cols + ["growth_class"], ascending=[True, True, True, True, False])
+        output_path = Path(str(OUTPUT).replace(".csv", "_temp.csv"))
+    else:
+        dup_cols = ["strain_name", "media_name"]
+        print(f"Dropping duplicates on {dup_cols}")
+        out = out.sort_values(by=dup_cols + ["growth_class"], ascending=[True, True, False])
+
+    out = out.drop_duplicates(subset=dup_cols)
+    print(f"Dropped duplicates, shape: {out.shape[0]} rows x {out.shape[1]} cols, growth class 1: {out[out['growth_class'] == 1].shape[0]}, growth class 0: {out[out['growth_class'] == 0].shape[0]}")
+
+    print("\n=== Merge strain metadata ===")
+    out = merge_strain_metadata(out)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    out.to_csv(output_path, index=False)
+    print(f"\nOutput: {output_path}")
 
 
 if __name__ == "__main__":
