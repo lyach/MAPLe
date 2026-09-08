@@ -56,11 +56,11 @@ REQUEST_DELAY = 0.2
 FETCH_BATCH_SIZE = 100
 
 # Concurrent threads used to fetch batches within one taxon.
-MAX_WORKERS = 6
+MAX_WORKERS = 10
 
 # Concurrent taxa processed at once (each with its own BacdiveClient/session).
 # Only kicks in when >1 taxon is listed and --limit is not set.
-TAXA_WORKERS = 4
+TAXA_WORKERS = 6
 
 # --------------------------------------------------------------------------
 # OUTPUT SCHEMAS (per target)

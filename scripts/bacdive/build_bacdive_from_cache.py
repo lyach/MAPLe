@@ -64,16 +64,13 @@ def parse_args(argv=None) -> argparse.Namespace:
              "(config.TARGETS[target].fieldnames) -- the default. Pass "
              "--no-full-schema to use whatever subset the YAML config's "
              "strain_features/medium_features currently restrict to "
-             "instead. Without --out, --full-schema defaults to "
-             "config.TARGETS[target].output_file rather than the YAML's "
-             "own output_file, so a full-schema build can never collide "
-             "with a YAML-restricted one on the same filename. Note: "
-             "--target alone does NOT get you the YAML's column subset "
-             "when it happens to equal the YAML's own target (as "
-             "medium_growth normally does) -- that combination still "
-             "uses --full-schema's default. Pass --no-full-schema "
-             "explicitly whenever you want the YAML's current "
-             "restrictions instead.",
+             "instead. Output file is determined independently: uses --out if "
+             "provided, else the YAML config's output_file if set, else the "
+             "target's default. Note: --target alone does NOT get you the "
+             "YAML's column subset when it happens to equal the YAML's own "
+             "target (as medium_growth normally does) -- that combination "
+             "still uses --full-schema's default. Pass --no-full-schema "
+             "explicitly whenever you want the YAML's current restrictions.",
     )
     p.add_argument(
         "--out", type=Path, default=None,
@@ -158,11 +155,15 @@ def main(argv=None) -> int:
         base = config.TARGETS[target]
         fieldnames = list(base.fieldnames)
         categorical_features = list(base.categorical_features)
-        output_file = args.out or base.output_file
     else:
         fieldnames = cfg.fieldnames
         categorical_features = cfg.categorical_features
-        output_file = args.out or cfg.output_file
+
+    # Determine output_file
+    if args.out:
+        output_file = args.out
+    else:
+        output_file = cfg.output_file or config.TARGETS[target].output_file
     output_writer = cfg.output_writer
 
     if not output_file.is_absolute():

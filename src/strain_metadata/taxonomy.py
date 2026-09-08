@@ -7,6 +7,7 @@ import time
 from typing import Optional
 
 from Bio import Entrez
+from tqdm import tqdm
 
 log = logging.getLogger("taxonomy")
 
@@ -52,7 +53,8 @@ def fetch_lineage(
     unique_ids = sorted(set(taxon_ids))
     lineage: dict[int, dict[str, str]] = {}
 
-    for start in range(0, len(unique_ids), _BATCH_SIZE):
+    starts = range(0, len(unique_ids), _BATCH_SIZE)
+    for start in tqdm(starts, desc="NCBI lineage", unit="batch", dynamic_ncols=True):
         batch = unique_ids[start : start + _BATCH_SIZE]
         handle = Entrez.efetch(db="taxonomy", id=",".join(str(t) for t in batch))
         records = Entrez.read(handle)

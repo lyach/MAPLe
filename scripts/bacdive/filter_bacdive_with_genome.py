@@ -15,12 +15,6 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[2]
 EXT = ROOT / "data" / "external"
 DEFAULT_MAP = EXT / "bacdive_genome_map.csv"
-
-# Full-schema growth table, no temperature-range expansion (see
-# src/bacdive/config.py's stamp_temperature_expansion / stamp_dedup_w_negatives
-# for how a differently-configured build gets a different filename instead of
-# colliding with this one). Pass --parquet to filter
-# bacdive_growth_full_texpand.parquet or a _negs variant instead.
 DEFAULT_PARQUET = EXT / "bacdive_growth_full.parquet"
 
 

@@ -17,20 +17,13 @@ from __future__ import annotations
 # html: NCBI's assembly-summary "Meta" field comes back HTML-escaped
 # (e.g. "&lt;Stat...&gt;"); we need to unescape it before reading it.
 import html
-# logging: structured console output.
 import logging
-# re: regex used both for cleaning ATCC numbers and for parsing the
-# "Meta" stats blob.
 import re
-# time: short pauses between requests, to stay under NCBI's rate limits.
+import threading
 import time
-# dataclass/field: lightweight containers for query results.
 from dataclasses import dataclass, field
-# datetime: parsing NCBI's submission/update date strings for ranking.
 from datetime import datetime
-# Path: filesystem paths (used for the FASTA/GBK download targets).
 from pathlib import Path
-# Optional: type hint meaning "this value or None".
 from typing import Optional
 
 # Bio.Entrez is Biopython's wrapper around NCBI's E-utilities web API.
@@ -39,9 +32,36 @@ from Bio import Entrez
 
 # Re-use the shared constants/config instead of redefining them here.
 from .config import ASSEMBLY_LEVEL_MAP
-from .align_loader import StrainInput, clean_strain_name_for_search
+from .align_loader import (
+    StrainInput,
+    clean_strain_name_for_search,
+    collection_ids_from_input,
+    inferred_atcc_number,
+    recorded_insdc_accession,
+)
 
 log = logging.getLogger("ncbi_client")
+
+
+class RateLimiter:
+    """Shared minimum interval between NCBI request *starts*.
+
+    Threads overlap in-flight HTTP time; this lock serializes only the
+    start-to-start gap so we stay under Entrez's 3/s (no key) or 10/s (key).
+    """
+
+    def __init__(self, min_interval: float):
+        self._min_interval = min_interval
+        self._lock = threading.Lock()
+        self._last = 0.0
+
+    def wait(self) -> None:
+        with self._lock:
+            now = time.monotonic()
+            elapsed = now - self._last
+            if elapsed < self._min_interval:
+                time.sleep(self._min_interval - elapsed)
+            self._last = time.monotonic()
 
 
 @dataclass
@@ -63,16 +83,6 @@ class ResolvedAssembly:
     # contig_n50/scaffold_n50) -- used as a fallback when we can't or don't
     # download every sequence ourselves. Empty dict if NCBI didn't report any.
     meta_stats: dict = field(default_factory=dict)
-
-
-def _clean_atcc_for_query(atcc_number: str) -> str:
-    """Your align file's ATCC numbers are sometimes plain digits ("15973")
-    and sometimes a prefixed catalog code ("BAA-1025"). Both forms are
-    meaningful to NCBI's search (it indexes strain text like "ATCC
-    BAA-1025" verbatim) so we only trim whitespace here -- we deliberately
-    do NOT strip non-digit characters, since that would turn "BAA-1025"
-    into the much less specific (and likely wrong) "1025"."""
-    return atcc_number.strip()
 
 
 def _parse_meta_stats(meta_str: str) -> dict:
@@ -193,21 +203,20 @@ class NCBIAssemblyClient:
         # Pause a little longer between requests if we don't have an API
         # key, since the rate limit without one is lower.
         self.request_delay = 0.11 if api_key else 0.34
-
-    # ---- low-level helper -------------------------------------------------
+        self.rate_limiter = RateLimiter(self.request_delay)
 
     def _retry(self, fn, attempts: int = 3, **kwargs):
         """Call one Entrez function (esearch/esummary/elink/epost), parse
         its XML response, and retry with exponential backoff on transient
-        failures (network blips, NCBI's occasional 429s). Always pauses
-        afterwards to respect the rate limit, even on success."""
+        failures (network blips, NCBI's occasional 429s). Starts are paced
+        by the shared RateLimiter so worker threads cannot stampede NCBI."""
         last_exc: Optional[Exception] = None
         for attempt in range(1, attempts + 1):
             try:
+                self.rate_limiter.wait()
                 handle = fn(**kwargs)
                 result = Entrez.read(handle)
                 handle.close()
-                time.sleep(self.request_delay)
                 return result
             except Exception as exc:
                 last_exc = exc
@@ -217,9 +226,6 @@ class NCBIAssemblyClient:
                     attempt, attempts, exc, wait_seconds,
                 )
                 time.sleep(wait_seconds)
-        # All attempts exhausted -- re-raise the most recent error so the
-        # caller can decide how to handle it (we don't want to silently
-        # swallow a real failure).
         raise last_exc
 
     # ── helpers ────────────────────────────────────────────────────────────
@@ -238,152 +244,221 @@ class NCBIAssemblyClient:
         result = self._retry(Entrez.esummary, db="assembly", id=",".join(uid_list))
         return result.get("DocumentSummarySet", {}).get("DocumentSummary", [])
 
-    # ── Strategy 1: direct ATCC search in the assembly database ────────────
-
-    def _try_ncbi_atcc_assembly(
+    def _try_recorded_insdc(
         self, strain_input: "StrainInput", report: "StrainResolutionReport"
-    ) -> Optional[dict]:
-        """Search NCBI's assembly database directly for the ATCC number.
-        This is the fastest and most strain-specific approach when it works,
-        but NCBI doesn't always index ATCC numbers in the assembly metadata."""
+    ) -> Optional["ResolvedAssembly"]:
+        """Use a GCA_/GCF_ accession already recorded on the isolate."""
         from .resolution_report import Strategy
+        from .overrides import resolve_via_accession
 
-        atcc = _clean_atcc_for_query(strain_input.atcc_number or "")
-        if not atcc:
+        acc = recorded_insdc_accession(strain_input)
+        source = (strain_input.genome_accession_source or "").strip().lower()
+        raw = (strain_input.genome_accession or "").strip()
+        if not acc:
+            if raw:
+                report.add_attempt(
+                    Strategy.RECORDED_INSDC_ACCESSION, raw,
+                    note=f"genome_accession_source={source or 'empty'!r} "
+                         "is not a usable INSDC GCA_/GCF_ accession",
+                )
             return None
 
-        query = f'"ATCC {atcc}"'
+        resolved = resolve_via_accession(acc, self)
+        if resolved:
+            report.add_attempt(
+                Strategy.RECORDED_INSDC_ACCESSION, acc,
+                result=resolved.assembly_accession,
+            )
+            log.info("Recorded INSDC hit: %r → %s", strain_input.strain,
+                     resolved.assembly_accession)
+            return resolved
+        report.add_attempt(
+            Strategy.RECORDED_INSDC_ACCESSION, acc,
+            note="NCBI returned no record for this accession",
+        )
+        return None
+
+    def _try_ncbi_collection_assembly(
+        self, strain_input: "StrainInput", report: "StrainResolutionReport"
+    ) -> Optional[dict]:
+        """Search NCBI's assembly database for each culture-collection ID.
+
+        ATCC hits keep the original ATCC strategy label so the align_strains
+        path is unchanged; DSM / JCM / ... use NCBI_COLLECTION_ASSEMBLY."""
+        from .resolution_report import Strategy
+
+        collections = collection_ids_from_input(strain_input)
+        if not collections:
+            return None
+
+        for prefix, number in collections:
+            strategy = (
+                Strategy.NCBI_ATCC_ASSEMBLY if prefix == "ATCC"
+                else Strategy.NCBI_COLLECTION_ASSEMBLY
+            )
+            for query in (f'"{prefix} {number}"',):
+                try:
+                    uid_list = self._assembly_ids_from_term(query)
+                    summaries = self._assembly_summaries_for_ids(uid_list)
+                except Exception as exc:
+                    report.add_attempt(strategy, query, note=f"API error: {exc}")
+                    continue
+
+                if summaries:
+                    chosen = _rank_assembly_summaries(summaries)[0]
+                    acc = chosen.get("AssemblyAccession", "?")
+                    report.add_attempt(strategy, query, result=acc)
+                    log.info("Collection assembly hit: %r via %r → %s (%s)",
+                             strain_input.strain, query, acc,
+                             chosen.get("AssemblyStatus"))
+                    return chosen
+
+                report.add_attempt(
+                    strategy, query, note="0 results in NCBI assembly database",
+                )
+                log.debug("Collection assembly miss: %r", query)
+        return None
+
+    def _try_ncbi_biosample_link(
+        self, strain_input: "StrainInput", report: "StrainResolutionReport"
+    ) -> Optional[dict]:
+        """Query NCBI's BioSample database for each culture-collection ID,
+        then follow the BioSample → assembly elink.
+
+        BioSample stores a 'culture_collection' attribute like 'ATCC:15252'
+        even when that ID is missing from the assembly search index."""
+        from .resolution_report import Strategy
+
+        collections = collection_ids_from_input(strain_input)
+        if not collections:
+            return None
+
+        expected = strain_input.name_for_organism_check()
+        for prefix, number in collections:
+            # Unquoted PREFIX:NUMBER is how BioSample indexes culture_collection
+            # (ATCC:15587). Quoted phrases miss records that the unquoted form hits.
+            for bs_query in (f"{prefix}:{number}", f'"{prefix} {number}"'):
+                try:
+                    bs_result = self._retry(
+                        Entrez.esearch, db="biosample", term=bs_query, retmax=10
+                    )
+                except Exception as exc:
+                    report.add_attempt(
+                        Strategy.NCBI_BIOSAMPLE_LINK, bs_query,
+                        note=f"BioSample esearch error: {exc}",
+                    )
+                    continue
+
+                bs_ids = bs_result.get("IdList", [])
+                if not bs_ids:
+                    report.add_attempt(
+                        Strategy.NCBI_BIOSAMPLE_LINK, bs_query,
+                        note="0 BioSample results",
+                    )
+                    log.debug("BioSample miss: %r", bs_query)
+                    continue
+
+                assembly_uid_set: set[str] = set()
+                for bs_id in bs_ids:
+                    try:
+                        link_result = self._retry(
+                            Entrez.elink,
+                            dbfrom="biosample", db="assembly",
+                            id=bs_id, linkname="biosample_assembly",
+                        )
+                        for linkset in link_result[0].get("LinkSetDb", []):
+                            for link in linkset.get("Link", []):
+                                assembly_uid_set.add(link["Id"])
+                    except Exception:
+                        pass
+
+                if not assembly_uid_set:
+                    report.add_attempt(
+                        Strategy.NCBI_BIOSAMPLE_LINK, bs_query,
+                        note=f"{len(bs_ids)} BioSample record(s) found but "
+                             "elink returned no assembly links",
+                    )
+                    continue
+
+                try:
+                    summaries = self._assembly_summaries_for_ids(list(assembly_uid_set))
+                except Exception as exc:
+                    report.add_attempt(
+                        Strategy.NCBI_BIOSAMPLE_LINK, bs_query,
+                        note=f"esummary error for linked assemblies: {exc}",
+                    )
+                    continue
+
+                if summaries:
+                    chosen = _rank_assembly_summaries(summaries)[0]
+                    acc = chosen.get("AssemblyAccession", "?")
+                    ncbi_organism = chosen.get("Organism", "") or chosen.get("SpeciesName", "")
+                    organism_ok = _organism_matches(expected, ncbi_organism)
+                    if not organism_ok:
+                        report.organism_mismatch = True
+                        log.warning(
+                            "ORGANISM MISMATCH for %r: searched via BioSample %r, "
+                            "but NCBI assembly %s is organism %r.",
+                            strain_input.strain, bs_query, acc, ncbi_organism,
+                        )
+                        note = (f"{len(bs_ids)} BioSample -> {len(assembly_uid_set)} "
+                                f"assembly link(s); ORGANISM MISMATCH (got {ncbi_organism!r})")
+                    else:
+                        note = (f"{len(bs_ids)} BioSample -> "
+                                f"{len(assembly_uid_set)} assembly link(s)")
+
+                    report.add_attempt(
+                        Strategy.NCBI_BIOSAMPLE_LINK, bs_query,
+                        result=acc, note=note,
+                    )
+                    log.info(
+                        "BioSample hit: %r via %r -> %s (%s)%s",
+                        strain_input.strain, bs_query, acc,
+                        chosen.get("AssemblyStatus"),
+                        " [ORGANISM MISMATCH]" if not organism_ok else "",
+                    )
+                    return chosen
+
+        return None
+
+    def _try_ncbi_strain_taxid(
+        self, strain_input: "StrainInput", report: "StrainResolutionReport"
+    ) -> Optional[dict]:
+        """Search the assembly database by a strain-level NCBI taxid.
+
+        Species / subspecies taxids are skipped -- they identify a set of
+        assemblies, not this isolate."""
+        from .resolution_report import Strategy
+
+        taxid = (strain_input.ncbi_taxid or "").strip()
+        level = (strain_input.ncbi_taxid_level or "").strip().lower()
+        if not taxid:
+            return None
+        if level != "strain":
+            report.add_attempt(
+                Strategy.NCBI_STRAIN_TAXID, taxid,
+                note=f"ncbi_taxid_level={level or 'empty'!r} is not strain -- skipped",
+            )
+            return None
+
+        query = f"txid{taxid}[Organism:noexp]"
         try:
-            uid_list  = self._assembly_ids_from_term(query)
+            uid_list = self._assembly_ids_from_term(query)
             summaries = self._assembly_summaries_for_ids(uid_list)
         except Exception as exc:
-            report.add_attempt(Strategy.NCBI_ATCC_ASSEMBLY, query,
+            report.add_attempt(Strategy.NCBI_STRAIN_TAXID, query,
                                note=f"API error: {exc}")
             return None
 
         if summaries:
             chosen = _rank_assembly_summaries(summaries)[0]
             acc = chosen.get("AssemblyAccession", "?")
-            report.add_attempt(Strategy.NCBI_ATCC_ASSEMBLY, query,
-                               result=acc)
-            log.info("Strategy 1 hit: %r via %r → %s (%s)",
+            report.add_attempt(Strategy.NCBI_STRAIN_TAXID, query, result=acc)
+            log.info("Strain-taxid hit: %r via %r → %s (%s)",
                      strain_input.strain, query, acc, chosen.get("AssemblyStatus"))
             return chosen
 
-        report.add_attempt(Strategy.NCBI_ATCC_ASSEMBLY, query,
-                           note="0 results in NCBI assembly database")
-        log.debug("Strategy 1 miss: %r", query)
-        return None
-
-    # ── Strategy 2: BioSample cross-reference ──────────────────────────────
-
-    def _try_ncbi_biosample_link(
-        self, strain_input: "StrainInput", report: "StrainResolutionReport"
-    ) -> Optional[dict]:
-        """Query NCBI's BioSample database for the ATCC number, then follow
-        the BioSample → assembly elink to get the assembly record.
-
-        BioSample stores a 'culture_collection' attribute like 'ATCC:15252'
-        for every deposited genome -- even when that ATCC number is missing
-        from the assembly database's own search index. This makes BioSample
-        the most reliable ATCC cross-reference within NCBI's ecosystem."""
-        from .resolution_report import Strategy
-
-        atcc = _clean_atcc_for_query(strain_input.atcc_number or "")
-        if not atcc:
-            return None
-
-        # Search BioSample for the ATCC number in the culture_collection field.
-        # We try two forms: the colon-prefixed form NCBI uses internally
-        # ("ATCC:15252") and the plain form ("ATCC 15252"), because different
-        # submitters formatted their submissions differently.
-        for bs_query in [f'"ATCC:{atcc}"', f'"ATCC {atcc}"']:
-            try:
-                bs_result = self._retry(
-                    Entrez.esearch, db="biosample", term=bs_query, retmax=10
-                )
-            except Exception as exc:
-                report.add_attempt(
-                    Strategy.NCBI_BIOSAMPLE_LINK, bs_query,
-                    note=f"BioSample esearch error: {exc}",
-                )
-                continue
-
-            bs_ids = bs_result.get("IdList", [])
-            if not bs_ids:
-                report.add_attempt(
-                    Strategy.NCBI_BIOSAMPLE_LINK, bs_query,
-                    note="0 BioSample results",
-                )
-                continue
-
-            # Found BioSample records -- now link them to assemblies.
-            assembly_uid_set: set[str] = set()
-            for bs_id in bs_ids:
-                try:
-                    link_result = self._retry(
-                        Entrez.elink,
-                        dbfrom="biosample", db="assembly",
-                        id=bs_id, linkname="biosample_assembly",
-                    )
-                    for linkset in link_result[0].get("LinkSetDb", []):
-                        for link in linkset.get("Link", []):
-                            assembly_uid_set.add(link["Id"])
-                except Exception:
-                    pass  # link failed for this one BioSample record, try next
-
-            if not assembly_uid_set:
-                report.add_attempt(
-                    Strategy.NCBI_BIOSAMPLE_LINK, bs_query,
-                    note=f"{len(bs_ids)} BioSample record(s) found but "
-                         "elink returned no assembly links",
-                )
-                continue
-
-            # Fetch assembly summaries for all linked UIDs and pick the best.
-            try:
-                summaries = self._assembly_summaries_for_ids(list(assembly_uid_set))
-            except Exception as exc:
-                report.add_attempt(
-                    Strategy.NCBI_BIOSAMPLE_LINK, bs_query,
-                    note=f"esummary error for linked assemblies: {exc}",
-                )
-                continue
-
-            if summaries:
-                chosen = _rank_assembly_summaries(summaries)[0]
-                acc = chosen.get("AssemblyAccession", "?")
-                ncbi_organism = chosen.get("Organism", "") or chosen.get("SpeciesName", "")
-
-                # Cross-check: does the organism NCBI reports actually match
-                # the strain we searched for? If not, the ATCC number in this
-                # BioSample was likely mislabeled -- flag it loudly but still
-                # return it (with the flag) so the user can decide.
-                organism_ok = _organism_matches(strain_input.strain, ncbi_organism)
-                if not organism_ok:
-                    report.organism_mismatch = True
-                    log.warning(
-                        "ORGANISM MISMATCH for %r: searched via BioSample %r, "
-                        "but NCBI assembly %s is organism %r. The ATCC number "
-                        "may be mislabeled in this BioSample record.",
-                        strain_input.strain, bs_query, acc, ncbi_organism,
-                    )
-                    note = (f"{len(bs_ids)} BioSample -> {len(assembly_uid_set)} "
-                            f"assembly link(s); ORGANISM MISMATCH (got {ncbi_organism!r})")
-                else:
-                    note = f"{len(bs_ids)} BioSample -> {len(assembly_uid_set)} assembly link(s)"
-
-                report.add_attempt(
-                    Strategy.NCBI_BIOSAMPLE_LINK, bs_query,
-                    result=acc, note=note,
-                )
-                log.info(
-                    "Strategy 2 hit: %r via BioSample %r -> %s (%s)%s",
-                    strain_input.strain, bs_query, acc, chosen.get("AssemblyStatus"),
-                    " [ORGANISM MISMATCH]" if not organism_ok else "",
-                )
-                return chosen
-
+        report.add_attempt(Strategy.NCBI_STRAIN_TAXID, query, note="0 results")
         return None
 
     # ── Strategy 3: organism-field search (broad) ──────────────────────────
@@ -467,33 +542,43 @@ class NCBIAssemblyClient:
         forced_accessions: dict = None,
         fallback_hints: dict = None,
         debug: bool = False,
+        include_organism_search: bool = True,
     ) -> tuple[Optional["ResolvedAssembly"], "StrainResolutionReport"]:
         """Resolve a strain to a ResolvedAssembly using the full strategy
         chain. Always returns a (result, report) tuple -- result is None only
         when every strategy failed.
 
         Resolution order (most to least trusted):
-          0.   Forced accession   -- forced_accessions.csv, bypasses all search
-          1.   NCBI ATCC assembly -- "ATCC nnnnn" in the assembly database
-          2.   NCBI BioSample     -- ATCC -> BioSample -> assembly cross-ref,
-                                     with organism cross-validation
-          3a.  NCBI organism      -- "[Organism]" field (broad, flags verify)
-          3b.  NCBI free-text     -- plain text (broadest, flags verify)
-          4.   Fallback hint      -- fallback_hints.csv, last resort before
-                                     declaring failure (flags verify)
+          0.   Forced accession     -- override CSV, keyed by strain or strain_id
+          1.   Recorded INSDC       -- GCA_/GCF_ already on the isolate
+          2.   Collection assembly  -- ATCC / DSM / JCM / ... in the assembly db
+          3.   BioSample            -- collection id -> BioSample -> assembly,
+                                       with organism cross-validation
+          4.   Strain-level taxid   -- only if ncbi_taxid_level == strain
+          5.   Organism name        -- gated by include_organism_search
+          6.   Fallback hint        -- override CSV, last resort (flags verify)
         """
         from .resolution_report import Strategy, StrainResolutionReport
+        from .overrides import resolve_via_accession
 
+        atcc = inferred_atcc_number(strain_input) or (strain_input.atcc_number or "")
         report = StrainResolutionReport(
             strain=strain_input.strain,
-            atcc_number=strain_input.atcc_number,
+            atcc_number=atcc,
         )
 
+        def _override_value(table: dict | None) -> Optional[str]:
+            if not table:
+                return None
+            for key in (strain_input.strain_id, strain_input.strain):
+                if key and key in table:
+                    return table[key]
+            return None
+
         # ── Strategy 0: forced accession (always wins) ───────────────────
-        if forced_accessions and strain_input.strain in forced_accessions:
-            pinned = forced_accessions[strain_input.strain]
+        pinned = _override_value(forced_accessions)
+        if pinned:
             log.info("Using FORCED accession %s for %r", pinned, strain_input.strain)
-            from .overrides import resolve_via_accession
             resolved = resolve_via_accession(pinned, self)
             if resolved:
                 report.add_attempt(Strategy.FORCED_ACCESSION, pinned, result=pinned)
@@ -502,39 +587,56 @@ class NCBIAssemblyClient:
             report.add_attempt(Strategy.FORCED_ACCESSION, pinned,
                                note="NCBI returned no record for this accession")
 
-        # ── Strategy 1: ATCC → assembly ──────────────────────────────────
-        summary = self._try_ncbi_atcc_assembly(strain_input, report)
-        if summary:
-            resolved = self._parse_summary_to_resolved(summary)
-            report.record_success(Strategy.NCBI_ATCC_ASSEMBLY, resolved.assembly_accession)
+        # ── Strategy 1: recorded INSDC genome accession ──────────────────
+        resolved = self._try_recorded_insdc(strain_input, report)
+        if resolved:
+            report.record_success(
+                Strategy.RECORDED_INSDC_ACCESSION, resolved.assembly_accession,
+            )
             return resolved, report
 
-        # ── Strategy 2: ATCC → BioSample → assembly (organism-validated) ─
+        # ── Strategy 2: culture-collection → assembly ────────────────────
+        summary = self._try_ncbi_collection_assembly(strain_input, report)
+        if summary:
+            resolved = self._parse_summary_to_resolved(summary)
+            winning = next(
+                (a.strategy for a in reversed(report.attempts) if a.result),
+                Strategy.NCBI_COLLECTION_ASSEMBLY,
+            )
+            report.record_success(winning, resolved.assembly_accession)
+            return resolved, report
+
+        # ── Strategy 3: collection → BioSample → assembly ────────────────
         summary = self._try_ncbi_biosample_link(strain_input, report)
         if summary:
             resolved = self._parse_summary_to_resolved(summary)
             report.record_success(Strategy.NCBI_BIOSAMPLE_LINK, resolved.assembly_accession)
             return resolved, report
 
-        # ── Strategy 3: organism name (broad) ────────────────────────────
-        summary = self._try_ncbi_organism(strain_input, report)
+        # ── Strategy 4: strain-level taxid ───────────────────────────────
+        summary = self._try_ncbi_strain_taxid(strain_input, report)
         if summary:
             resolved = self._parse_summary_to_resolved(summary)
-            # _try_ncbi_organism records which of ORGANISM/FREETEXT won via
-            # the last attempt that has a result.
-            winning = next(
-                (a.strategy for a in reversed(report.attempts) if a.result),
-                Strategy.NCBI_ORGANISM,
-            )
-            report.record_success(winning, resolved.assembly_accession)
+            report.record_success(Strategy.NCBI_STRAIN_TAXID, resolved.assembly_accession)
             return resolved, report
 
-        # ── Strategy 4: fallback hint (last resort) ──────────────────────
-        if fallback_hints and strain_input.strain in fallback_hints:
-            hint = fallback_hints[strain_input.strain]
+        # ── Strategy 5: organism name (align path; off for BacDive) ──────
+        if include_organism_search:
+            summary = self._try_ncbi_organism(strain_input, report)
+            if summary:
+                resolved = self._parse_summary_to_resolved(summary)
+                winning = next(
+                    (a.strategy for a in reversed(report.attempts) if a.result),
+                    Strategy.NCBI_ORGANISM,
+                )
+                report.record_success(winning, resolved.assembly_accession)
+                return resolved, report
+
+        # ── Strategy 6: fallback hint (last resort) ──────────────────────
+        hint = _override_value(fallback_hints)
+        if hint:
             log.info("All searches failed; trying FALLBACK hint %s for %r",
                      hint, strain_input.strain)
-            from .overrides import resolve_via_accession
             resolved = resolve_via_accession(hint, self)
             if resolved:
                 report.add_attempt(Strategy.FALLBACK_HINT, hint, result=hint)
@@ -543,10 +645,18 @@ class NCBIAssemblyClient:
             report.add_attempt(Strategy.FALLBACK_HINT, hint,
                                note="NCBI returned no record for this hint accession")
 
-        log.warning(
-            "All resolution strategies failed for strain=%r atcc=%r",
-            strain_input.strain, strain_input.atcc_number,
-        )
+        had_insdc = bool(recorded_insdc_accession(strain_input))
+        if had_insdc:
+            log.warning(
+                "Recorded INSDC accession did not resolve for strain=%r acc=%r",
+                strain_input.strain, strain_input.genome_accession,
+            )
+        else:
+            log.info(
+                "No NCBI assembly for strain=%r (no INSDC accession; "
+                "collection/taxid search empty) atcc=%r",
+                strain_input.strain, atcc,
+            )
         return None, report
 
     # ---- downloading sequence data via NCBI FTP -----------------------

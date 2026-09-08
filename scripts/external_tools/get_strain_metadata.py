@@ -51,7 +51,7 @@ import logging
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.strain_metadata import config
 from src.strain_metadata.logging_setup import setup_logging
@@ -98,7 +98,7 @@ def main(argv=None) -> int:
     if "genus_ranges" in settings:
         # settings provides {Genus: [min_mb, max_mb, min_gc, max_gc]}; merge
         # over the built-in defaults so a partial file only overrides what it lists.
-        from strain_metadata.validation import GENUS_RANGES
+        from src.strain_metadata.validation import GENUS_RANGES
         genus_ranges = dict(GENUS_RANGES)
         for genus, vals in settings["genus_ranges"].items():
             genus_ranges[genus] = tuple(vals)

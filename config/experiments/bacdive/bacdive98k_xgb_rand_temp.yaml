@@ -1,5 +1,5 @@
 # BacDive growth classification + XGBoost
-name: bacdive40k_xgb_random_str_temp
+name: bacdive40k_xgb_random_temp
 dataset: config/dataset/modeling_bacdive/bacdive40k_modeling_temp.yaml
 model: config/models/xgboost.yaml
 task: growth_class
