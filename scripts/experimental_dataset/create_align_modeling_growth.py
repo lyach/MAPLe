@@ -24,10 +24,10 @@ INPUT = ROOT / "data" / "processed" / "aero_anaero_tidy_curves.csv"
 FLAGS = ROOT / "data" / "metadata" / "align_dataset" / "align_growth_curve_curation.csv"
 STRAIN_META = ROOT / "data" / "metadata" / "align_dataset" / "align_strains_metadata.csv"
 MEDIA_META = ROOT / "data" / "metadata" / "modeling" / "media_features.csv"
-OUTPUT = ROOT / "data" / "processed" / "align" / "align_modeling_growth.csv"
+OUTPUT = ROOT / "data" / "processed" / "align" / "align_str_med.csv"
 
 # If True, temperature is used as a duplicate key
-TEMP = False
+TEMP = True
 
 # curation key → tidy CSV column
 FIELD_MAP = {
@@ -257,9 +257,9 @@ def main() -> None:
 
     output_path = OUTPUT
     if TEMP:
-        dup_cols = ["strain_name", "media_name", "temperature", "atmosphere"]
+        dup_cols = ["strain_name", "media_name", "temperature"]
         print(f"Dropping duplicates on {dup_cols}")
-        out = out.sort_values(by=dup_cols + ["growth_class"], ascending=[True, True, True, True, False])
+        out = out.sort_values(by=dup_cols + ["growth_class"], ascending=[True, True, True, False])
         output_path = Path(str(OUTPUT).replace(".csv", "_temp.csv"))
     else:
         dup_cols = ["strain_name", "media_name"]

@@ -37,6 +37,7 @@ FALLBACK_HINTS_CSV    = ROOT / "data" / "metadata" / "ncbi" / "fallback_hints.cs
 
 # --- outputs (data/external/) ---
 EXTERNAL_DIR = ROOT / "data" / "external"
+PROCESSED_DIR = ROOT / "data" / "processed"
 FASTA_DIR    = EXTERNAL_DIR / "fasta"                     # one .fna per assembly
 GBK_DIR      = EXTERNAL_DIR / "gbk"                       # one .gbk per assembly
 OUTPUT_CSV   = EXTERNAL_DIR / "strains_metadata.csv"      # successful rows
@@ -44,9 +45,9 @@ FAILURES_CSV = EXTERNAL_DIR / "failures.csv"              # diagnostic failure r
 PHYLUM_CSV   = EXTERNAL_DIR / "strain_phylum.csv"          # ncbi_taxon_id -> phylum lookup
 
 # --- BacDive parquet entry point ---
-BACDIVE_INPUT_PARQUET = EXTERNAL_DIR / "bacdive_growth_full.parquet"
-BACDIVE_METADATA_CSV  = EXTERNAL_DIR / "bacdive_strains_metadata.csv"
-BACDIVE_FAILURES_CSV  = EXTERNAL_DIR / "bacdive_strain_meta_failures.csv"
+BACDIVE_INPUT_PARQUET = PROCESSED_DIR / "bacdive" / "bd_temp.parquet"
+BACDIVE_METADATA_CSV  = EXTERNAL_DIR / "bd_strains_metadata.csv"
+BACDIVE_FAILURES_CSV  = EXTERNAL_DIR / "bd_strain_meta_failures.csv"
 
 # --- logs ---
 LOGS_DIR = ROOT / "logs"                                  # timestamped run logs
