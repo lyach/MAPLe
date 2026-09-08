@@ -4,6 +4,9 @@
 Reads bacdive_genome_map.csv, takes bacdive_id values with cds_on_disk == 1,
 filters the growth parquet to those IDs, then drops rows whose
 genome_accession is an empty string ''.
+
+Usage:
+   python scripts/bacdive/filter_bacdive_with_genome.py
 """
 from __future__ import annotations
 
@@ -14,8 +17,10 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
 EXT = ROOT / "data" / "external"
+PRO = ROOT / "data" / "processed"
 DEFAULT_MAP = EXT / "bacdive_genome_map.csv"
-DEFAULT_PARQUET = EXT / "bacdive_growth_full.parquet"
+DEFAULT_PARQUET = PRO / "bacdive" / "bd_med.parquet"
+OUT = PRO / "bacdive" / "bd_med_w_genome.parquet"
 
 
 def blank(series: pd.Series) -> pd.Series:
@@ -28,17 +33,12 @@ def parse_args() -> argparse.Namespace:
                    help="Genome map CSV (default: %(default)s)")
     p.add_argument("--parquet", type=Path, default=DEFAULT_PARQUET,
                    help="Growth parquet to filter (default: %(default)s)")
-    p.add_argument("--out", type=Path, default=None,
-                   help="Filtered parquet output (default: <parquet stem>"
-                        "_cds_filtered.parquet, next to --parquet -- named "
-                        "from the input rather than a row count, since the "
-                        "row count changes whenever the input does)")
     return p.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    out = args.out or args.parquet.with_name(
+    out = OUT or args.parquet.with_name(
         f"{args.parquet.stem}_cds_filtered{args.parquet.suffix}"
     )
 

@@ -5,7 +5,7 @@ value) under ``data/modeling/splits_<dataset_stem>/``, alongside a log and a
 machine-readable stats JSON describing the train/test distribution per fold.
 
 Usage:
-    python scripts/modeling/create_splits.py config/splits/bacdive_genus.yaml
+    python scripts/modeling/create_splits.py config/splits/bd.yaml
 """
 
 import argparse
