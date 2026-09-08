@@ -30,17 +30,17 @@
 #
 # Reads ~100k small JSON files off the shared filesystem, so it belongs on
 # the scheduler rather than a login node even though it makes no network
-# calls. Historical timing: ~130 records/sec single-threaded, so ~13 min
-# for the full cache.
+# calls. Measured (job 21350053, 2026-09-08): 6m59s elapsed, 1.9G MaxRSS --
+# time/mem below sized off that with headroom, not off the original guess.
 #
 # Submit:
 #   sbatch scripts/hpc/run_bacdive_build_full_schema.sbatch
 
 #SBATCH --job-name=bacdive-build-full-schema
 #SBATCH --account=def-mahadeva_cpu
-#SBATCH --time=00:45:00
+#SBATCH --time=00:15:00
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=8G
+#SBATCH --mem=3G
 #SBATCH --output=%x-%j.out
 
 set -euo pipefail
