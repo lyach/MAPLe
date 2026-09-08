@@ -53,6 +53,13 @@ FEATURE_GROUPS: dict[str, str] = {
     "family": "strain",
     "order": "strain",
     "phylum": "strain",
+    "n_ingredients": "media",
+    "complexity": "media",
+    "has_yeast_extract": "media",
+    "has_peptone": "media",
+    "has_agar": "media",
+    "has_blood_components": "media",
+    "has_nacl": "media",
 }
 
 
