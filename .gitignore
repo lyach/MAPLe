@@ -11,6 +11,8 @@ notebooks/
 scripts/slurm/
 databases/
 tools/
+config/dataset/old_modeling_bacdive
+config/experiments/old_bacdive
 
 # data
 data/*
