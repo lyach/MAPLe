@@ -44,4 +44,6 @@ temperature_range_expansion: True
 
 dedup_w_negatives: False
 
+strain_metadata: data/external/bd_strains_metadata.csv
+
 output_file: data/processed/bacdive/bd_temp.parquet

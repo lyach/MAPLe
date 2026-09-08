@@ -58,7 +58,13 @@ def _load_recipe_manifest(path: Path) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame(columns=cols)
     manifest = pd.read_csv(path, dtype=str, keep_default_na=False)
-    return manifest[manifest["status"] == "ok"][cols]
+    ok = manifest[manifest["status"] == "ok"][cols]
+    log.info(
+        "media recipe manifest %s: %d ok row(s) of %d (%s)",
+        path.name, len(ok), len(manifest),
+        ok["source"].value_counts().to_dict(),
+    )
+    return ok
 
 
 def _apply_composition(
@@ -461,6 +467,7 @@ def run_from_cache(
     show_progress: bool = True,
     temperature_range_expansion: bool = False,
     dedup_w_negatives: bool = False,
+    strain_metadata: Optional[Path] = None,
 ) -> tuple[int, int, int]:
     """Build a target table from cached JSON records only (no API calls).
 
@@ -474,6 +481,10 @@ def run_from_cache(
     ``dedup_w_negatives``: if true, a (isolate, unit) pair that has both a
     growth and a no-growth label keeps both rows instead of resolving to
     positive. Same-label duplicates still collapse.
+
+    ``strain_metadata``: optional CSV of per-strain metadata, left-merged onto
+    the table on ``strain_name`` (left) == ``strain`` (right); see
+    ``_merge_strain_metadata``.
 
     Returns ``(n_rows, n_records_ok, n_failures)``.
     """
@@ -552,6 +563,8 @@ def run_from_cache(
         for col in spec.categorical_features:
             if col in df.columns:
                 df[col] = df[col].replace("", "unknown").fillna("unknown")
+        if strain_metadata is not None:
+            df = _merge_strain_metadata(df, strain_metadata)
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
     getattr(df, output_writer)(output_file, index=False)
@@ -568,6 +581,76 @@ def run_from_cache(
         df, spec, n_records, n_records, failures, source="cache",
     )
     return len(df), n_records, len(failures)
+
+
+def _merge_strain_metadata(
+    df: pd.DataFrame,
+    metadata_csv: Path,
+    left_on: str = "strain_name",
+    right_on: str = "strain",
+) -> pd.DataFrame:
+    """Left-merge a per-strain metadata CSV onto ``df``.
+
+    Joins ``df[left_on]`` to ``metadata_csv``'s ``right_on`` column, keeping
+    every row of ``df`` (a strain absent from the CSV gets empty
+    strings). Columns
+    already present in ``df`` are dropped from the CSV side so the built table's 
+    own values always win; the join key column itself is dropped too. The CSV is
+    de-duplicated on ``right_on`` (first row wins) so the merge can never
+    multiply rows. Unmatched rows (and blank CSV cells) come through as ``""``
+    rather than NaN, matching how the rest of the table spells an empty value.
+    """
+    if not metadata_csv.is_absolute():
+        metadata_csv = config.ROOT / metadata_csv
+    if not metadata_csv.is_file():
+        raise FileNotFoundError(f"strain metadata CSV not found: {metadata_csv}")
+    if left_on not in df.columns:
+        raise KeyError(
+            f"cannot merge strain metadata: {left_on!r} not in the built table"
+        )
+
+    meta = pd.read_csv(metadata_csv, dtype=str)
+    if right_on not in meta.columns:
+        raise KeyError(
+            f"{metadata_csv} has no {right_on!r} column "
+            f"(found: {list(meta.columns)})"
+        )
+
+    n_dupes = int(meta[right_on].duplicated().sum())
+    if n_dupes:
+        log.warning(
+            "strain metadata %s has %d duplicate %r value(s); keeping the first",
+            metadata_csv, n_dupes, right_on,
+        )
+        meta = meta.drop_duplicates(subset=[right_on], keep="first")
+
+    overlap = [c for c in meta.columns if c != right_on and c in df.columns]
+    if overlap:
+        log.info(
+            "strain metadata: dropping %d column(s) already in the table "
+            "(left wins): %s",
+            len(overlap), overlap,
+        )
+        meta = meta.drop(columns=overlap)
+
+    added = [c for c in meta.columns if c != right_on]
+    n_before = len(df)
+    n_matched = int(df[left_on].isin(set(meta[right_on])).sum())
+    merged = df.merge(
+        meta, how="left", left_on=left_on, right_on=right_on, validate="m:1",
+    ).drop(columns=[right_on])
+    # A strain missing from the CSV (and a blank CSV cell) merges in as NaN;
+    # fill with "" so the merged columns match how the rest of the table
+    # represents an empty value.
+    if added:
+        merged[added] = merged[added].fillna("")
+    log.info(
+        "strain metadata: merged %s on %s==%s -- %d column(s) added %s, "
+        "%d/%d row(s) matched",
+        metadata_csv.name, left_on, right_on, len(added), added,
+        n_matched, n_before,
+    )
+    return merged
 
 
 def _write_failures(failures: list[dict], failures_csv: Path) -> None:

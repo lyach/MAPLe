@@ -272,19 +272,19 @@ def stamp_temperature_expansion(path: Path, expanded: bool) -> Path:
     with expanded (132,821-row) data on 2026-08-24.
 
     Symmetric and idempotent regardless of what ``path`` already carries:
-    ``expanded=True`` ensures the stem ends in ``_texpand`` (adding it only
+    ``expanded=True`` ensures the stem ends in ``_temp`` (adding it only
     if missing); ``expanded=False`` ensures it does NOT (stripping it if
     present) -- so a YAML ``output_file`` written with the suffix already
     baked in (e.g. because that YAML's own default is expanded) still
     resolves correctly if a caller overrides to unexpanded, rather than
-    keeping a stale "_texpand" that no longer describes the data.
+    keeping a stale "_temp" that no longer describes the data.
     """
-    has_suffix = path.stem.endswith("_texpand")
+    has_suffix = path.stem.endswith("_temp")
     if expanded == has_suffix:
         return path
     if expanded:
-        return path.with_name(f"{path.stem}_texpand{path.suffix}")
-    return path.with_name(f"{path.stem[: -len('_texpand')]}{path.suffix}")
+        return path.with_name(f"{path.stem}_temp{path.suffix}")
+    return path.with_name(f"{path.stem[: -len('_temp')]}{path.suffix}")
 
 
 def stamp_dedup_w_negatives(path: Path, dedup_w_negatives: bool) -> Path:
@@ -384,6 +384,7 @@ class BuildFromCacheConfig:
     output_writer: str = "to_parquet"
     temperature_range_expansion: bool = True
     dedup_w_negatives: bool = False
+    strain_metadata: Path | None = None
 
     def to_target_spec(self) -> TargetSpec:
         """``TargetSpec`` with the selected output columns."""
@@ -463,6 +464,11 @@ def load_build_from_cache_config(path: Path | None = None) -> BuildFromCacheConf
     dedup_w_negatives:
         If true, a (isolate, unit) pair with both growth labels keeps both
         rows instead of resolving the conflict to positive. Default false.
+    strain_metadata:
+        Optional CSV of per-strain metadata to left-merge onto the output on
+        ``strain_name`` (left) == ``strain`` (right). Columns that already
+        exist in the built table are kept from the left and dropped from the
+        CSV. Omit or leave blank to skip the merge.
     """
     path = path or BUILD_FROM_CACHE_YAML
     data = _load_yaml(path)
@@ -538,6 +544,12 @@ def load_build_from_cache_config(path: Path | None = None) -> BuildFromCacheConf
         "dedup_w_negatives",
         default=False,
     )
+    meta_raw = data.get("strain_metadata")
+    strain_metadata = None
+    if meta_raw not in (None, "", False):
+        strain_metadata = Path(str(meta_raw).strip())
+        if not strain_metadata.is_absolute():
+            strain_metadata = ROOT / strain_metadata
 
     return BuildFromCacheConfig(
         target=target,
@@ -548,4 +560,5 @@ def load_build_from_cache_config(path: Path | None = None) -> BuildFromCacheConf
         output_writer=writer,
         temperature_range_expansion=expand,
         dedup_w_negatives=dedup_w_negatives,
+        strain_metadata=strain_metadata,
     )

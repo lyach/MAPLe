@@ -8,14 +8,17 @@ without calling the BacDive API.
 Defaults to the target's complete column set (``--full-schema``, itself
 default-on); pass ``--no-full-schema`` to use whatever subset
 ``bacdive/build_from_cache.yaml``'s ``strain_features``/``medium_features``
-currently restrict to instead (see also ``src/bacdive/config.py``).
-Extraction / dedupe match ``get_bacdive_dataset.py``; only the fetch step is
-skipped.
+currently restrict to instead (see also ``src/bacdive/config.py``). That
+YAML's ``strain_metadata`` key, if set, names a CSV that is left-merged onto
+the table on ``strain_name`` == ``strain``. Extraction / dedupe match
+``get_bacdive_dataset.py``; only the fetch step is skipped.
 
 USAGE:
     python scripts/bacdive/build_bacdive_from_cache.py
     python scripts/bacdive/build_bacdive_from_cache.py --no-temperature-range-expansion
     python scripts/bacdive/build_bacdive_from_cache.py --no-full-schema
+    python scripts/bacdive/build_bacdive_from_cache.py --no-strain-metadata
+    python scripts/bacdive/build_bacdive_from_cache.py --strain-metadata data/external/bd_strains_metadata.csv
     python scripts/bacdive/build_bacdive_from_cache.py --config bacdive/build_from_cache.yaml
     python scripts/bacdive/build_bacdive_from_cache.py --target metabolite_utilization
     python scripts/bacdive/build_bacdive_from_cache.py --limit 100
@@ -81,6 +84,20 @@ def parse_args(argv=None) -> argparse.Namespace:
         help="Override cache dir from the YAML config",
     )
     p.add_argument(
+        "--strain-metadata", type=Path, default=None,
+        help="Override strain_metadata from the YAML config: a CSV of "
+             "per-strain metadata to left-merge onto the output, joining the "
+             "table's strain_name to the CSV's strain column. Columns already "
+             "in the table (genus/family/order/phylum, ...) are kept from the "
+             "table and dropped from the CSV. Pass --no-strain-metadata to "
+             "skip the merge even when the YAML config sets it.",
+    )
+    p.add_argument(
+        "--no-strain-metadata", dest="strain_metadata", action="store_const",
+        const=Path(""),
+        help="Skip the strain-metadata merge even if the YAML config sets it.",
+    )
+    p.add_argument(
         "--temperature-range-expansion", action=argparse.BooleanOptionalAction,
         default=None,
         help="Override temperature_range_expansion from the YAML config. "
@@ -143,6 +160,17 @@ def main(argv=None) -> int:
         if args.dedup_w_negatives is None
         else args.dedup_w_negatives
     )
+    if args.strain_metadata is None:
+        strain_metadata = cfg.strain_metadata
+    elif str(args.strain_metadata) in ("", "."):
+        strain_metadata = None
+    else:
+        strain_metadata = args.strain_metadata
+    if strain_metadata is not None and not strain_metadata.is_absolute():
+        strain_metadata = config.ROOT / strain_metadata
+    if strain_metadata is not None and not strain_metadata.is_file():
+        log.error("strain metadata CSV not found: %s", strain_metadata)
+        return 1
 
     use_full_schema = args.full_schema or target != cfg.target
     if use_full_schema:
@@ -181,9 +209,10 @@ def main(argv=None) -> int:
 
     log.info(
         "building from cache %s (target=%s, %d output columns, "
-        "temperature_range_expansion=%s, dedup_w_negatives=%s) -> %s",
+        "temperature_range_expansion=%s, dedup_w_negatives=%s, "
+        "strain_metadata=%s) -> %s",
         cache_dir, target, len(fieldnames), expansion, dedup_w_negatives,
-        output_file,
+        strain_metadata, output_file,
     )
     log.info("output columns: %s", fieldnames)
 
@@ -198,6 +227,7 @@ def main(argv=None) -> int:
         show_progress=not (args.no_progress or args.quiet),
         temperature_range_expansion=expansion,
         dedup_w_negatives=dedup_w_negatives,
+        strain_metadata=strain_metadata,
     )
 
     print(
