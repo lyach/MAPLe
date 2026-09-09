@@ -1,12 +1,12 @@
-# BacDive growth classification + XGBoost
-name: bacdive40k_xgb_family_str_med_temp
-dataset: config/dataset/modeling_bacdive/bacdive40k_modeling_strain_med_temp.yaml
+# BacDive (strain, med) w genome, XGBoost , family split
+name: bd_med_w_genome_xgb_fam
+dataset: config/dataset/modeling_bacdive/bd_med_w_genome_fam.yaml
 model: config/models/xgboost.yaml
 task: growth_class
 
 cv:
   strategy: [stratified_grouped]
-  splits_file: data/modeling/splits_bacdive_growth_40k/family_bacdive_growth_40k.csv
+  splits_file: data/modeling/splits_bd_med_w_genome/family_bd_med_w_genome.csv
   split_on: family
 
 class_weight: balanced

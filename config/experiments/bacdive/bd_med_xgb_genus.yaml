@@ -1,12 +1,13 @@
-# BacDive growth classification + XGBoost
-name: bacdive40k_mediumlabel_xgb_random_temp
-dataset: config/dataset/modeling_bacdive/bacdive40k_mediumlabel_modeling_temp.yaml
+# BacDive (strain, med), XGBoost , genus split
+name: bd_med_xgb_genus
+dataset: config/dataset/modeling_bacdive/bd_med_genus.yaml
 model: config/models/xgboost.yaml
 task: growth_class
 
 cv:
-  strategy: [random]
-  n_repeats: 1
+  strategy: [stratified_grouped]
+  splits_file: data/modeling/splits_bd_med/genus_bd_med.csv
+  split_on: genus
 
 class_weight: balanced
 

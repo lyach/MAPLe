@@ -1,5 +1,5 @@
-dataset_path: data/external/bacdive_growth_40k_mediumlabel.parquet
-split_on_column: family
+dataset_path: data/processed/bacdive/bd_temp.parquet
+split_on_column: genus
 target: growth_class
 
 cv:
