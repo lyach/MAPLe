@@ -111,6 +111,54 @@ def _filter_for_task(df: pd.DataFrame, task: str) -> pd.DataFrame:
     return df
 
 
+def _apply_row_filters(df: pd.DataFrame, ds_cfg, task: str) -> pd.DataFrame:
+    """Apply the dataset config's ``filters.include`` / ``filters.exclude``.
+    """
+    filters = getattr(ds_cfg, "filters", None)
+    if filters is None:
+        return df
+
+    for column, values in (filters.include or {}).items():
+        if column not in df.columns:
+            raise ValueError(
+                f"filters.include names column {column!r}, which is not in "
+                f"{sorted(df.columns)[:10]}... (dataset has {len(df.columns)} columns)"
+            )
+        wanted = {str(v) for v in values}
+        n_before = len(df)
+        df = df[df[column].astype(str).isin(wanted)].copy()
+        logger.info("filters.include {}={}: {} -> {} rows",
+                    column, sorted(wanted), n_before, len(df))
+
+    for column, values in (filters.exclude or {}).items():
+        if column not in df.columns:
+            raise ValueError(
+                f"filters.exclude names column {column!r}, which is not in "
+                f"{sorted(df.columns)[:10]}... (dataset has {len(df.columns)} columns)"
+            )
+        unwanted = {str(v) for v in values}
+        mask = df[column].astype(str).isin(unwanted)
+        n_dropped = int(mask.sum())
+        n_neg = (
+            int((df.loc[mask, task] == 0).sum())
+            if task in df.columns else -1
+        )
+        if n_dropped == 0:
+            logger.warning(
+                "filters.exclude {}={} matched NO rows -- check the values "
+                "against the column's actual contents", column, sorted(unwanted),
+            )
+        df = df[~mask].copy()
+        logger.info(
+            "filters.exclude {}={}: dropped {} rows ({} with {}=0), {} remain",
+            column, sorted(unwanted), n_dropped, n_neg, task, len(df),
+        )
+
+    if df.empty:
+        raise ValueError("filters removed every row")
+    return df
+
+
 def run_cv_loop(
     df: pd.DataFrame,
     exp_cfg,
@@ -352,6 +400,7 @@ def main() -> None:
         assert_split_source_length(len(df), splits_path, data_path)
 
     df = _filter_for_task(df, exp_cfg.task)
+    df = _apply_row_filters(df, ds_cfg, exp_cfg.task)
 
     # Merge external feature tables (path: specs) before splitting
     df = merge_external_features(ds_cfg, df, root=ROOT)

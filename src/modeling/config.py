@@ -46,6 +46,22 @@ class CurvesDatasetConfig(BaseModel):
 # Modeling dataset config (run_experiment.py)
 # ---------------------------------------------------------------------------
 
+class RowFilterConfig(BaseModel):
+    """Row-level include/exclude rules, applied by column value.
+
+    Each entry is ``column: [value, ...]``. ``exclude`` drops rows whose value
+    in that column is in the list; ``include`` keeps only those rows.
+
+    Rows are filtered AFTER the split-map row-count check, so a filtered run
+    reuses the unfiltered split map.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    include: dict[str, list[Any]] = {}
+    exclude: dict[str, list[Any]] = {}
+
+
 class DatasetConfig(BaseModel):
     """Config for experiment featurization: path + features + targets."""
 
@@ -54,6 +70,7 @@ class DatasetConfig(BaseModel):
     modeling_dataset_path: str
     features: dict[str, Any] = {}
     targets: list[str] = ["growth_class", "max_od", "growth_rate"]
+    filters: RowFilterConfig = RowFilterConfig()
 
 
 # ---------------------------------------------------------------------------

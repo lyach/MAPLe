@@ -30,7 +30,12 @@ import re
 import statistics
 from typing import Any, Optional
 
-from src.bacdive.media import media_features
+from src.bacdive.media import (
+    canonical_media_name,
+    get_media_alias_map,
+    media_canon_status,
+    media_features,
+)
 
 log = logging.getLogger("bacdive.extract")
 
@@ -607,6 +612,9 @@ def record_to_medium_rows(
             link=link,
             composition=composition,
         )
+        media_alias_overrides = get_media_alias_map()
+        media_canon = canonical_media_name(name, media_alias_overrides)
+        media_canon_state = media_canon_status(name, media_alias_overrides)
 
         ref_key = ref.strip()
         ref_temps = temps_by_ref.get(ref_key)
@@ -637,6 +645,8 @@ def record_to_medium_rows(
             row = dict(base)
             row["media_name"] = name
             row["media_name_full"] = medium.get("name", "") or ""
+            row["media_canon"] = media_canon
+            row["media_canon_status"] = media_canon_state
             row["medium_link"] = link or ""
             row["growth_class"] = emitted
             row["medium_growth_class"] = label

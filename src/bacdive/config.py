@@ -116,10 +116,15 @@ _MEDIUM_ID_COLS = [
     "bacdive_id",
     "strain_name",
     "strain_name_raw",
-    # media_name is the canonical medium identity (dedup + lomo grouping key);
-    # media_name_full keeps BacDive's original, more descriptive spelling.
+    # Three medium-name columns, each with one job:
+    #   media_name        BacDive's original
+    #   media_name_full   BacDive's original, more descriptive spelling
+    #   media_canon       variant canonicalised 
     "media_name",
     "media_name_full",
+    "media_canon",
+    # ok | ambiguous (name lists several media) | unspecified (no name at all)
+    "media_canon_status",
     "mediadive_id",
     "medium_link",
     "cip_medium_number",

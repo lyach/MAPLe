@@ -89,7 +89,7 @@ python scripts/modeling/create_modeling_dataset.py config/dataset/curves_dataset
 
 | Group | Columns |
 | --- | --- |
-| identifiers | `bacdive_id`, `strain_name`, `media_name`, `mediadive_id` |
+| identifiers | `bacdive_id`, `strain_name`, `media_name`, `media_name_full`, `media_canon`, `media_canon_status`, `mediadive_id` |
 | target | `growth_class` (1 = growth, 0 = no growth) |
 | strain features | `genus`, `family`, `order`, `phylum`, `gram_stain`, `cell_shape`, `motility`, `oxygen_tolerance`, `nutrition_type`, `spore_formation`, `gc_content`, `genome_accession`, `n16s_accession` |
 | condition (strain-level) | `temperature`, `ph` |
@@ -118,3 +118,38 @@ The output is a "curves-like" table consumed by `src/modeling/dataset.py`. It
 provides `strain_name` and `growth_class` (plus `media_name` for
 `medium_growth`), which is all the `growth_class` task needs. `loso` CV groups
 on `strain_name`; `lomo` groups on `media_name` (medium_growth only).
+
+## Medium-name canonicalisation (`media_canon`)
+
+There are three medium-name columns, each with one job:
+
+| Column | Role |
+| --- | --- |
+| `media_name` | Dedup key. BacDive's name with the CIP fold applied. |
+| `media_name_full` | BacDive's original, more descriptive spelling. |
+| `media_canon` | **Grouping key for a held-out-medium split.** Alias-canonicalised. |
+| `media_canon_status` | `ok` / `ambiguous` (name lists several media) / `unspecified` (no name). |
+
+BacDive spells one physical medium many ways (e.g. `MacConkey agar`, `MacConkey`, `MacConkey Agar`...). A held-out-medium split grouped on `media_name` therefore trains on the variants it thinks it held out.
+
+`canonical_media_name` (in `src/bacdive/media.py`) applies deterministic rules: casefold, strip 
+acronyms, DSMZ tails, drop form words, expand acronyms, fold spelling variants, sort tokens.
+Then lets a curated `data/external/media_alias_map.csv` override the result. Regression
+tests: `python tests/test_media_canon.py`.
+
+```bash
+# 1. add/refresh media_canon on the built parquets (row counts never change)
+python scripts/bacdive/add_media_canon.py
+
+# 2. audit what the rules did and did not merge
+python scripts/bacdive/prepare_media_alias_review.py
+
+# 3. after reviewing, fold decisions into the map
+python scripts/bacdive/apply_media_alias_review.py \
+    data/external/media_alias_review_reasoned.csv
+python scripts/bacdive/add_media_canon.py   # re-apply with the new map
+```
+
+A rebuild from cache produces `media_canon` (`extract.record_to_medium_rows`). 
+`add_media_canon.py` exists only to backfill already built tables without re-reading 
+the 100k-record cache.

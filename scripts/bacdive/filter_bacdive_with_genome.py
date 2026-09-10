@@ -19,12 +19,19 @@ ROOT = Path(__file__).resolve().parents[2]
 EXT = ROOT / "data" / "external"
 PRO = ROOT / "data" / "processed"
 DEFAULT_MAP = EXT / "bacdive_genome_map.csv"
-DEFAULT_PARQUET = PRO / "bacdive" / "bd_med.parquet"
-OUT = PRO / "bacdive" / "bd_med_w_genome.parquet"
+DEFAULT_PARQUET = PRO / "bacdive" / "bd_med_w_genome.parquet"
 
 
 def blank(series: pd.Series) -> pd.Series:
     return series.fillna("").astype(str).str.strip().replace({"None": "", "nan": ""})
+
+
+def default_out(parquet: Path) -> Path:
+    """ Add `_w_genome` suffix if not present.
+    """
+    if parquet.stem.endswith("_w_genome"):
+        return parquet
+    return parquet.with_name(f"{parquet.stem}_w_genome{parquet.suffix}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,14 +40,19 @@ def parse_args() -> argparse.Namespace:
                    help="Genome map CSV (default: %(default)s)")
     p.add_argument("--parquet", type=Path, default=DEFAULT_PARQUET,
                    help="Growth parquet to filter (default: %(default)s)")
+    p.add_argument("--out", type=Path, default=None,
+                   help="Output parquet (default: <input stem>_w_genome.parquet)")
     return p.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    out = OUT or args.parquet.with_name(
-        f"{args.parquet.stem}_cds_filtered{args.parquet.suffix}"
-    )
+    out = args.out or default_out(args.parquet)
+    if out == args.parquet:
+        raise SystemExit(
+            f"refusing to overwrite the input table in place: {out}. "
+            "Pass an explicit --out."
+        )
 
     gmap = pd.read_csv(args.map, dtype=str).fillna("")
     cds_ids = set(gmap.loc[gmap.cds_on_disk == "1", "bacdive_id"])

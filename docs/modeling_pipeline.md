@@ -121,6 +121,7 @@ This is the config `run_experiment.py` loads via `experiment.dataset`. It does *
 | `modeling_dataset_path`  | str       | CSV/Parquet path to load (interim output of step 1, or an already-processed external table)       |
 | `features`               | dict      | Features to include and their encoding spec (see [6](#6-featurization-srcmodelingfeaturespy))     |
 | `targets`                | list[str] | Available prediction targets                                                                      |
+| `filters`                | dict      | Optional row-level `include` / `exclude` rules, keyed by column (see below)                        |
 
 
 Example (BacDive, pointing at the same table used to create splits):
@@ -135,6 +136,21 @@ features:
 targets:
   - growth_class
 ```
+
+#### Row filters — `filters`
+
+For ablations that remove a *slice of rows* rather than a feature. Each entry
+is `column: [value, ...]`; `exclude` drops matching rows, `include` keeps only
+matching rows, and multiple columns are ANDed. Values are compared as strings,
+so YAML quoting cannot change the result.
+
+```yaml
+filters:
+  exclude:
+    media_canon: [macconkey]
+```
+
+Filters are applied **after** the split-map row-count check, so a filtered run reuses the unfiltered split map and its folds stay directly comparable to the baseline (folds match by group value, not row position). The run logs how many rows and how many minority-class rows were dropped, and warns if an `exclude` list matched nothing. Filtering away every row is an error.
 
 ---
 
@@ -337,6 +353,40 @@ cv:
 ```
 
 When `cv.splits_file` is set, `run_experiment.py` loads the map and derives folds by matching `split_on` values instead of calling `make_splits`. Before CV it compares `len(modeling_dataset)` to `dataset_shape[0]` in the companion `*_stats.json` (the row count of the table `create_splits.py` was run on). A mismatch raises — this catches pointing `modeling_dataset_path` at `data/interim/<output_name>` after `create_modeling_dataset.py` filtered rows, while splits were built from the original processed table. The requested strategies must exist in the map, and every `split_on` value in the modeling dataset must be present in the map (otherwise the run errors, preventing silent mismatch/leakage). Per-fold metrics and predictions gain a `repeat` column.
+
+#### Held-out medium (S6): group on `media_canon`, never `media_name`
+
+For a held-out-medium split, set `split_on_column: media_canon` -- the
+alias-canonicalised medium identity added by
+`src/bacdive/media.py::canonical_media_name`. Grouping on the raw `media_name`
+**leaks**: BacDive spells one medium many ways, so a fold that "holds out"
+`MacConkey agar` still trains on `MacConkey`, `MacConkey Agar`, `MacConcey
+agar` and `Mac-Conkey agar`. On `bd_med_w_genome`, 93% of the no-growth rows
+sit on a medium that is spelled more than one way, so a raw-name split would
+leak almost the entire minority class and measure alias memorisation rather
+than chemistry transfer.
+
+```yaml
+# config/splits/bd_med_w_genome_s6_medium.yaml
+dataset_path: data/processed/bacdive/bd_med_w_genome.parquet
+split_on_column: media_canon
+target: growth_class
+cv:
+  strategy: [stratified_grouped]
+n_splits: 5
+```
+
+Use `stratified_grouped`, not `lomo`: `lomo` is literal leave-one-medium-out
+(one fold per medium, ~1.9k folds) and its fold labelling assumes a single
+medium per fold. Rows whose medium is not identifiable carry
+`media_canon_status` of `ambiguous` (the name lists several media) or
+`unspecified` (no name at all) and can be dropped with a row filter:
+
+```yaml
+filters:
+  exclude:
+    media_canon_status: [ambiguous, unspecified]
+```
 
 #### LOSO / LOMO warning
 
