@@ -18,12 +18,12 @@ Microbial diversity remains largely underutilized because phenotype data linking
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/lyach/MicrobeNet.git
+   git clone https://github.com/lyach/MAPLE.git
    ```
 
 2. Navigate to the project directory:
    ```bash
-   cd MicrobeNet
+   cd MAPLE
    ```
 
 3. Create an isolated virtual environment:
