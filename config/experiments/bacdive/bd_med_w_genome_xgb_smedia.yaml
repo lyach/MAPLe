@@ -1,13 +1,12 @@
-# BacDive (strain, med), XGBoost , family split
-name: bd_med_xgb_fam_no_temp
-dataset: config/dataset/modeling_bacdive/bd_med_fam_no_temp.yaml
+name: bd_med_w_genome_xgb_smedia
+dataset: config/dataset/modeling_bacdive/bd_med_w_genome_smedia.yaml
 model: config/models/xgboost.yaml
 task: growth_class
 
 cv:
   strategy: [stratified_grouped]
-  splits_file: data/modeling/splits_bd_med/family_bd_med.csv
-  split_on: family
+  splits_file: data/modeling/splits_bd_med_w_genome/media_canon_bd_med_w_genome.csv
+  split_on: media_canon
 
 class_weight: balanced
 

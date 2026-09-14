@@ -1,13 +1,12 @@
-# BacDive (strain, med) w genome, XGBoost , genus split
-name: bd_med_w_genome_xgb_genus
-dataset: config/dataset/modeling_bacdive/bd_med_w_genome_genus.yaml
+name: bd_temp_xgb_smedia
+dataset: config/dataset/modeling_bacdive/bd_temp_smedia.yaml
 model: config/models/xgboost.yaml
 task: growth_class
 
 cv:
   strategy: [stratified_grouped]
-  splits_file: data/modeling/splits_bd_med_w_genome/genus_bd_med_w_genome.csv
-  split_on: genus
+  splits_file: data/modeling/splits_bd_temp/media_canon_bd_temp.csv
+  split_on: media_canon
 
 class_weight: balanced
 

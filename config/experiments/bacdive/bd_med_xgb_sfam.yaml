@@ -1,12 +1,11 @@
-# BacDive (strain, med) w genome, XGBoost , family split
-name: bd_med_w_genome_xgb_fam
-dataset: config/dataset/modeling_bacdive/bd_med_w_genome_fam.yaml
+name: bd_med_xgb_sfam
+dataset: config/dataset/modeling_bacdive/bd_med_sfam.yaml
 model: config/models/xgboost.yaml
 task: growth_class
 
 cv:
   strategy: [stratified_grouped]
-  splits_file: data/modeling/splits_bd_med_w_genome/family_bd_med_w_genome.csv
+  splits_file: data/modeling/splits_bd_med/family_bd_med.csv
   split_on: family
 
 class_weight: balanced

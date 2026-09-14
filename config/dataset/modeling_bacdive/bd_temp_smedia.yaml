@@ -1,21 +1,16 @@
-# Modeling dataset config — BacDive growth (strain x medium)
-# Used by run_experiment.py (featurization + targets).
-
 # ================ FILE ================
-modeling_dataset_path: "data/external/bacdive_growth_40k.parquet"
+modeling_dataset_path: "data/processed/bacdive/bd_temp.parquet"
 
 # ================ FEATURIZATION ================
 features:
-  # strain features (taxonomy + morphology + physiology)
+  # strain features
   genus: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
   family: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
   phylum: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
-  gram_stain: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
-  cell_shape: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
-  motility: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
-  oxygen_tolerance: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
-  spore_formation: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
-  # media features (parsed from composition — transfer across unseen media)
+  genome_size_bp:
+    - to_numeric
+    - 'RobustScaler()'
+  # media features
   n_ingredients: "StandardScaler()"
   has_yeast_extract: "MinMaxScaler()"
   has_peptone: "MinMaxScaler()"

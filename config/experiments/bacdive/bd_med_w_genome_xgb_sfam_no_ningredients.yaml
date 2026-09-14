@@ -1,0 +1,23 @@
+name: bd_med_w_genome_xgb_sfam_no_ningredients
+dataset: config/dataset/modeling_bacdive/bd_med_w_genome_sfam_no_ningredients.yaml
+model: config/models/xgboost.yaml
+task: growth_class
+
+cv:
+  strategy: [stratified_grouped]
+  splits_file: data/modeling/splits_bd_med_w_genome/family_bd_med_w_genome.csv
+  split_on: family
+
+class_weight: balanced
+
+metrics: [auroc, pr_auc_nogrowth, recall_nogrowth, precision_nogrowth, mcc, balanced_accuracy]
+
+interpret:
+  shap: false
+  group_importance: false
+
+seed: 42
+output_dir: reports
+
+wandb:
+  enabled: false

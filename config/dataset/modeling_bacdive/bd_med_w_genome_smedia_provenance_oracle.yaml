@@ -1,23 +1,16 @@
-# Modeling dataset config 
-# BacDive (strain, medium, temperature) 
-# Strain-family split
-
 # ================ FILE ================
-modeling_dataset_path: "data/processed/bacdive/bd_temp.parquet"
+modeling_dataset_path: "data/processed/bacdive/bd_med_w_genome.parquet"
 
 # ================ FEATURIZATION ================
 features:
   # strain features
-  # genus: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
+  genus: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
   family: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
   phylum: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
   genome_size_bp:
     - to_numeric
     - 'RobustScaler()'
-  num_contigs:
-    - to_numeric
-    - 'RobustScaler()'
-  assembly_level: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
+  
   # media features
   n_ingredients: "StandardScaler()"
   has_yeast_extract: "MinMaxScaler()"
@@ -26,6 +19,8 @@ features:
   has_blood_components: "MinMaxScaler()"
   has_nacl: "MinMaxScaler()"
   complexity: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
+  # oracle
+  composition_source: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
   temperature:
     - to_numeric
     - 'OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)'

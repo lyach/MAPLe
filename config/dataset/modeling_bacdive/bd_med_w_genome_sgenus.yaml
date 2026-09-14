@@ -1,9 +1,5 @@
-# Modeling dataset config 
-# BacDive (strain, medium, temp) 
-# Strain-genus split
-
 # ================ FILE ================
-modeling_dataset_path: "data/processed/bacdive/bd_temp.parquet"
+modeling_dataset_path: "data/processed/bacdive/bd_med_w_genome.parquet"
 
 # ================ FEATURIZATION ================
 features:
@@ -14,10 +10,7 @@ features:
   genome_size_bp:
     - to_numeric
     - 'RobustScaler()'
-  num_contigs:
-    - to_numeric
-    - 'RobustScaler()'
-  assembly_level: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
+  
   # media features
   n_ingredients: "StandardScaler()"
   has_yeast_extract: "MinMaxScaler()"
