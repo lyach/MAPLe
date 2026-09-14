@@ -6,7 +6,7 @@ description = "Virtual environment for the MAPLE project"
 authors = [
     { name = "Lya Chinas"}
 ]
-requires-python = ">=3.10" 
+requires-python = ">=3.11"
 
 # --- Dependencies ---
 dependencies = [
@@ -28,7 +28,7 @@ dependencies = [
     "pyarrow",
     "umap-learn>=0.5.11",
     "xgboost",
-    "shap",
+    "shap>=0.50.0",
 
     # Data & Utils
     "matplotlib",

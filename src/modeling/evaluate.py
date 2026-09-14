@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 import numpy as np
@@ -228,18 +229,31 @@ def per_group_metrics(
     DataFrame with one row per group and one column per metric.
     """
     rows: list[dict[str, Any]] = []
-    for name, grp in predictions_df.groupby(group_col):
-        y_true = grp["y_true"].values
-        y_pred = grp["y_pred"].values
-        y_prob = grp["y_prob"].values if "y_prob" in grp.columns else None
-        m = evaluate_fold(y_true, y_pred, y_prob, task, requested)
-        # Support counts make single-class NaNs (undefined AUROC/PR-AUC on a
-        # group with no negatives) interpretable at a glance.
-        m["n"] = int(len(y_true))
-        if task == "growth_class":
-            m["n_pos"] = int((y_true == 1).sum())  # growth
-            m["n_neg"] = int((y_true == 0).sum())  # no-growth
-        m[group_col] = name
-        rows.append(m)
+    # Expected some groups (strain/media) do not hold both labels (growth and no-growth),
+    # supress the warning
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="A single label was found in 'y_true' and 'y_pred'",
+            category=UserWarning,
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message="y_pred contains classes not in y_true",
+            category=UserWarning,
+        )
+        for name, grp in predictions_df.groupby(group_col):
+            y_true = grp["y_true"].values
+            y_pred = grp["y_pred"].values
+            y_prob = grp["y_prob"].values if "y_prob" in grp.columns else None
+            m = evaluate_fold(y_true, y_pred, y_prob, task, requested)
+            # Support counts make single-class NaNs (undefined AUROC/PR-AUC on a
+            # group with no negatives) interpretable at a glance.
+            m["n"] = int(len(y_true))
+            if task == "growth_class":
+                m["n_pos"] = int((y_true == 1).sum())  # growth
+                m["n_neg"] = int((y_true == 0).sum())  # no-growth
+            m[group_col] = name
+            rows.append(m)
 
     return pd.DataFrame(rows).set_index(group_col)
