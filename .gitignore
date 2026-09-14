@@ -19,6 +19,7 @@ data/*
 !data/metadata/
 
 # environment
+.venv/
 .env/
 uv.lock
 

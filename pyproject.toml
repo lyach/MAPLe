@@ -1,8 +1,8 @@
 # Project Metadata
 [project]
-name = "microbenet"
+name = "maple"
 version = "0.1.0"
-description = "Virtual environment for the Microbe Dataset"
+description = "Virtual environment for the MAPLE project"
 authors = [
     { name = "Lya Chinas"}
 ]
@@ -11,11 +11,16 @@ requires-python = ">=3.10"
 # --- Dependencies ---
 dependencies = [
     # Deep Learning
+    "torch",
+    "torchvision",
+    "torchaudio",
+
     # Pinned to the CUDA 12.4 wheels
-    "torch==2.4.1",
-    "torchvision==0.19.1",
-    "torchaudio==2.4.1",
+    # "torch==2.4.1",
+    # "torchvision==0.19.1",
+    # "torchaudio==2.4.1",
     "coral-pytorch",
+
     # Data Science
     "numpy",
     "pandas",
@@ -24,6 +29,7 @@ dependencies = [
     "umap-learn>=0.5.11",
     "xgboost",
     "shap",
+
     # Data & Utils
     "matplotlib",
     "seaborn",
@@ -31,10 +37,12 @@ dependencies = [
     "loguru",
     # MLOps
     "wandb",
+
     # Config
     "pydantic",
     "pydantic-settings",
     "pyyaml",
+
     # Development
     "ruff",
     "jupyterlab",
@@ -55,12 +63,12 @@ dependencies = [
 [tool.uv]
 index-url = "https://pypi.org/simple"
 
-[[tool.uv.index]]
-name = "pytorch-cu124"
-url = "https://download.pytorch.org/whl/cu124"
-explicit = true
+# [[tool.uv.index]]
+# name = "pytorch-cu124"
+# url = "https://download.pytorch.org/whl/cu124"
+# explicit = true
 
-[tool.uv.sources]
-torch = { index = "pytorch-cu124" }
-torchvision = { index = "pytorch-cu124" }
-torchaudio = { index = "pytorch-cu124" }
+# [tool.uv.sources]
+# torch = { index = "pytorch-cu124" }
+# torchvision = { index = "pytorch-cu124" }
+# torchaudio = { index = "pytorch-cu124" }
