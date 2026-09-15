@@ -27,7 +27,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[3]
 
 CORE_COLUMNS = [
-    "experiment", "dataset", "ablation",
+    "experiment", "dataset", "features_included",
     "datapoints", "negatives", "prevalence",
     "pr_auc_nogrowth", "stdev_pr_auc_nogrowth",
     "mcc", "stdev_mcc", "recall_nogrowth", "auroc",
@@ -54,7 +54,7 @@ def _load_yaml(path: Path) -> dict:
         return yaml.safe_load(handle) or {}
 
 
-def _ablation(features: dict) -> str:
+def _feats(features: dict) -> str:
     """Comma-separated feature names declared for this run.
 
     Derived from the config snapshot's ``dataset.features`` keys rather than
@@ -130,7 +130,7 @@ def collect_run(run_dir: Path) -> list[dict]:
             "seed": exp.get("seed"),
             "model": model.get("type"),
             "class_weight": exp.get("class_weight"),
-            "ablation": _ablation(features),
+            "feats_included": _feats(features),
             "datapoints": n,
             "negatives": n_neg,
             "prevalence": round(prevalence, 5) if prevalence else None,
@@ -170,12 +170,11 @@ def main() -> int:
 
     df = pd.DataFrame(rows)
 
-    # Dataset, then split, then the fullest feature set first so the
-    # ablations read as deltas from it.
-    df["_n_features"] = df["ablation"].str.count(",") + 1
+    # Dataset, then split, then the fullest feature set first
+    df["_n_features"] = df["feats_included"].str.count(",") + 1
     df = (
         df.sort_values(
-            ["dataset", "_n_features", "ablation"],
+            ["dataset", "_n_features", "feats_included"],
             ascending=[True, False, True],
         )
         .drop(columns=["_n_features"])
@@ -184,7 +183,7 @@ def main() -> int:
 
     lead = [
         "experiment", "dataset", "split_group", "n_groups",
-        "strategy", "folds", "model", "ablation",
+        "strategy", "folds", "model", "feats_included",
         "datapoints", "negatives", "prevalence",
         "pr_auc_nogrowth", "stdev_pr_auc_nogrowth",
         "mcc", "stdev_mcc",
