@@ -6,7 +6,13 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -118,13 +124,22 @@ class WandbConfig(BaseModel):
     entity: str | None = None
 
 
+# Dataset keys that may appear inline in an experiment config
+_INLINE_DATASET_KEYS = frozenset(DatasetConfig.model_fields)
+
+
 class ExperimentConfig(BaseModel):
-    """Top-level experiment config that references dataset + model configs."""
+    """Top-level experiment config.
+
+    The dataset is given either inline -- flat ``modeling_dataset_path`` /
+    ``features`` / ``targets`` / ``filters`` keys, -- or as a path to a
+    standalone dataset YAML (``dataset: config/dataset/...``, legacy).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     name: str
-    dataset: str
+    dataset: str | DatasetConfig
     model: str
     task: Literal["growth_class", "max_od", "growth_rate"]
     cv: CVConfig = CVConfig()
@@ -134,6 +149,33 @@ class ExperimentConfig(BaseModel):
     seed: int = 42
     output_dir: str = "reports"
     wandb: WandbConfig = WandbConfig()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _lift_inline_dataset(cls, data: Any) -> Any:
+        """Fold flat dataset keys into ``dataset`` as an inline DatasetConfig.
+        """
+        if not isinstance(data, dict):
+            return data
+        inline = {k: v for k, v in data.items() if k in _INLINE_DATASET_KEYS}
+        if not inline:
+            return data  # legacy form: `dataset:` must be a path
+
+        if data.get("dataset") is not None:
+            raise ValueError(
+                f"config sets both `dataset: {data['dataset']}` (a path to a standalone "
+                f"dataset YAML) and inline dataset keys {sorted(inline)}. Use one or the "
+                "other: drop the `dataset:` line to keep the inline block, or drop the "
+                "inline keys to keep the referenced file."
+            )
+        try:
+            dataset = DatasetConfig(**inline)
+        except ValidationError as exc:
+            raise ValueError(f"invalid inline dataset block:\n{exc}") from exc
+
+        rest = {k: v for k, v in data.items() if k not in _INLINE_DATASET_KEYS}
+        rest["dataset"] = dataset
+        return rest
 
 
 # ---------------------------------------------------------------------------
@@ -177,26 +219,38 @@ def load_model_config(path: str | Path) -> ModelConfig:
 
 
 def load_experiment_config(path: str | Path) -> ExperimentConfig:
-    return ExperimentConfig(**load_yaml(path))
+    try:
+        return ExperimentConfig(**load_yaml(path))
+    except ValidationError as exc:
+        raise ValueError(f"invalid experiment config {path}:\n{exc}") from exc
 
 
 def load_split_config(path: str | Path) -> SplitConfig:
     return SplitConfig(**load_yaml(path))
 
 
-def resolve_experiment(path: str | Path, root: Path | None = None):
-    """Load an experiment config and resolve its nested dataset + model configs.
+def _find_root(start: Path) -> Path:
+    """Ascend from ``start`` to the directory containing ``pyproject.toml``."""
+    for parent in [start, *start.parents]:
+        if (parent / "pyproject.toml").exists():
+            return parent
+    return Path.cwd()
 
-    Returns ``(experiment_cfg, dataset_cfg, model_cfg)``.
+
+def resolve_experiment(path: str | Path, root: Path | None = None):
+    """Load an experiment config and resolve its dataset + model configs.
+
+    Returns ``(experiment_cfg, dataset_cfg, model_cfg)``. The dataset config is
+    taken from the experiment's inline block, or loaded from the path in
+    ``dataset:`` for configs that still use a standalone dataset YAML.
     """
     if root is None:
-        root = Path(path).resolve().parents[1]
-        # climb from config/experiments/<file>.yaml -> project root
-        # but if path is already absolute, fall back to cwd
-        if not (root / "src").exists():
-            root = Path.cwd()
+        root = _find_root(Path(path).resolve())
 
     exp_cfg = load_experiment_config(path)
-    ds_cfg = load_dataset_config(root / exp_cfg.dataset)
+    if isinstance(exp_cfg.dataset, DatasetConfig):
+        ds_cfg = exp_cfg.dataset
+    else:
+        ds_cfg = load_dataset_config(root / exp_cfg.dataset)
     mdl_cfg = load_model_config(root / exp_cfg.model)
     return exp_cfg, ds_cfg, mdl_cfg

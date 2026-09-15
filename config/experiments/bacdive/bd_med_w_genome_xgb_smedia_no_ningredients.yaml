@@ -1,5 +1,5 @@
+# ================ EXPERIMENT ================
 name: bd_med_w_genome_xgb_smedia_no_ningredients
-dataset: config/dataset/modeling_bacdive/bd_med_w_genome_smedia_no_ningredients.yaml
 model: config/models/xgboost.yaml
 task: growth_class
 
@@ -21,3 +21,32 @@ output_dir: reports
 
 wandb:
   enabled: false
+
+# ================ DATASET ================
+modeling_dataset_path: "data/processed/bacdive/bd_med_w_genome.parquet"
+
+# ================ FEATURIZATION ================
+features:
+  # strain features
+  genus: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
+  family: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
+  phylum: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
+  genome_size_bp:
+    - to_numeric
+    - 'RobustScaler()'
+  
+  # media features
+  # n_ingredients: "StandardScaler()"
+  has_yeast_extract: "MinMaxScaler()"
+  has_peptone: "MinMaxScaler()"
+  has_agar: "MinMaxScaler()"
+  has_blood_components: "MinMaxScaler()"
+  has_nacl: "MinMaxScaler()"
+  complexity: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
+  temperature:
+    - to_numeric
+    - 'OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)'
+
+# ================ TARGETS ================
+targets:
+  - growth_class

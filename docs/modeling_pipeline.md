@@ -8,7 +8,7 @@ This pipeline processes growth-curve parameters and strain metadata into machine
 - **Maximum $\text{OD}_{600}$ Regression**
 - **Growth-Rate Regression**
 
-Execution is split into two primary CLI steps, driven by four configuration files (`curves`, `dataset`, `model`, and `experiment` YAMLs). For interactive workflows, all core steps can also be imported directly from `src/modeling/`.
+Execution is split into two primary CLI steps, driven by three configuration files (`curves`, `model`, and `experiment` YAMLs). The experiment config carries its own dataset block, including: the table path, features, and targets live directly in it. For interactive workflows, all core steps can also be imported directly from `src/modeling/`.
 
 ### Pipeline
 
@@ -21,9 +21,9 @@ metadata.csv ────┘     (config/dataset/curves_dataset_*.yaml)
 processed / interim table ──► [ create_splits.py ] ──► data/modeling/splits_<stem>/
        ▲ (optional, reusable CV splits)              <split_on>_<stem>.csv
 config/                                                    │            │
-├── dataset/   modeling_dataset_*.yaml (path + features)   │ (optional) │
+├── dataset/curves/  curves_dataset_*.yaml (step 1 only)   │ (optional) │
 ├── models/      ──────────────────────────────────────────────► [ run_experiment.py ]
-├── experiments/                                                        │
+├── experiments/  (table path + features + targets inline)              │
 └── splits/                                                             ▼
                                                           reports/<experiment_id>/
                                                           ├── metrics.json
@@ -52,12 +52,12 @@ Before running the modeling pipeline, you need:
 | Curves table         | `data/processed/*_tidy_curves.csv` or `.parquet` from [dataset pipeline](dataset_pipeline.md) / external sources | Yes (for step 1) |
 | Strain metadata table | `data/external/strains_metadata.csv` (via `get_strain_metadata.py`)                                             | No       |
 | Curves config       | `config/dataset/curves_dataset_*.yaml`                                          | Yes (for step 1) |
-| Modeling dataset config | `config/dataset/modeling_dataset_*.yaml`                                    | Yes      |
+| Modeling dataset config | `config/dataset/modeling_dataset_*.yaml` | No       |
 | Model config        | `config/models/*.yaml`                                                          | Yes      |
 | Experiment config   | `config/experiments/*.yaml`                                                     | Yes      |
 
 
-`run_experiment.py` reads the table at `modeling_dataset_path` in the modeling dataset config. That path may be an interim file produced by `create_modeling_dataset.py`, or an already-processed external table (e.g. BacDive parquet). When using precomputed splits, this path must be the **same table** (same row count) that `create_splits.py` was run on.
+`run_experiment.py` reads the table at `modeling_dataset_path` in the experiment config. That path may be an interim file produced by `create_modeling_dataset.py`, or an already-processed external table (e.g. BacDive parquet). When using precomputed splits, this path must be the **same table** (same row count) that `create_splits.py` was run on.
 
 ---
 
@@ -111,46 +111,12 @@ The output is a CSV or Parquet file at `data/interim/<output_name>` (format foll
 
 The table retains all columns from the curves CSV plus any merged metadata columns.
 
-### 2e. Modeling dataset config — `config/dataset/modeling_dataset_*.yaml`
+### 2e. Which table an experiment reads
 
-This is the config `run_experiment.py` loads via `experiment.dataset`. It does **not** describe how the table was built; it only names the table and the features/targets for modeling.
+The table an experiment runs on, and the features it builds from that table, are declared **in the experiment config itself** — see [3b](#3b-dataset-block). There is no separate modeling dataset file to keep in sync.
 
-
-| Field                    | Type      | Description                                                                                       |
-| ------------------------ | --------- | ------------------------------------------------------------------------------------------------- |
-| `modeling_dataset_path`  | str       | CSV/Parquet path to load (interim output of step 1, or an already-processed external table)       |
-| `features`               | dict      | Features to include and their encoding spec (see [6](#6-featurization-srcmodelingfeaturespy))     |
-| `targets`                | list[str] | Available prediction targets                                                                      |
-| `filters`                | dict      | Optional row-level `include` / `exclude` rules, keyed by column (see below)                        |
-
-
-Example (BacDive, pointing at the same table used to create splits):
-
-```yaml
-modeling_dataset_path: data/external/bacdive_growth_150k.parquet
-
-features:
-  genus: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
-  complexity: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
-
-targets:
-  - growth_class
-```
-
-#### Row filters — `filters`
-
-For ablations that remove a *slice of rows* rather than a feature. Each entry
-is `column: [value, ...]`; `exclude` drops matching rows, `include` keeps only
-matching rows, and multiple columns are ANDed. Values are compared as strings,
-so YAML quoting cannot change the result.
-
-```yaml
-filters:
-  exclude:
-    media_canon: [macconkey]
-```
-
-Filters are applied **after** the split-map row-count check, so a filtered run reuses the unfiltered split map and its folds stay directly comparable to the baseline (folds match by group value, not row position). The run logs how many rows and how many minority-class rows were dropped, and warns if an `exclude` list matched nothing. Filtering away every row is an error.
+> **Legacy.** An experiment config may instead point at a standalone dataset YAML with `dataset: config/dataset/modeling_dataset_*.yaml`, holding the same `modeling_dataset_path` / `features` / `targets` / `filters` keys. This still loads, but the two forms are mutually exclusive: declaring both is an error. To merge an old pair into one file, run
+> `python scripts/utils/migrate_dataset_into_experiment.py <config-or-dir> --apply`.
 
 ---
 
@@ -162,14 +128,18 @@ Filters are applied **after** the split-map row-count check, so a filtered run r
 | Field                        | Type             | Example                                       | Description                                       |
 | ---------------------------- | ---------------- | --------------------------------------------- | ------------------------------------------------- |
 | `name`                       | str              | `"aerobic_xgboost_growth_class"`              | Experiment name; used as output subdirectory      |
-| `dataset`                    | str              | `"config/dataset/modeling_dataset_aero.yaml"` | Path to **modeling** dataset config (`modeling_dataset_path` + features + targets) |
+| `modeling_dataset_path`      | str              | `"data/processed/bacdive/bd_temp.parquet"`    | CSV/Parquet table to load (see [3b](#3b-dataset-block)) |
+| `features`                   | dict             | see [3b](#3b-dataset-block)                   | Features to include and their encoding spec       |
+| `targets`                    | list[str]        | `[growth_class]`                              | Available prediction targets                      |
+| `filters`                    | dict (optional)  | see [3b](#3b-dataset-block)                   | Row-level `include` / `exclude` rules, keyed by column |
+| `dataset`                    | str (legacy)     | `"config/dataset/modeling_dataset_aero.yaml"` | Path to a standalone dataset config, instead of the four keys above |
 | `model`                      | str              | `"config/models/xgboost.yaml"`                | Path to model config                              |
 | `task`                       | str              | `"growth_class"`                              | Prediction target                                 |
 | `cv.strategy`                | str or list[str] | `[loso, lomo]`                                | CV strategy                                       |
 | `cv.n_repeats`               | int              | `1`                                           | Number of CV repeats                              |
 | `cv.splits_file`             | str (optional)   | `"data/modeling/splits_bacdive_growth_150k/genus_bacdive_growth_150k.csv"` | Consume precomputed splits (see [5a](#5a-precomputed-reusable-splits-create_splitspy)) |
 | `cv.split_on`                | str (optional)   | `"genus"`                                     | Group column the saved split map is keyed on (required with `cv.splits_file`) |
-| `class_weight`               | str or dict      | `"balanced"`                                  | Per-sample class reweighting (see [3d](#3d-class-imbalance-handling-reweighting)) |
+| `class_weight`               | str or dict      | `"balanced"`                                  | Per-sample class reweighting (see [3e](#3e-class-imbalance-handling-reweighting)) |
 | `metrics`                    | list[str]        | `[auroc, f1, mcc]`                            | Metrics to compute                                |
 | `interpret.shap`             | bool             | `true`                                        | Run SHAP analysis after CV                        |
 | `interpret.group_importance` | bool             | `true`                                        | Compute strain/media/condition grouped importance |
@@ -182,8 +152,8 @@ Filters are applied **after** the split-map row-count check, so a filtered run r
 Example:
 
 ```yaml
+# ================ EXPERIMENT ================
 name: aerobic_xgboost_growth_class
-dataset: config/dataset/modeling_dataset_aero.yaml
 model: config/models/xgboost.yaml
 task: growth_class
 
@@ -202,9 +172,50 @@ interpret:
 
 seed: 42
 output_dir: reports
+
+# ================ DATASET ================
+modeling_dataset_path: data/external/bacdive_growth_150k.parquet
+
+# ================ FEATURIZATION ================
+features:
+  genus: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
+  complexity: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
+
+targets:
+  - growth_class
 ```
 
-### 3b. Model config — `config/models/*.yaml`
+### 3b. Dataset block
+
+These keys name the table to model and how to featurize it. They live in the experiment config alongside the fields above; the banner comments are convention, not syntax.
+
+
+| Field                    | Type      | Description                                                                                       |
+| ------------------------ | --------- | ------------------------------------------------------------------------------------------------- |
+| `modeling_dataset_path`  | str       | CSV/Parquet path to load (interim output of step 1, or an already-processed external table)       |
+| `features`               | dict      | Features to include and their encoding spec (see [6](#6-featurization-srcmodelingfeaturespy))     |
+| `targets`                | list[str] | Available prediction targets                                                                      |
+| `filters`                | dict      | Optional row-level `include` / `exclude` rules, keyed by column (see below)                        |
+
+
+When using precomputed splits, `modeling_dataset_path` must be the **same table** (same row count) that `create_splits.py` was run on.
+
+#### Row filters — `filters`
+
+For ablations that remove a *rows* rather than a feature. Each entry
+is `column: [value, ...]`; `exclude` drops matching rows, `include` keeps only
+matching rows, and multiple columns are ANDed. Values are compared as strings,
+so YAML quoting cannot change the result.
+
+```yaml
+filters:
+  exclude:
+    media_canon: [macconkey]
+```
+
+Filters are applied **after** the split map row count, so a filtered run reuses the unfiltered split map and its folds stay directly comparable to the baseline (folds match by group value, not row position). The run logs how many rows and how many minority-class rows were dropped, and warns if an `exclude` list matched nothing. Filtering away every row is an error.
+
+### 3c. Model config — `config/models/*.yaml`
 
 
 | Field            | Type | Description                                                 |
@@ -227,7 +238,7 @@ Available model configs:
 
 The `dummy` type (most-frequent / mean) is available in code but has no config file yet.
 
-### 3c. Run the script
+### 3d. Run the script
 
 ```bash
 python scripts/modeling/run_experiment.py config/experiments/class_aero.yaml
@@ -244,7 +255,7 @@ The script:
 7. Refits on all data and runs SHAP interpretability (if enabled).
 8. Saves everything to `reports/<name>/`.
 
-### 3d. Class imbalance handling (reweighting)
+### 3e. Class imbalance handling (reweighting)
 
 For skewed targets (e.g. `growth_class` with rare no-growth wells), set `class_weight` in the experiment config:
 
@@ -398,7 +409,7 @@ filters:
 
 ## 6. Featurization (`src/modeling/features.py`)
 
-Feature encoding is defined in the dataset config's `features` dict and applied inside CV — the transformer is **fit on the train fold only** to prevent leakage.
+Feature encoding is defined in the experiment config's `features` dict and applied inside CV — the transformer is **fit on the train fold only** to prevent leakage.
 
 
 | Spec            | Encoder          | Description                                                       |
@@ -465,7 +476,7 @@ X, y, feature_names, groups, fgm = featurize(df, cfg, target="growth_class")
 | Matthews correlation                | `mcc`                 |
 | Balanced accuracy                   | `balanced_accuracy`   |
 
-`auroc`, `pr_auc`, and `pr_auc_nogrowth` are threshold-free (ranking); the rest are computed at the fold's tuned `threshold` (see [3d](#3d-class-imbalance-handling-reweighting)). The `*_nogrowth` variants target the minority class and are recommended over `f1`/`pr_auc` for imbalanced growth-class datasets.
+`auroc`, `pr_auc`, and `pr_auc_nogrowth` are threshold-free (ranking); the rest are computed at the fold's tuned `threshold` (see [3e](#3e-class-imbalance-handling-reweighting)). The `*_nogrowth` variants target the minority class and are recommended over `f1`/`pr_auc` for imbalanced growth-class datasets.
 
 **Regression** (`max_od`, `growth_rate`):
 
@@ -478,7 +489,7 @@ X, y, feature_names, groups, fgm = featurize(df, cfg, target="growth_class")
 | MAE       | `mae`       |
 
 
-Metrics are computed per fold, then aggregated (mean ± std) per CV strategy, plus a pooled out-of-fold summary (see [3d](#3d-class-imbalance-handling-reweighting)). Per-strain and per-media breakdowns are saved separately, with support counts `n`/`n_pos`/`n_neg` so `NaN` ranking metrics on single-class groups are self-explanatory; a `*_withneg.csv` variant filters to groups containing at least one no-growth case.
+Metrics are computed per fold, then aggregated (mean ± std) per CV strategy, plus a pooled out-of-fold summary (see [3e](#3e-class-imbalance-handling-reweighting)). Per-strain and per-media breakdowns are saved separately, with support counts `n`/`n_pos`/`n_neg` so `NaN` ranking metrics on single-class groups are self-explanatory; a `*_withneg.csv` variant filters to groups containing at least one no-growth case.
 
 ---
 
@@ -574,7 +585,7 @@ All modules live under `src/modeling/` and are importable from notebooks:
 ## 11. Adding new features
 
 1. Add the column to the curves CSV or strain metadata CSV (no code change for metadata columns merged in step 1).
-2. Add an entry to the `features` dict in the **modeling** dataset config (`config/dataset/modeling_dataset_*.yaml`):
+2. Add an entry to the `features` dict in the experiment config (`config/experiments/**/*.yaml`):
 
 ```yaml
 features:

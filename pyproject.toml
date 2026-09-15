@@ -45,6 +45,7 @@ dependencies = [
 
     # Development
     "ruff",
+    "pytest",
     "jupyterlab",
     "ipykernel",
     "pre-commit",
@@ -58,6 +59,10 @@ dependencies = [
     "bacdive",
 
 ]
+
+# Tests
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 # uv
 [tool.uv]

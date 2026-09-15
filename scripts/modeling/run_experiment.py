@@ -376,8 +376,12 @@ def main() -> None:
     logger.info("output: {}", output_dir)
 
     # Save config snapshot
+    exp_dump = exp_cfg.model_dump()
+    exp_dump["dataset"] = (
+        exp_cfg.dataset if isinstance(exp_cfg.dataset, str) else "inline"
+    )
     config_snapshot = {
-        "experiment": exp_cfg.model_dump(),
+        "experiment": exp_dump,
         "dataset": ds_cfg.model_dump(),
         "model": mdl_cfg.model_dump(),
         "timestamp": datetime.now().isoformat(),
