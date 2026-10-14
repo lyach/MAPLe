@@ -20,14 +20,17 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
-INPUT = ROOT / "data" / "processed" / "aero_anaero_tidy_curves.csv"
+INPUT = ROOT / "data" / "processed" / "align_dataset" / "aero_anaero_tidy_curves.csv"
 FLAGS = ROOT / "data" / "metadata" / "align_dataset" / "align_growth_curve_curation.csv"
 STRAIN_META = ROOT / "data" / "metadata" / "align_dataset" / "align_strains_metadata.csv"
 MEDIA_META = ROOT / "data" / "metadata" / "modeling" / "media_features.csv"
-OUTPUT = ROOT / "data" / "processed" / "align" / "align_str_med.csv"
+OUTPUT = ROOT / "data" / "processed" / "align" / "align_str_med_temp_atm.csv"
 
 # If True, temperature is used as a duplicate key
 TEMP = True
+
+# If True, atmosphere is used as duplicate key
+ATM = True
 
 # curation key → tidy CSV column
 FIELD_MAP = {
@@ -256,16 +259,16 @@ def main() -> None:
     print(f"Shape before dropping duplicates: {out.shape[0]} rows x {out.shape[1]} cols, growth class 1: {out[out['growth_class'] == 1].shape[0]}, growth class 0: {out[out['growth_class'] == 0].shape[0]}")
 
     output_path = OUTPUT
+    dup_cols = ["strain_name", "media_name"]
     if TEMP:
-        dup_cols = ["strain_name", "media_name", "temperature"]
-        print(f"Dropping duplicates on {dup_cols}")
-        out = out.sort_values(by=dup_cols + ["growth_class"], ascending=[True, True, True, False])
-        output_path = Path(str(OUTPUT).replace(".csv", "_temp.csv"))
-    else:
-        dup_cols = ["strain_name", "media_name"]
-        print(f"Dropping duplicates on {dup_cols}")
-        out = out.sort_values(by=dup_cols + ["growth_class"], ascending=[True, True, False])
+        dup_cols.append("temperature")
+        output_path = Path(str(output_path).replace(".csv", "_temp.csv"))
+    if ATM:
+        dup_cols.append("atmosphere")
+        output_path = Path(str(output_path).replace(".csv", "_atm.csv"))
 
+    print(f"Dropping duplicates on {dup_cols}")
+    out = out.sort_values(by=dup_cols + ["growth_class"], ascending=[True] * len(dup_cols) + [False])
     out = out.drop_duplicates(subset=dup_cols)
     print(f"Dropped duplicates, shape: {out.shape[0]} rows x {out.shape[1]} cols, growth class 1: {out[out['growth_class'] == 1].shape[0]}, growth class 0: {out[out['growth_class'] == 0].shape[0]}")
 
