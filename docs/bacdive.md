@@ -1,6 +1,6 @@
 # BacDive pipeline
 
-Downloads a taxonomy-scoped subset of the [BacDive](https://bacdive.dsmz.de)
+Downloads the [BacDive](https://bacdive.dsmz.de)
 database and builds a tidy table with a binary `growth_class` target that plugs
 straight into the modeling pipeline (`docs/modeling_pipeline.md`).
 
@@ -42,7 +42,7 @@ trainable/evaluable negatives.
 1. Edit the scope + target in [`bacdive/taxa.yaml`](taxa.yaml):
 
 ```yaml
-target: metabolite_utilization   # or: medium_growth
+target: medium_growth   # or: metabolite_utilization
 taxa:
   - Escherichia coli
   - Bacillus subtilis
@@ -72,15 +72,7 @@ python scripts/build_bacdive_from_cache.py
 3. Feed it into the modeling pipeline:
 
 ```bash
-# medium_growth — experiment reads data/external/bacdive_growth_150k.parquet
 python scripts/modeling/run_experiment.py config/experiments/class_bacdive.yaml
-
-# metabolite_utilization
-python scripts/modeling/run_experiment.py config/experiments/class_bacdive_metabolite.yaml
-
-# optional: write an interim copy via the curves config
-python scripts/modeling/create_modeling_dataset.py config/dataset/curves_dataset_bacdive.yaml
-python scripts/modeling/create_modeling_dataset.py config/dataset/curves_dataset_bacdive_metabolite.yaml
 ```
 
 ## Output schemas
@@ -119,6 +111,43 @@ provides `strain_name` and `growth_class` (plus `media_name` for
 `medium_growth`), which is all the `growth_class` task needs. `loso` CV groups
 on `strain_name`; `lomo` groups on `media_name` (medium_growth only).
 
+## Medium review
+
+Many entries have a blank `composition_raw` and no link BacDive itself
+resolves. `_backfill_composition` (in `src/bacdive/pipeline.py`) fills these
+in on every build, picking the best source, with possibilities: 
+1. the recipe manifest
+matched by the medium's own link;
+2. the same manifest matched by an exact
+`media_name` match;
+3. the manifest again for `manual_review` matches, then
+(4) a sibling row with the same `media_name` that already has a recipe.
+`src/bacdive/media.py` provides the shared helpers (`looks_like_recipe`,
+`canonical_media_name`, mediadive id parsing) these steps build on.
+
+Sources 1. and 2. come from `scripts/bacdive/fetch_media_recipes.py`,
+which scrapes CIP pages and MediaDive records for media with a link,
+plus exact `media_name` matches against MediaDive's catalogue,
+into `data/external/media_recipe_manifest.csv`. Names it can't resolve
+exactly are left for a human/LLM review pass:
+
+```bash
+# 1. fetch recipes for linked/exact-name media, write the manifest
+python scripts/bacdive/fetch_media_recipes.py
+
+# 2. build a worksheet of remaining unlinked names + fuzzy MediaDive candidates
+python scripts/bacdive/prepare_media_name_review.py
+
+# 3. fill in chosen_mediadive_id per row (human or LLM reasoning pass), then
+#    fold the confirmed matches into the manifest as source=manual_review
+python scripts/bacdive/apply_media_name_review.py \
+    data/external/media_name_review_reasoned.csv
+```
+
+The next dataset rebuild (or `add_media_canon.py`) picks up the updated
+manifest automatically; each row's `composition_source` records which step
+(if any) supplied its text.
+
 ## Medium-name canonicalisation (`media_canon`)
 
 There are three medium-name columns, each with one job:
@@ -127,7 +156,7 @@ There are three medium-name columns, each with one job:
 | --- | --- |
 | `media_name` | Dedup key. BacDive's name with the CIP fold applied. |
 | `media_name_full` | BacDive's original, more descriptive spelling. |
-| `media_canon` | **Grouping key for a held-out-medium split.** Alias-canonicalised. |
+| `media_canon` | Grouping key for a held-out-medium split. Alias-canonicalised. |
 | `media_canon_status` | `ok` / `ambiguous` (name lists several media) / `unspecified` (no name). |
 
 BacDive spells one physical medium many ways (e.g. `MacConkey agar`, `MacConkey`, `MacConkey Agar`...). A held-out-medium split grouped on `media_name` therefore trains on the variants it thinks it held out.
@@ -151,5 +180,4 @@ python scripts/bacdive/add_media_canon.py   # re-apply with the new map
 ```
 
 A rebuild from cache produces `media_canon` (`extract.record_to_medium_rows`). 
-`add_media_canon.py` exists only to backfill already built tables without re-reading 
-the 100k-record cache.
+`add_media_canon.py` exists only to backfill already built tables without re-reading the cache.
