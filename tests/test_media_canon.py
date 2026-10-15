@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """Regression tests for the canonicalised media name (`media_canon` column).
 
-Every case here came from auditing real BacDive medium names (see
-``scripts/bacdive/prepare_media_alias_review.py``), and the two directions
-matter differently:
-
 * A missing merge is a leak: the "held-out" medium is still in the
   training set under another spelling.
 * A wrong merge only costs group cardinality (both variants are held out

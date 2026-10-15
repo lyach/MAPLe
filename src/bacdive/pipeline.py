@@ -1,37 +1,25 @@
-"""
-pipeline.py
-===========
-Runs the BacDive pipeline end to end for a chosen extraction target:
+"""Run the BacDive pipeline end to end for a chosen extraction target.
 
-  1. read the taxonomic scope + target (taxa.yaml),
-  2. fetch every matching record per taxon (cached; not yet cached records
-     are fetched in parallel batches -- see ``client.BacDiveFetcher``),
-  3. flatten records into rows for the target
-     (``(strain x medium)`` or ``(strain x metabolite x assay)``),
-  4. de-duplicate rows across publications (same strain + unit),
-  5. write the target dataset + ``bacdive_failures.csv`` and a summary.
+``run`` reads the taxonomic scope, fetches every matching record per taxon
+(cached; see ``client.BacDiveFetcher``), flattens records into rows for the
+target, de-duplicates across publications and writes the dataset plus
+``bacdive_failures.csv``. With more than one taxon (and no ``limit``), taxa are
+processed concurrently, each with its own HTTP session.
 
-When more than one taxon is listed (and ``limit`` is not set), taxa are also
-processed concurrently (``taxa_workers``): each worker gets its own
-HTTP session.
-
-``run_from_cache`` skips steps 1-2 and rebuilds the table from
+``run_from_cache`` skips fetching and rebuilds the table from
 ``data/external/bacdive_cache/*.json`` only (no API).
-
-Takes plain arguments so it can be driven from the CLI, a notebook, or a test.
 """
 
 from __future__ import annotations
 
 import concurrent.futures as cf
 import json
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import pandas as pd
+from loguru import logger
 from tqdm import tqdm
 
 from src.bacdive import config
@@ -39,28 +27,28 @@ from src.bacdive.config import TargetSpec
 from src.bacdive.extract import record_to_rows
 from src.bacdive.media import looks_like_recipe, media_features
 
-log = logging.getLogger("bacdive.pipeline")
 
+# ---------------------------------------------------------------------------
+# Composition backfill
+# ---------------------------------------------------------------------------
 
 def _blank(series: pd.Series) -> pd.Series:
     return series.isna() | (series.astype(str).str.strip() == "")
 
 
 def _load_recipe_manifest(path: Path) -> pd.DataFrame:
-    """Successfully-resolved rows of the external recipe manifest.
+    """Return the successfully resolved rows of the external recipe manifest.
 
-    Built by ``scripts/bacdive/fetch_media_recipes.py`` from the CIP/Pasteur
-    catalogue and MediaDive (by link or by exact name match); see that
-    script's docstring. Returns an empty frame (not an error) when the
-    manifest hasn't been generated yet.
+    Built by ``scripts/bacdive/fetch_media_recipes.py``; an empty frame when it
+    has not been generated yet.
     """
     cols = ["source", "link", "query_name", "composition_raw"]
     if not path.exists():
         return pd.DataFrame(columns=cols)
     manifest = pd.read_csv(path, dtype=str, keep_default_na=False)
     ok = manifest[manifest["status"] == "ok"][cols]
-    log.info(
-        "media recipe manifest %s: %d ok row(s) of %d (%s)",
+    logger.info(
+        "media recipe manifest {}: {} ok row(s) of {} ({})",
         path.name, len(ok), len(manifest),
         ok["source"].value_counts().to_dict(),
     )
@@ -70,13 +58,10 @@ def _load_recipe_manifest(path: Path) -> pd.DataFrame:
 def _apply_composition(
     df: pd.DataFrame, mask: pd.Series, composition: pd.Series, source: str,
 ) -> None:
-    """Fill ``composition_raw``/``composition_source`` and recompute the
-    derived media features (``n_ingredients``, ``has_*``, ``complexity``)
-    for the rows in ``mask``, in place.
+    """Fill ``composition_raw`` / ``composition_source`` and recompute the derived
+    media features for the rows in *mask*, in place.
 
-    Only the composition-text-derived columns are touched -- ``mediadive_id``
-    stays whatever this row's own ``medium_link`` produced, never borrowed
-    from wherever the backfilled text came from.
+    ``mediadive_id`` is left as this row's own ``medium_link`` produced it.
     """
     for idx in df.index[mask]:
         feats = media_features(
@@ -94,32 +79,20 @@ def _apply_composition(
 def _backfill_composition(
     df: pd.DataFrame, manifest_path: Path = config.MEDIA_RECIPE_MANIFEST,
 ) -> pd.DataFrame:
-    """Fill blank ``composition_raw`` from four sources BacDive's own record
-    doesn't carry, most-authoritative first:
+    """Fill blank ``composition_raw`` from sources BacDive's record lacks.
 
-    1. The external recipe manifest, matched by the medium's own
-       ``cip_medium_link`` / ``medium_link`` -- an authoritative recipe for
-       *this exact* medium (CIP/Pasteur catalogue pages, or MediaDive
-       records reached via the numeric id in a DSMZ PDF link).
-    2. The same manifest, matched by ``media_name`` instead -- media with no
-       link at all, resolved by an EXACT (not fuzzy) name match against
-       MediaDive's catalogue; see fetch_media_recipes.py on why fuzzy
-       matching is deliberately not attempted.
-    3. The same manifest again, ``source=manual_review`` -- a human/LLM
-       reasoning pass's confirmed choice among fuzzy-matched MediaDive
-       candidates (prepare_media_name_review.py +
-       apply_media_name_review.py), for names the exact-match step above
-       couldn't resolve on its own.
-    4. Another entry sharing the same ``media_name`` that does have a
-       composition -- the same medium, reported by a different publication.
-       Only text shaped like a real recipe (``media.looks_like_recipe``) is
-       eligible, and the most common such text among the name's siblings is
-       used, so a one-off modifier note (e.g. "supplemented with 2.5% NaCl")
-       never gets picked over the medium's real recipe.
+    Sources, most authoritative first:
 
-    Every row keeps a ``composition_source`` marking which of these (if any)
-    supplied its text; rows BacDive's own record already answered are
-    marked "record" and left untouched.
+    1. The recipe manifest matched on ``cip_medium_link`` / ``medium_link``.
+    2. The manifest matched on an exact ``media_name`` (``mediadive_by_name``;
+       fuzzy matching is deliberately not attempted).
+    3. The manifest's ``manual_review`` rows, for names step 2 could not resolve.
+    4. Another entry with the same ``media_name`` that has a recipe-shaped
+       composition (``media.looks_like_recipe``); the most common such text
+       wins so a one-off modifier note never beats the real recipe.
+
+    ``composition_source`` records which source supplied each row's text; rows
+    BacDive already answered are marked "record" and left untouched.
     """
     if "composition_raw" not in df.columns or df.empty:
         return df
@@ -143,11 +116,8 @@ def _backfill_composition(
                 composition = df.loc[mask, link_col].map(recipe_by_link)
                 _apply_composition(df, mask, composition, source)
 
-        # mediadive_by_name: an exact (non-fuzzy) name match, made automatically
-        # by fetch_media_recipes.py. manual_review: a human/LLM-reasoned match
-        # from prepare_media_name_review.py's candidate worksheet, applied via
-        # apply_media_name_review.py. Both key off media_name the same way;
-        # kept as separate composition_source values for provenance.
+        # Both sources key off media_name the same way; they stay separate
+        # composition_source values for provenance
         for source in ("mediadive_by_name", "manual_review"):
             by_name = manifest[manifest["source"] == source]
             if by_name.empty or "media_name" not in df.columns:
@@ -166,8 +136,8 @@ def _backfill_composition(
         recipe_rows = df.loc[~comp_blank, "composition_raw"]
         recipe_rows = recipe_rows[recipe_rows.map(looks_like_recipe)]
         if not recipe_rows.empty:
-            # most common recipe-shaped text per name -- not just the first
-            # -- so an outlier variant doesn't win over the usual recipe.
+            # Most common recipe-shaped text per name, so an outlier variant
+            # doesn't win over the usual recipe
             canonical = (
                 recipe_rows.groupby(name_norm.loc[recipe_rows.index])
                 .agg(lambda s: s.value_counts().idxmax())
@@ -181,22 +151,24 @@ def _backfill_composition(
     return df
 
 
+# ---------------------------------------------------------------------------
+# De-duplication and fetching
+# ---------------------------------------------------------------------------
+
 @dataclass
 class _TaxonResult:
     taxon: str
     rows: list[dict] = field(default_factory=list)
     n_records: int = 0
     ok: bool = False
-    error: Optional[str] = None
+    error: str | None = None
 
 
 def _unit_key(row: pd.Series, spec: TargetSpec) -> str:
-    """Stable key for a row's de-dup unit: preferred id, else name, plus extras.
+    """Return a stable key for a row's de-dup unit: preferred id, else name, plus extras.
 
-    e.g. medium -> media name (plus temperature, oxygen); metabolite -> ChEBI
-    id or substrate name, combined with the assay kind. When ``id_col`` and
-    ``name_col`` are the same (media_name), the name is lowercased so spelling
-    variants of the same string collapse.
+    When ``id_col`` and ``name_col`` are the same (``media_name``), the name is
+    lowercased so case variants collapse.
     """
     ident = str(row.get(spec.id_col, "") or "").strip()
     if ident and spec.id_col != spec.name_col:
@@ -216,14 +188,9 @@ def _dedupe(
 ) -> pd.DataFrame:
     """Collapse duplicate (isolate, unit) rows coming from multiple refs.
 
-    Same-label duplicates always collapse (``first`` for non-label columns).
-    On a ``growth_class`` conflict:
-
-    * ``dedup_w_negatives=False`` (default) -- positive wins (``max``). This
-      deletes an explicit no-growth at the same ``(isolate, unit)``.
-    * ``dedup_w_negatives=True`` -- keep both labels. Duplicate yes rows still
-      merge, duplicate no rows still merge, but a culture-temp negative is not
-      overwritten by a colliding positive.
+    Same-label duplicates always collapse. On a ``growth_class`` conflict,
+    positive wins by default (which deletes an explicit no-growth);
+    *dedup_w_negatives* keeps both labels instead.
     """
     if df.empty:
         return df
@@ -231,7 +198,7 @@ def _dedupe(
     df = df.copy()
     df["_isolate_key"] = df[spec.isolate_col].astype(str).str.strip().str.lower()
     df["_unit_key"] = df.apply(lambda r: _unit_key(r, spec), axis=1)
-    # Prefer a culture-temp provenance among same-label rows
+    # Prefer culture-temp provenance among same-label rows
     if "growth_source" in df.columns:
         df = df.assign(
             _src_rank=(df["growth_source"] != "culture temp").astype(int)
@@ -244,8 +211,8 @@ def _dedupe(
 
     if dedup_w_negatives:
         if n_conflicts:
-            log.warning(
-                "%d (isolate, unit) pairs had conflicting labels -- "
+            logger.warning(
+                "{} (isolate, unit) pairs had conflicting labels -- "
                 "keeping both (dedup_w_negatives); same-label duplicates collapsed.",
                 n_conflicts,
             )
@@ -256,8 +223,8 @@ def _dedupe(
         return deduped.drop(columns=["_isolate_key", "_unit_key"], errors="ignore")
 
     if n_conflicts:
-        log.warning(
-            "%d (isolate, unit) pairs had conflicting labels -- resolved to positive.",
+        logger.warning(
+            "{} (isolate, unit) pairs had conflicting labels -- resolved to positive.",
             n_conflicts,
         )
 
@@ -278,11 +245,11 @@ def _fetch_one_taxon(
     show_progress: bool,
     max_workers: int,
     batch_size: int,
-    limit: Optional[int] = None,
+    limit: int | None = None,
     n_records_so_far: int = 0,
 ) -> _TaxonResult:
-    """Fetch + flatten every record for one taxon. Owns its own fetcher/session."""
-    # Imported lazily so cache-only builds do not require the bacdive PyPI client.
+    """Fetch and flatten every record for one taxon, with its own fetcher/session."""
+    # Imported lazily so cache-only builds do not require the bacdive PyPI client
     from src.bacdive.client import BacDiveFetcher
 
     fetcher = BacDiveFetcher(
@@ -304,284 +271,17 @@ def _fetch_one_taxon(
         if not result.ok:
             result.error = "no records returned"
     except LookupError as exc:
-        log.warning("%s", exc)
+        logger.warning("{}", exc)
         result.error = str(exc)
-    except Exception as exc:  # noqa: BLE001 - keep going on any one taxon
-        log.error("error processing taxon %r: %s", taxon, exc)
+    except Exception as exc:  # noqa: BLE001 -- keep going on any one taxon
+        logger.error("error processing taxon {!r}: {}", taxon, exc)
         result.error = f"error: {exc}"
     return result
 
 
-def run(
-    taxa: list[str],
-    target: str = config.DEFAULT_TARGET,
-    output_file: Optional[Path] = None,
-    output_writer: str = "to_parquet",
-    failures_csv: Path = config.FAILURES_CSV,
-    cache_dir: Path = config.CACHE_DIR,
-    request_delay: float = config.REQUEST_DELAY,
-    limit: Optional[int] = None,
-    force: bool = False,
-    show_progress: bool = True,
-    max_workers: int = config.MAX_WORKERS,
-    batch_size: int = config.FETCH_BATCH_SIZE,
-    taxa_workers: int = config.TAXA_WORKERS,
-) -> tuple[int, int, int]:
-    """Run the pipeline for a list of taxonomy queries and a target.
-
-    Parameters
-    ----------
-    taxa:
-        Taxonomy queries (see ``taxa.yaml``).
-    target:
-        One of ``config.TARGETS`` (``medium_growth`` or
-        ``metabolite_utilization``).
-    output_file:
-        Output path; defaults to the target's spec path.
-    output_writer:
-        Pandas DataFrame export method name (e.g. ``"to_parquet"``,
-        ``"to_csv"``).
-    limit:
-        Optional cap on the total number of *records* processed (for quick
-        tests). ``None`` = no cap. Forces sequential (``taxa_workers``
-        effectively 1).
-    force:
-        Re-fetch and overwrite cached records even if already on disk.
-    show_progress:
-        Show tqdm progress bars (one per taxon, plus one per-taxon for record
-        fetching). Disable for non-interactive/log-only runs.
-    max_workers:
-        Threads used per taxon to fetch not yet cached record batches in
-        parallel (network-bound; see ``client.BacDiveFetcher``).
-    batch_size:
-        BacDive-IDs per fetch call within a taxon.
-    taxa_workers:
-        Taxa processed concurrently, each with its own fetcher/session.
-        Only takes effect when >1 taxon is listed and ``limit`` is unset.
-
-    Returns ``(n_rows, n_taxa_ok, n_failures)``.
-    """
-    if target not in config.TARGETS:
-        raise ValueError(
-            f"unknown target {target!r}; choose one of {sorted(config.TARGETS)}"
-        )
-    spec = config.TARGETS[target]
-    output_file = output_file or spec.output_file
-
-    log.info("target: %s -> %s (%s)", target, output_file, output_writer)
-
-    rows: list[dict] = []
-    failures: list[dict] = []
-    n_taxa_ok = 0
-    n_records = 0
-
-    # `limit` needs a precise, shared running count to stop promptly, so it
-    # forces the simple sequential path. Otherwise, run taxa concurrently
-    # when there's more than one (each taxon already parallelizes its own
-    # record fetching, so single-taxon runs get no benefit from this level).
-    run_parallel = limit is None and taxa_workers > 1 and len(taxa) > 1
-
-    if not run_parallel:
-        taxa_bar = tqdm(
-            taxa, desc="Taxa", unit="taxon", position=0, disable=not show_progress,
-        )
-        for taxon in taxa_bar:
-            taxa_bar.set_postfix(records=n_records, current=taxon[:20])
-            if limit is not None and n_records >= limit:
-                log.info("record limit (%d) reached -- stopping.", limit)
-                break
-            result = _fetch_one_taxon(
-                taxon, target, cache_dir, request_delay, force, show_progress,
-                max_workers, batch_size, limit=limit, n_records_so_far=n_records,
-            )
-            n_records += result.n_records
-            if result.ok:
-                n_taxa_ok += 1
-                rows.extend(result.rows)
-            else:
-                failures.append({"taxon": taxon, "reason": result.error})
-        taxa_bar.close()
-    else:
-        log.info(
-            "processing %d taxa with up to %d concurrent worker(s)",
-            len(taxa), taxa_workers,
-        )
-        # Disable each fetcher's inner per-record bar: multiple tqdm bars
-        # writing from different threads at once would garble the terminal.
-        taxa_bar = tqdm(
-            total=len(taxa), desc="Taxa", unit="taxon", position=0,
-            disable=not show_progress,
-        )
-        with cf.ThreadPoolExecutor(max_workers=taxa_workers) as pool:
-            futures = {
-                pool.submit(
-                    _fetch_one_taxon, taxon, target, cache_dir, request_delay,
-                    force, False, max_workers, batch_size,
-                ): taxon
-                for taxon in taxa
-            }
-            for future in cf.as_completed(futures):
-                result = future.result()
-                n_records += result.n_records
-                if result.ok:
-                    n_taxa_ok += 1
-                    rows.extend(result.rows)
-                else:
-                    failures.append({"taxon": result.taxon, "reason": result.error})
-                taxa_bar.update(1)
-                taxa_bar.set_postfix(records=n_records, current=result.taxon[:20])
-        taxa_bar.close()
-
-    df = pd.DataFrame(rows)
-    if not df.empty:
-        df = _dedupe(df, spec)
-        df = _backfill_composition(df)
-        # enforce column order / presence
-        for col in spec.fieldnames:
-            if col not in df.columns:
-                df[col] = ""
-        df = df[spec.fieldnames]
-        # keep categoricals NaN-free so downstream OneHotEncoder is safe
-        for col in spec.categorical_features:
-            df[col] = df[col].replace("", "unknown").fillna("unknown")
-
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    getattr(df, output_writer)(output_file, index=False)
-    log.info("wrote %d row(s) -> %s", len(df), output_file)
-
-    _write_failures(failures, failures_csv)
-
-    _log_summary(df, spec, n_records, n_taxa_ok, failures)
-    return len(df), n_taxa_ok, len(failures)
-
-
-def run_from_cache(
-    target: str = config.DEFAULT_TARGET,
-    fieldnames: Optional[list[str]] = None,
-    categorical_features: Optional[list[str]] = None,
-    output_file: Optional[Path] = None,
-    output_writer: str = "to_parquet",
-    cache_dir: Path = config.CACHE_DIR,
-    failures_csv: Optional[Path] = None,
-    limit: Optional[int] = None,
-    show_progress: bool = True,
-    temperature_range_expansion: bool = False,
-    dedup_w_negatives: bool = False,
-    strain_metadata: Optional[Path] = None,
-) -> tuple[int, int, int]:
-    """Build a target table from cached JSON records only (no API calls).
-
-    Walks ``cache_dir/*.json``, flattens each record with ``record_to_rows``,
-    de-duplicates, and writes the selected columns.
-
-    ``fieldnames`` / ``categorical_features`` default to the full target schema
-    in ``config.TARGETS``. Pass a subset (as resolved from
-    ``build_from_cache.yaml``) to drop unused columns from the output.
-
-    ``dedup_w_negatives``: if true, a (isolate, unit) pair that has both a
-    growth and a no-growth label keeps both rows instead of resolving to
-    positive. Same-label duplicates still collapse.
-
-    ``strain_metadata``: optional CSV of per-strain metadata, left-merged onto
-    the table on ``strain_name`` (left) == ``strain`` (right); see
-    ``_merge_strain_metadata``.
-
-    Returns ``(n_rows, n_records_ok, n_failures)``.
-    """
-    if target not in config.TARGETS:
-        raise ValueError(
-            f"unknown target {target!r}; choose one of {sorted(config.TARGETS)}"
-        )
-    base = config.TARGETS[target]
-    spec = TargetSpec(
-        name=base.name,
-        output_file=output_file or base.output_file,
-        fieldnames=list(fieldnames or base.fieldnames),
-        categorical_features=list(
-            categorical_features
-            if categorical_features is not None
-            else base.categorical_features
-        ),
-        id_col=base.id_col,
-        name_col=base.name_col,
-        isolate_col=base.isolate_col,
-        extra_key_cols=list(base.extra_key_cols),
-        positive_only=base.positive_only,
-    )
-    output_file = spec.output_file
-    failures_csv = failures_csv or (
-        config.EXTERNAL_DIR / "bacdive_cache_failures.csv"
-    )
-
-    if not cache_dir.is_dir():
-        raise FileNotFoundError(f"cache dir not found: {cache_dir}")
-
-    cache_files = sorted(cache_dir.glob("*.json"))
-    if limit is not None:
-        cache_files = cache_files[: max(0, limit)]
-
-    log.info(
-        "cache-only build: target=%s, %d file(s) in %s -> %s "
-        "(temperature_range_expansion=%s, dedup_w_negatives=%s)",
-        target, len(cache_files), cache_dir, output_file,
-        temperature_range_expansion, dedup_w_negatives,
-    )
-
-    rows: list[dict] = []
-    failures: list[dict] = []
-    n_records = 0
-
-    for path in tqdm(
-        cache_files, desc="Cache", unit="rec", disable=not show_progress,
-    ):
-        try:
-            record = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            failures.append({"cache_file": path.name, "reason": str(exc)})
-            continue
-        if not isinstance(record, dict):
-            failures.append(
-                {"cache_file": path.name, "reason": "record is not a JSON object"}
-            )
-            continue
-        n_records += 1
-        rows.extend(
-            record_to_rows(
-                record, target,
-                temperature_range_expansion=temperature_range_expansion,
-            )
-        )
-
-    df = pd.DataFrame(rows)
-    if not df.empty:
-        df = _dedupe(df, spec, dedup_w_negatives=dedup_w_negatives)
-        df = _backfill_composition(df)
-        for col in spec.fieldnames:
-            if col not in df.columns:
-                df[col] = ""
-        df = df[spec.fieldnames]
-        for col in spec.categorical_features:
-            if col in df.columns:
-                df[col] = df[col].replace("", "unknown").fillna("unknown")
-        if strain_metadata is not None:
-            df = _merge_strain_metadata(df, strain_metadata)
-
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    getattr(df, output_writer)(output_file, index=False)
-    log.info("wrote %d row(s) -> %s", len(df), output_file)
-
-    failures_csv.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(failures, columns=config.CACHE_FAILURE_FIELDNAMES).to_csv(
-        failures_csv, index=False
-    )
-    if failures:
-        log.info("wrote %d cache failure(s) -> %s", len(failures), failures_csv)
-
-    _log_summary(
-        df, spec, n_records, n_records, failures, source="cache",
-    )
-    return len(df), n_records, len(failures)
-
+# ---------------------------------------------------------------------------
+# Output and summary
+# ---------------------------------------------------------------------------
 
 def _merge_strain_metadata(
     df: pd.DataFrame,
@@ -589,16 +289,12 @@ def _merge_strain_metadata(
     left_on: str = "strain_name",
     right_on: str = "strain",
 ) -> pd.DataFrame:
-    """Left-merge a per-strain metadata CSV onto ``df``.
+    """Left-merge a per-strain metadata CSV onto *df* (``left_on`` == ``right_on``).
 
-    Joins ``df[left_on]`` to ``metadata_csv``'s ``right_on`` column, keeping
-    every row of ``df`` (a strain absent from the CSV gets empty
-    strings). Columns
-    already present in ``df`` are dropped from the CSV side so the built table's 
-    own values always win; the join key column itself is dropped too. The CSV is
-    de-duplicated on ``right_on`` (first row wins) so the merge can never
-    multiply rows. Unmatched rows (and blank CSV cells) come through as ``""``
-    rather than NaN, matching how the rest of the table spells an empty value.
+    Every row of *df* is kept. Columns already in *df* are dropped from the CSV
+    so the built table's values win, and the CSV is de-duplicated on
+    ``right_on`` (first row wins) so rows are never multiplied. Unmatched rows
+    and blank cells come through as ``""``, not NaN.
     """
     if not metadata_csv.is_absolute():
         metadata_csv = config.ROOT / metadata_csv
@@ -618,17 +314,17 @@ def _merge_strain_metadata(
 
     n_dupes = int(meta[right_on].duplicated().sum())
     if n_dupes:
-        log.warning(
-            "strain metadata %s has %d duplicate %r value(s); keeping the first",
+        logger.warning(
+            "strain metadata {} has {} duplicate {!r} value(s); keeping the first",
             metadata_csv, n_dupes, right_on,
         )
         meta = meta.drop_duplicates(subset=[right_on], keep="first")
 
     overlap = [c for c in meta.columns if c != right_on and c in df.columns]
     if overlap:
-        log.info(
-            "strain metadata: dropping %d column(s) already in the table "
-            "(left wins): %s",
+        logger.info(
+            "strain metadata: dropping {} column(s) already in the table "
+            "(left wins): {}",
             len(overlap), overlap,
         )
         meta = meta.drop(columns=overlap)
@@ -639,14 +335,13 @@ def _merge_strain_metadata(
     merged = df.merge(
         meta, how="left", left_on=left_on, right_on=right_on, validate="m:1",
     ).drop(columns=[right_on])
-    # A strain missing from the CSV (and a blank CSV cell) merges in as NaN;
-    # fill with "" so the merged columns match how the rest of the table
-    # represents an empty value.
+    # Missing strains and blank cells merge in as NaN; fill with "" to match
+    # how the rest of the table spells an empty value
     if added:
         merged[added] = merged[added].fillna("")
-    log.info(
-        "strain metadata: merged %s on %s==%s -- %d column(s) added %s, "
-        "%d/%d row(s) matched",
+    logger.info(
+        "strain metadata: merged {} on {}=={} -- {} column(s) added {}, "
+        "{}/{} row(s) matched",
         metadata_csv.name, left_on, right_on, len(added), added,
         n_matched, n_before,
     )
@@ -659,7 +354,7 @@ def _write_failures(failures: list[dict], failures_csv: Path) -> None:
         failures_csv, index=False
     )
     if failures:
-        log.info("wrote %d failure(s) -> %s", len(failures), failures_csv)
+        logger.info("wrote {} failures -> {}", len(failures), failures_csv)
 
 
 def _log_summary(
@@ -709,7 +404,7 @@ def _log_summary(
                 n_temp = int((df["growth_source"] == "culture temp").sum())
                 n_agreed = n_temp - n_ov
                 lines.append(
-                    f"growth_override   : {n_ov} temp≠medium "
+                    f"growth_override   : {n_ov} temp != medium "
                     f"({n_agreed} culture-temp rows agree with the medium)"
                 )
             if "temp_join" in df.columns:
@@ -719,15 +414,281 @@ def _log_summary(
                     + ", ".join(f"{k or 'blank'} {int(v)}" for k, v in join.items())
                 )
     summary = "\n".join(lines)
-    print(summary)
-    log.info("run summary:\n%s", summary)
+    logger.info("run summary:\n{}", summary)
 
-    # PU warning: positive-only labels can't be used as a headline metric.
+    # Positive-only labels can't be used as a headline metric
     if spec.positive_only and pos and neg == 0:
-        log.warning(
-            "target '%s' is positive-only (%d positive / 0 negative). This is a "
+        logger.warning(
+            "target '{}' is positive-only ({} positive / 0 negative). This is a "
             "positive-unlabeled (PU) signal: absence of a (strain, unit) pair is "
             "NOT a negative. Use it as weak supervision / pretraining, not a "
             "reported classification metric. See bacdive/README.md.",
             spec.name, pos,
         )
+
+
+# ---------------------------------------------------------------------------
+# Entry points
+# ---------------------------------------------------------------------------
+
+def run(
+    taxa: list[str],
+    target: str = config.DEFAULT_TARGET,
+    output_file: Path | None = None,
+    output_writer: str = "to_parquet",
+    failures_csv: Path = config.FAILURES_CSV,
+    cache_dir: Path = config.CACHE_DIR,
+    request_delay: float = config.REQUEST_DELAY,
+    limit: int | None = None,
+    force: bool = False,
+    show_progress: bool = True,
+    max_workers: int = config.MAX_WORKERS,
+    batch_size: int = config.FETCH_BATCH_SIZE,
+    taxa_workers: int = config.TAXA_WORKERS,
+) -> tuple[int, int, int]:
+    """Run the pipeline for a list of taxonomy queries and a target.
+
+    Parameters
+    ----------
+    taxa:
+        Taxonomy queries (see ``taxa.yaml``).
+    target:
+        One of ``config.TARGETS``.
+    output_file:
+        Output path; ``None`` = the target's default path.
+    output_writer:
+        Pandas DataFrame export method name (e.g. ``"to_parquet"``).
+    limit:
+        Cap on the total number of records processed; ``None`` = no cap.
+        Forces sequential processing.
+    force:
+        Re-fetch and overwrite cached records.
+    show_progress:
+        Show tqdm progress bars; disable for log-only runs.
+    max_workers:
+        Threads per taxon fetching uncached record batches.
+    batch_size:
+        BacDive-IDs per fetch call.
+    taxa_workers:
+        Taxa processed concurrently; only applies with more than one taxon
+        and no ``limit``.
+
+    Returns ``(n_rows, n_taxa_ok, n_failures)``.
+    """
+    if target not in config.TARGETS:
+        raise ValueError(
+            f"unknown target {target!r}; choose one of {sorted(config.TARGETS)}"
+        )
+    spec = config.TARGETS[target]
+    output_file = output_file or spec.output_file
+
+    logger.info("target: {} -> {} ({})", target, output_file, output_writer)
+
+    rows: list[dict] = []
+    failures: list[dict] = []
+    n_taxa_ok = 0
+    n_records = 0
+
+    # ``limit`` needs a precise shared count to stop promptly, so it forces the
+    # sequential path. Single-taxon runs gain nothing from taxon-level
+    # concurrency (each taxon already parallelizes its own fetching).
+    run_parallel = limit is None and taxa_workers > 1 and len(taxa) > 1
+
+    if not run_parallel:
+        taxa_bar = tqdm(
+            taxa, desc="Taxa", unit="taxon", position=0, disable=not show_progress,
+        )
+        for taxon in taxa_bar:
+            taxa_bar.set_postfix(records=n_records, current=taxon[:20])
+            if limit is not None and n_records >= limit:
+                logger.info("record limit reached: {}", limit)
+                break
+            result = _fetch_one_taxon(
+                taxon, target, cache_dir, request_delay, force, show_progress,
+                max_workers, batch_size, limit=limit, n_records_so_far=n_records,
+            )
+            n_records += result.n_records
+            if result.ok:
+                n_taxa_ok += 1
+                rows.extend(result.rows)
+            else:
+                failures.append({"taxon": taxon, "reason": result.error})
+        taxa_bar.close()
+    else:
+        logger.info(
+            "processing {} taxa with up to {} concurrent workers",
+            len(taxa), taxa_workers,
+        )
+        # Inner per-record bars are disabled: several tqdm bars writing from
+        # different threads would garble the terminal
+        taxa_bar = tqdm(
+            total=len(taxa), desc="Taxa", unit="taxon", position=0,
+            disable=not show_progress,
+        )
+        with cf.ThreadPoolExecutor(max_workers=taxa_workers) as pool:
+            futures = {
+                pool.submit(
+                    _fetch_one_taxon, taxon, target, cache_dir, request_delay,
+                    force, False, max_workers, batch_size,
+                ): taxon
+                for taxon in taxa
+            }
+            for future in cf.as_completed(futures):
+                result = future.result()
+                n_records += result.n_records
+                if result.ok:
+                    n_taxa_ok += 1
+                    rows.extend(result.rows)
+                else:
+                    failures.append({"taxon": result.taxon, "reason": result.error})
+                taxa_bar.update(1)
+                taxa_bar.set_postfix(records=n_records, current=result.taxon[:20])
+        taxa_bar.close()
+
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df = _dedupe(df, spec)
+        df = _backfill_composition(df)
+        # Enforce column order and presence
+        for col in spec.fieldnames:
+            if col not in df.columns:
+                df[col] = ""
+        df = df[spec.fieldnames]
+        # Keep categoricals NaN-free so downstream OneHotEncoder is safe
+        for col in spec.categorical_features:
+            df[col] = df[col].replace("", "unknown").fillna("unknown")
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    getattr(df, output_writer)(output_file, index=False)
+    logger.info("wrote {} rows -> {}", len(df), output_file)
+
+    _write_failures(failures, failures_csv)
+
+    _log_summary(df, spec, n_records, n_taxa_ok, failures)
+    return len(df), n_taxa_ok, len(failures)
+
+
+def run_from_cache(
+    target: str = config.DEFAULT_TARGET,
+    fieldnames: list[str] | None = None,
+    categorical_features: list[str] | None = None,
+    output_file: Path | None = None,
+    output_writer: str = "to_parquet",
+    cache_dir: Path = config.CACHE_DIR,
+    failures_csv: Path | None = None,
+    limit: int | None = None,
+    show_progress: bool = True,
+    temperature_range_expansion: bool = False,
+    dedup_w_negatives: bool = False,
+    strain_metadata: Path | None = None,
+) -> tuple[int, int, int]:
+    """Build a target table from cached JSON records only (no API calls).
+
+    Parameters
+    ----------
+    fieldnames, categorical_features:
+        Column subsets (as resolved from ``build_from_cache.yaml``); ``None`` =
+        the full target schema in ``config.TARGETS``.
+    limit:
+        Cap on the number of cache files read; ``None`` = all.
+    dedup_w_negatives:
+        Keep both rows of a (isolate, unit) pair with conflicting labels.
+    strain_metadata:
+        Optional CSV left-merged on ``strain_name`` == ``strain``; see
+        ``_merge_strain_metadata``.
+
+    Returns ``(n_rows, n_records_ok, n_failures)``.
+    """
+    if target not in config.TARGETS:
+        raise ValueError(
+            f"unknown target {target!r}; choose one of {sorted(config.TARGETS)}"
+        )
+    base = config.TARGETS[target]
+    spec = TargetSpec(
+        name=base.name,
+        output_file=output_file or base.output_file,
+        fieldnames=list(fieldnames or base.fieldnames),
+        categorical_features=list(
+            categorical_features
+            if categorical_features is not None
+            else base.categorical_features
+        ),
+        id_col=base.id_col,
+        name_col=base.name_col,
+        isolate_col=base.isolate_col,
+        extra_key_cols=list(base.extra_key_cols),
+        positive_only=base.positive_only,
+    )
+    output_file = spec.output_file
+    failures_csv = failures_csv or (
+        config.EXTERNAL_DIR / "bacdive_cache_failures.csv"
+    )
+
+    if not cache_dir.is_dir():
+        raise FileNotFoundError(f"cache dir not found: {cache_dir}")
+
+    cache_files = sorted(cache_dir.glob("*.json"))
+    if limit is not None:
+        cache_files = cache_files[: max(0, limit)]
+
+    logger.info(
+        "cache-only build: target={}, {} file(s) in {} -> {} "
+        "(temperature_range_expansion={}, dedup_w_negatives={})",
+        target, len(cache_files), cache_dir, output_file,
+        temperature_range_expansion, dedup_w_negatives,
+    )
+
+    rows: list[dict] = []
+    failures: list[dict] = []
+    n_records = 0
+
+    for path in tqdm(
+        cache_files, desc="Cache", unit="rec", disable=not show_progress,
+    ):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            failures.append({"cache_file": path.name, "reason": str(exc)})
+            continue
+        if not isinstance(record, dict):
+            failures.append(
+                {"cache_file": path.name, "reason": "record is not a JSON object"}
+            )
+            continue
+        n_records += 1
+        rows.extend(
+            record_to_rows(
+                record, target,
+                temperature_range_expansion=temperature_range_expansion,
+            )
+        )
+
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df = _dedupe(df, spec, dedup_w_negatives=dedup_w_negatives)
+        df = _backfill_composition(df)
+        for col in spec.fieldnames:
+            if col not in df.columns:
+                df[col] = ""
+        df = df[spec.fieldnames]
+        for col in spec.categorical_features:
+            if col in df.columns:
+                df[col] = df[col].replace("", "unknown").fillna("unknown")
+        if strain_metadata is not None:
+            df = _merge_strain_metadata(df, strain_metadata)
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    getattr(df, output_writer)(output_file, index=False)
+    logger.info("wrote {} rows -> {}", len(df), output_file)
+
+    failures_csv.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(failures, columns=config.CACHE_FAILURE_FIELDNAMES).to_csv(
+        failures_csv, index=False
+    )
+    if failures:
+        logger.info("wrote {} cache failures -> {}", len(failures), failures_csv)
+
+    _log_summary(
+        df, spec, n_records, n_records, failures, source="cache",
+    )
+    return len(df), n_records, len(failures)

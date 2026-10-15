@@ -1,14 +1,6 @@
-"""
-config.py
-=========
-Paths and tunable constants for the BacDive growth pipeline. Every other
-module in ``src.bacdive`` imports its paths and magic numbers from here so
-they live in exactly one place.
+"""Paths, tunable constants and output schemas for the BacDive growth pipeline.
 
-The pipeline downloads a taxonomy-scoped subset of BacDive (DSMZ) and emits a
-tidy ``(strain x culture medium)`` table with a binary ``growth_class`` target
-that plugs straight into the existing modeling pipeline (see
-``docs/modeling_pipeline.md``).
+Every other module in ``src.bacdive`` imports its paths and constants from here.
 """
 
 from __future__ import annotations
@@ -18,9 +10,10 @@ from pathlib import Path
 
 import yaml
 
-# --------------------------------------------------------------------------
-# PROJECT LAYOUT
-# --------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Project layout
+# ---------------------------------------------------------------------------
 
 # config.py -> src/bacdive/ -> src/ -> <project root>
 ROOT = Path(__file__).resolve().parents[2]
@@ -44,9 +37,10 @@ MEDIA_RECIPE_MANIFEST = EXTERNAL_DIR / "media_recipe_manifest.csv"
 # --- logs ---
 LOGS_DIR = ROOT / "logs"
 
-# --------------------------------------------------------------------------
-# API BEHAVIOR TUNABLES
-# --------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# API behavior tunables
+# ---------------------------------------------------------------------------
 
 # Pause between paged API calls (seconds). The public v2 API is
 # unauthenticated; keep requests gentle to stay a good citizen.
@@ -62,9 +56,10 @@ MAX_WORKERS = 10
 # Only kicks in when >1 taxon is listed and --limit is not set.
 TAXA_WORKERS = 6
 
-# --------------------------------------------------------------------------
-# OUTPUT SCHEMAS (per target)
-# --------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Output schemas (per target)
+# ---------------------------------------------------------------------------
 
 # Strain feature columns
 _STRAIN_FEATURES = [
@@ -119,7 +114,7 @@ _MEDIUM_ID_COLS = [
     # Three medium-name columns, each with one job:
     #   media_name        BacDive's original
     #   media_name_full   BacDive's original, more descriptive spelling
-    #   media_canon       variant canonicalised 
+    #   media_canon       variant canonicalised
     "media_name",
     "media_name_full",
     "media_canon",
@@ -199,20 +194,17 @@ CACHE_FAILURE_FIELDNAMES = [
 ]
 
 
-# --------------------------------------------------------------------------
-# TARGET REGISTRY
-# --------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Target registry
+# ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class TargetSpec:
     """Everything the pipeline needs to build one target's output table.
 
-    ``isolate_col`` / ``id_col`` / ``name_col`` / ``extra_key_cols`` define the
-    de-duplication key: rows sharing the same
-    ``(isolate, unit, extra...)`` are collapsed. By default the positive
-    ``growth_class`` wins on conflict; ``dedup_w_negatives=True`` keeps both
-    labels instead. ``unit_col`` is the column counted as "unique units" in
-    the run summary.
+    ``isolate_col``, ``id_col``, ``name_col`` and ``extra_key_cols`` define the
+    de-duplication key: rows sharing ``(isolate, unit, extra...)`` are collapsed.
+    ``unit_col`` is the column counted as "unique units" in the run summary.
     """
 
     name: str
@@ -233,13 +225,9 @@ class TargetSpec:
 TARGETS: dict[str, TargetSpec] = {
     "medium_growth": TargetSpec(
         name="medium_growth",
-        # This is the FULL schema's own name -- both the live-API path
-        # (get_bacdive_dataset.py, always full schema, no --out) and
-        # build_bacdive_from_cache.py's --full-schema fall back to it. A
-        # cache-only build using a YAML-restricted column subset instead
-        # (e.g. bacdive/build_from_cache.yaml) always sets its OWN
-        # output_file explicitly, so it never resolves to this default --
-        # the two schemas can't collide on one name.
+        # Default name of the full schema. A cache-only build with a
+        # YAML-restricted column subset always sets its own output_file, so
+        # the two schemas can never collide on one name.
         output_file=EXTERNAL_DIR / "bacdive_growth_full.parquet",
         fieldnames=_MEDIUM_GROWTH_FIELDNAMES,
         categorical_features=_STRAIN_CATEGORICALS,
@@ -262,27 +250,14 @@ TARGETS: dict[str, TargetSpec] = {
     ),
 }
 
+
 def stamp_temperature_expansion(path: Path, expanded: bool) -> Path:
     """Stamp a resolved ``temperature_range_expansion`` onto an output path.
 
-    This flag changes row *count*, not just which feature columns are kept
-    (a temperature range like "10-41" becomes one midpoint row, or three --
-    min, max, mean), so two builds differing only in this flag must never be
-    able to land on the same filename. The stamp is derived from the
-    resolved config value actually passed to the pipeline, not from
-    whatever path a caller happens to type -- a CLI ``--out`` override can
-    no longer silently mask a mismatched setting, the way ``--out
-    bacdive_growth_api_107k.parquet`` combined with the YAML's
-    ``temperature_range_expansion: true`` overwrote that (unexpanded) file
-    with expanded (132,821-row) data on 2026-08-24.
-
-    Symmetric and idempotent regardless of what ``path`` already carries:
-    ``expanded=True`` ensures the stem ends in ``_temp`` (adding it only
-    if missing); ``expanded=False`` ensures it does NOT (stripping it if
-    present) -- so a YAML ``output_file`` written with the suffix already
-    baked in (e.g. because that YAML's own default is expanded) still
-    resolves correctly if a caller overrides to unexpanded, rather than
-    keeping a stale "_temp" that no longer describes the data.
+    The flag changes the row count (a range like "10-41" becomes one midpoint
+    row, or three), so builds differing only in this flag must never share a
+    filename. Idempotent: ``expanded=True`` ensures the stem ends in ``_temp``,
+    ``expanded=False`` ensures it does not.
     """
     has_suffix = path.stem.endswith("_temp")
     if expanded == has_suffix:
@@ -295,13 +270,8 @@ def stamp_temperature_expansion(path: Path, expanded: bool) -> Path:
 def stamp_dedup_w_negatives(path: Path, dedup_w_negatives: bool) -> Path:
     """Stamp a resolved ``dedup_w_negatives`` onto an output path.
 
-    Same rationale and symmetric/idempotent behavior as
-    ``stamp_temperature_expansion``: this flag also changes row count (a
-    conflicting isolate/unit pair becomes one collapsed row, or two), so two
-    builds differing only in this flag must never land on the same filename.
-    ``dedup_w_negatives=True`` ensures the stem ends in ``_negs`` (adding it
-    only if missing); ``False`` ensures it does not (stripping it if
-    present).
+    Same rationale and idempotent behavior as ``stamp_temperature_expansion``,
+    using the ``_negs`` stem suffix.
     """
     has_suffix = path.stem.endswith("_negs")
     if dedup_w_negatives == has_suffix:
@@ -312,15 +282,16 @@ def stamp_dedup_w_negatives(path: Path, dedup_w_negatives: bool) -> Path:
 
 
 DEFAULT_TARGET = "medium_growth"
+
 # Back-compat aliases
 OUTPUT_FILE = TARGETS["medium_growth"].output_file
 OUTPUT_FIELDNAMES = TARGETS["medium_growth"].fieldnames
 CATEGORICAL_FEATURES = TARGETS["medium_growth"].categorical_features
 
 
-# --------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # taxa.yaml loaders
-# --------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 
 def _load_yaml(path: Path | None) -> dict | list:
     path = path or TAXA_YAML
@@ -331,12 +302,9 @@ def _load_yaml(path: Path | None) -> dict | list:
 def load_taxa(path: Path | None = None) -> list[str]:
     """Read the taxonomic scope from ``taxa.yaml``.
 
-    The file is expected to contain a top-level ``taxa`` list of strings, each
-    a genus, ``"Genus species"``, or ``"Genus species subspecies"`` query
-    understood by ``BacdiveClient.search(taxonomy=...)``. A bare YAML list is
-    also accepted.
-
-    Returns a de-duplicated, order-preserving list of non-empty taxon strings.
+    Expects a top-level ``taxa`` list (a bare YAML list is also accepted) of
+    genus, ``"Genus species"`` or ``"Genus species subspecies"`` queries.
+    Returns a de-duplicated, order-preserving list of non-empty strings.
     """
     data = _load_yaml(path)
 
@@ -358,10 +326,7 @@ def load_taxa(path: Path | None = None) -> list[str]:
 
 
 def load_target(path: Path | None = None) -> str:
-    """Read the ``target`` key from ``taxa.yaml`` (default ``medium_growth``).
-
-    Raises ``ValueError`` if the configured target is not a known target.
-    """
+    """Read the ``target`` key from ``taxa.yaml`` (default ``medium_growth``)."""
     data = _load_yaml(path)
     target = DEFAULT_TARGET
     if isinstance(data, dict) and data.get("target"):
@@ -373,9 +338,9 @@ def load_target(path: Path | None = None) -> str:
     return target
 
 
-# --------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # build_from_cache.yaml loader
-# --------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class BuildFromCacheConfig:
@@ -392,7 +357,7 @@ class BuildFromCacheConfig:
     strain_metadata: Path | None = None
 
     def to_target_spec(self) -> TargetSpec:
-        """``TargetSpec`` with the selected output columns."""
+        """Return the ``TargetSpec`` with the selected output columns."""
         base = TARGETS[self.target]
         return TargetSpec(
             name=base.name,
@@ -450,30 +415,22 @@ def _validate_subset(selected: list[str], allowed: list[str], key: str) -> list[
 def load_build_from_cache_config(path: Path | None = None) -> BuildFromCacheConfig:
     """Load ``build_from_cache.yaml`` and resolve the output column schema.
 
-    Expected keys
-    -------------
-    target:
-        ``medium_growth`` or ``metabolite_utilization``.
-    strain_features:
-        Subset of ``_STRAIN_FEATURES`` to keep. Omitting the key keeps all.
-    medium_features:
-        Subset of ``_MEDIUM_FEATURES`` (medium_growth only). Omitting keeps all.
-    metabolite_features:
-        Subset of ``_METABOLITE_FEATURES`` (metabolite only). Omitting keeps all.
-    cache_dir / output_file:
-        Optional path overrides (``out`` is accepted as an alias for
-        ``output_file``).
-    temperature_range_expansion:
-        If true, a culture-temp range (``"30-37"``) emits three rows
-        (min, max, mean) instead of one midpoint. Default false.
-    dedup_w_negatives:
-        If true, a (isolate, unit) pair with both growth labels keeps both
-        rows instead of resolving the conflict to positive. Default false.
-    strain_metadata:
-        Optional CSV of per-strain metadata to left-merge onto the output on
-        ``strain_name`` (left) == ``strain`` (right). Columns that already
-        exist in the built table are kept from the left and dropped from the
-        CSV. Omit or leave blank to skip the merge.
+    Parameters
+    ----------
+    path:
+        YAML file; ``None`` = ``BUILD_FROM_CACHE_YAML``.
+
+    Recognised keys:
+
+    * ``target`` -- ``medium_growth`` or ``metabolite_utilization``.
+    * ``strain_features``, ``medium_features``, ``metabolite_features`` --
+      column subsets to keep; omitting a key keeps all.
+    * ``cache_dir``, ``output_file`` (alias ``out``), ``output_writer`` --
+      optional overrides.
+    * ``temperature_range_expansion`` -- emit min, max, mean rows for a range.
+    * ``dedup_w_negatives`` -- keep both labels on a conflicting pair.
+    * ``strain_metadata`` -- optional CSV left-merged on ``strain_name`` ==
+      ``strain``; blank skips the merge.
     """
     path = path or BUILD_FROM_CACHE_YAML
     data = _load_yaml(path)
@@ -503,7 +460,7 @@ def load_build_from_cache_config(path: Path | None = None) -> BuildFromCacheConf
                 "medium_features",
             )
         elif "medium_growth_features" in data:
-            # alias used in early drafts of build_from_cache.yaml
+            # Alias used in early drafts of build_from_cache.yaml
             unit_feats = _validate_subset(
                 _as_str_list(
                     data.get("medium_growth_features"), "medium_growth_features"

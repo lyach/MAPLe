@@ -1,28 +1,28 @@
-"""
-media.py
-========
-Turn a BacDive ``culture medium`` entry into modeling features.
+"""Turn a BacDive ``culture medium`` entry into modeling features.
 
-BacDive uses a large, open vocabulary of media names (hundreds of DSMZ / CIP
-recipes), so ``media_name`` as an identity one-hot does not transfer across
-media under leave-one-medium-out CV. Instead we parse the free-text
-``composition`` into presence flags (mirroring the columns in
-``local/media_features.csv``) plus an ingredient count, and pull a stable
-MediaDive medium id out of the ``link`` when present.
+BacDive's open vocabulary of medium names does not transfer under
+leave-one-medium-out CV, so the free-text ``composition`` is parsed into
+presence flags (mirroring ``local/media_features.csv``) plus an ingredient
+count, and a stable MediaDive id is pulled from the ``link``. Medium names are
+also folded onto a canonical grouping key (``media_canon``).
 """
 
 from __future__ import annotations
 
 import csv
-import logging
 import re
 from functools import lru_cache
 from pathlib import Path
 
-log = logging.getLogger(__name__)
+from loguru import logger
 
-# Substring markers (lowercased) used to derive presence flags. Each maps a
-# feature column to the tokens that, if found in the composition text, set it.
+
+# ---------------------------------------------------------------------------
+# Composition markers
+# ---------------------------------------------------------------------------
+
+# Lowercased substring markers: each feature column maps to the tokens that,
+# if found in the composition text, set it.
 _MARKERS: dict[str, tuple[str, ...]] = {
     "has_yeast_extract": ("yeast extract",),
     "has_peptone": ("peptone", "tryptone", "trypto casein", "casein"),
@@ -188,28 +188,24 @@ _QUANTITY_UNIT_RE = re.compile(r"\d+(\.\d+)?\s*(g|mg|kg|ml|mL|l|L)\b")
 
 
 def looks_like_recipe(composition: str | None) -> bool:
-    """True if ``composition`` names at least one ingredient's mass/volume.
+    """Return True if ``composition`` names at least one ingredient's mass/volume.
 
-    Used to gate backfilling ``composition_raw`` from another entry: only
-    text shaped like an actual recipe should ever be reused as one.
+    Gates backfilling ``composition_raw`` so only recipe-shaped text is reused.
     """
     return bool(composition) and bool(_QUANTITY_UNIT_RE.search(str(composition)))
 
 
 def parse_mediadive_id(link: str | None) -> str:
-    """Extract the numeric MediaDive medium id from a ``link`` URL.
-
-    Returns "" for missing links or non-MediaDive links (e.g. CIP/Pasteur).
-    """
+    """Extract the MediaDive medium id from a ``link`` URL, or "" if not a MediaDive link."""
     if not link:
         return ""
     match = _MEDIADIVE_RE.search(str(link))
     return match.group(1) if match else ""
 
 
-# --------------------------------------------------------------------------
-# media_canon (used as media grouping key)
-# --------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Canonical medium name (grouping key)
+# ---------------------------------------------------------------------------
 
 # Filler words
 _GENERIC_MEDIA_TOKENS = frozenset({
@@ -357,14 +353,10 @@ _RATIO_RE = re.compile(r"/\s*\d")
 def _media_tokens(name: str) -> list[str]:
     """Identity tokens for a medium name.
 
-    Splits a short medium code away from digits glued to either side --
-    "2xLB" -> ["2", "lb"], and "ISP2" -> ["isp", "2"] -- then folds spelling
-    variants via ``_MEDIA_TOKEN_CANON``.
-
-    The trailing case matters as much as the leading one: BacDive writes the
-    same medium as both "ISP 2" and "ISP2", and without this split those land
-    in different groups (they did, over 46 and 14 no-growth rows respectively),
-    which is exactly the alias leak the canonical key exists to close.
+    Splits a short medium code from digits glued to either side ("2xLB" ->
+    ["2", "lb"], "ISP2" -> ["isp", "2"]), then folds spelling variants via
+    ``_MEDIA_TOKEN_CANON``. The trailing split matters: BacDive writes both
+    "ISP 2" and "ISP2", which would otherwise land in different groups.
     """
     text = str(name or "").lower()
     for pattern, replacement in _PHRASE_CANON:
@@ -399,8 +391,8 @@ def _media_tokens(name: str) -> list[str]:
 def _medium_cores(name: str) -> set[str]:
     """Recognised medium identities named anywhere in ``name``.
 
-    Used only by :func:`is_multi_medium` to tell a genuine list of alternative
-    media apart from one medium whose name happens to contain a separator.
+    Lets :func:`is_multi_medium` tell a list of media from one name that
+    merely contains a separator.
     """
     tokens = set(_media_tokens(name))
     cores = {t for t in tokens if t in _MEDIA_ACRONYMS}
@@ -411,16 +403,12 @@ def _medium_cores(name: str) -> set[str]:
 
 
 def is_multi_medium(name: str) -> bool:
-    """True if ``name`` lists two or more alternative media.
+    """Return True if ``name`` lists two or more alternative media.
 
-    BacDive sometimes records every medium a strain was tried on in one field
-    ("NA, 2xYT agar, TSA, R2A agar, MacConkey agar"), which leaves the medium
-    undefined for that row. Such rows cannot be assigned to a held-out medium
-    group and are excluded from S6 rather than silently grouped.
-
-    Must NOT fire on a single medium whose name merely contains a separator:
-    gas mixtures ("PY + X MEDIUM (N2/CO2)") and dilution ratios ("BHI/2
-    MEDIUM") are the common false positives.
+    BacDive sometimes records every medium tried in one field ("NA, 2xYT agar,
+    TSA"), so the row cannot be assigned to a held-out medium group. Must not
+    fire on gas mixtures ("PY + X MEDIUM (N2/CO2)") or dilution ratios
+    ("BHI/2 MEDIUM").
     """
     text = str(name or "").strip()
     if not text:
@@ -431,8 +419,7 @@ def is_multi_medium(name: str) -> bool:
     parts = [p for p in _LIST_SPLIT_RE.split(stripped) if p.strip()]
     if len(parts) < 2:
         return False
-    # Count parts that name a medium we actually recognise; two or more
-    # distinct recognised cores means a genuine list.
+    # Two or more distinct recognised cores means a genuine list
     cores: set[str] = set()
     for part in parts:
         cores |= _medium_cores(part)
@@ -440,24 +427,17 @@ def is_multi_medium(name: str) -> bool:
 
 
 def canonical_media_name(name: str, overrides: dict[str, str] | None = None) -> str:
-    """Canonical medium identity for ``name`` -- the S6 grouping key.
+    """Return the canonical medium identity for ``name`` (the S6 grouping key).
 
-    Deterministic pipeline: casefold, strip vendor/acronym parentheticals and
-    DSMZ catalogue tails, drop generic form words, expand acronyms, fold
-    spelling variants, then sort the surviving tokens so word order cannot
-    split a group. ``overrides`` (a curated ``media_name -> canonical_key``
-    map, see :func:`load_media_alias_map`) is consulted first and wins
-    outright, so a reviewed decision is never re-derived.
+    Casefolds, strips vendor/acronym parentheticals and DSMZ catalogue tails,
+    drops generic form words, expands acronyms, folds spelling variants, then
+    sorts the surviving tokens so word order cannot split a group.
+    ``overrides`` (see :func:`load_media_alias_map`) is consulted first and
+    wins outright.
 
-    Multi-medium strings get a distinct ``ambiguous:<slug>`` key so they form
-    their own singleton groups and can be filtered out, rather than colliding
-    into one bucket. A blank name -- BacDive does carry a few rows with no
-    recorded medium -- becomes the explicit token ``unspecified`` rather than
-    "", so it is one named group instead of an empty grouping value that could
-    trip the NA handling in the split machinery.
-
-    Use :func:`media_canon_status` to filter the non-identifiable rows out of a
-    held-out-medium split.
+    Multi-medium strings get an ``ambiguous:<slug>`` key and a blank name
+    becomes ``unspecified``, so neither collides with a real group or trips NA
+    handling in the split machinery. See :func:`media_canon_status`.
     """
     raw = str(name or "").strip()
     if not raw:
@@ -511,13 +491,10 @@ def canonical_media_name(name: str, overrides: dict[str, str] | None = None) -> 
 
 
 def media_canon_status(name: str, overrides: dict[str, str] | None = None) -> str:
-    """Whether ``name`` identifies exactly one medium: ``ok`` / ``ambiguous`` /
-    ``unspecified``.
+    """Return ``ok``, ``ambiguous`` or ``unspecified`` for a medium name.
 
-    Emitted as its own column so a held-out-medium split can drop the rows
-    whose medium is not identifiable using a plain value list
-    (``filters.exclude: {media_canon_status: [ambiguous, unspecified]}``),
-    with no wildcard matching needed.
+    Emitted as its own column so a split can drop non-identifiable rows with a
+    plain value list (``filters.exclude: {media_canon_status: [...]}``).
     """
     canon = canonical_media_name(name, overrides)
     if canon == "unspecified":
@@ -535,18 +512,13 @@ MEDIA_ALIAS_MAP_CSV = (
 def load_media_alias_map(path: Path | str | None = None) -> dict[str, str]:
     """Load the curated ``media_name -> canonical_key`` override map.
 
-    Opt-in, exactly like ``src.strain_metadata.align_loader.load_name_overrides``:
-    a missing file is normal (the deterministic rules in
-    :func:`canonical_media_name` work without it) and returns ``{}`` with a log
-    line rather than raising. Produced by
-    ``scripts/bacdive/apply_media_alias_review.py``.
-
-    Both the raw and the casefolded spelling are registered so a lookup
-    succeeds either way.
+    A missing file is normal and returns ``{}``. Produced by
+    ``scripts/bacdive/apply_media_alias_review.py``. Both the raw and the
+    casefolded spelling are registered.
     """
     csv_path = Path(path) if path is not None else MEDIA_ALIAS_MAP_CSV
     if not csv_path.exists():
-        log.info("no media alias map at %s -- using deterministic rules only", csv_path)
+        logger.info("no media alias map at {}; using deterministic rules only", csv_path)
         return {}
 
     overrides: dict[str, str] = {}
@@ -558,31 +530,30 @@ def load_media_alias_map(path: Path | str | None = None) -> dict[str, str]:
                 continue
             overrides[raw] = key
             overrides.setdefault(raw.lower(), key)
-    log.info("loaded %d media alias override(s) from %s", len(overrides), csv_path)
+    logger.info("loaded {} media alias overrides from {}", len(overrides), csv_path)
     return overrides
 
 
 @lru_cache(maxsize=1)
 def get_media_alias_map() -> dict[str, str]:
-    """Process-wide cached :func:`load_media_alias_map` for the default path.
+    """Return the cached :func:`load_media_alias_map` for the default path.
 
-    ``record_to_medium_rows`` is reached through a target registry whose
-    signature is shared with the metabolite target, so the map is fetched here
-    rather than threaded through as a parameter. Call
-    ``get_media_alias_map.cache_clear()`` after rewriting the CSV in the same
-    process.
+    Fetched here because ``record_to_medium_rows`` shares a signature with the
+    metabolite target. Call ``get_media_alias_map.cache_clear()`` after
+    rewriting the CSV in the same process.
     """
     return load_media_alias_map()
 
 
+# ---------------------------------------------------------------------------
+# Composition features
+# ---------------------------------------------------------------------------
+
 def _count_ingredients(composition: str) -> int:
     """Rough ingredient count from the free-text composition.
 
-    BacDive compositions come in two layouts:
-      * newline-separated "Ingredient 10.0 g/l" lines (DSMZ style), and
-      * semicolon-separated "Ingredient (10.0 g)" clauses (CIP style).
-    We split on whichever separator dominates and drop obvious header/filler
-    lines ("Name:", "Composition:", "Distilled water", empties).
+    Handles newline-separated (DSMZ) and semicolon-separated (CIP) layouts,
+    dropping header and filler lines ("Name:", "Distilled water", empties).
     """
     if not composition:
         return 0
@@ -607,13 +578,12 @@ def _count_ingredients(composition: str) -> int:
 def media_features(name: str, link: str | None, composition: str | None) -> dict:
     """Return the media feature columns for one culture-medium entry.
 
-    Keys match the ``media`` feature columns in the output schema
-    (``config.OUTPUT_FIELDNAMES``).
+    Keys match the medium feature columns in ``config.OUTPUT_FIELDNAMES``.
     """
     comp = (composition or "").strip()
     comp_lower = comp.lower()
-    # Fall back to the medium name for flag detection when composition is blank
-    # (many CIP/Pasteur entries have a link but no composition text).
+    # Fall back to the medium name when composition is blank (many CIP/Pasteur
+    # entries have a link but no composition text)
     haystack = comp_lower or (name or "").lower()
 
     flags = {
@@ -621,16 +591,13 @@ def media_features(name: str, link: str | None, composition: str | None) -> dict
         for col, tokens in _MARKERS.items()
     }
 
-    # complexity: three-way classification of medium chemical definition.
-    #   defined      — composition present, a defined marker was matched and
-    #                  no complex marker was
-    #   semi_defined — composition present, both complex and defined markers matched
-    #   undefined    — no composition, a complex marker matched with no
-    #                  defined marker, OR neither marker matched at all (e.g.
-    #                  a modifier note like "at 37 C" rather than a real
-    #                  recipe, or an unresolvable internal solution code) --
-    #                  "defined" must be positively evidenced, never assumed
-    #                  by default.
+    # Complexity is three-way:
+    #   defined      -- composition present, a defined marker matched and no
+    #                   complex marker did
+    #   semi_defined -- composition present, both kinds of marker matched
+    #   undefined    -- no composition, or no defined marker matched (e.g. a
+    #                   modifier note like "at 37 C" or an unresolvable
+    #                   solution code); "defined" must be positively evidenced
     if not comp_lower:
         flags["complexity"] = "undefined"
     else:
