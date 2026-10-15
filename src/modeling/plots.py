@@ -846,6 +846,182 @@ def plot_threshold_sweep(
 
 
 # ---------------------------------------------------------------------------
+# BacDive
+# ---------------------------------------------------------------------------
+
+
+def plot_grouped_metrics_bars(
+    metrics_a: list[dict | str | Path],
+    metrics_b: list[dict | str | Path],
+    metrics: list[str],
+    *,
+    metric_titles: list[str] | None = None,
+    row_titles: list[str] | None = None,
+    group_titles: tuple[str, str] | list[str] = (
+        "random CV (in-distribution)",
+        "grouped CV (held-out group)",
+    ),
+    legend_title: str | None = None,
+    col_wrap: int = 2,
+    figsize: tuple[float, float] | None = None,
+    palette: str | list = "Set1",
+    fig_title: str | None = None,
+    xlim: tuple[float, float] | None = None,
+) -> Figure:
+    """Compare one metric across paired experiments as grouped horizontal bars.
+
+    Each y-tick is one paired entry from ``metrics_a`` / ``metrics_b`` (e.g. a
+    feature set). Each panel is one metric (mean +/- std), with two bars per
+    row — group A vs group B.
+
+    Parameters
+    ----------
+    metrics_a, metrics_b:
+        Parallel lists of metrics dicts and/or paths to ``metrics.json``
+        files. Index ``i`` in both lists is one y-axis category.
+    metrics:
+        Metric names to plot as panels (e.g. ``["mcc"]`` or
+        ``["mcc", "auroc"]``).
+    metric_titles:
+        Optional x-axis labels per panel; defaults to metric names.
+    row_titles:
+        Y-tick labels; defaults to the parent directory name of the
+        corresponding ``metrics_a`` path, else ``"Run i"``.
+    group_titles:
+        Two legend labels for ``metrics_a`` and ``metrics_b``.
+    legend_title:
+        Title for the in-axes legend (upper right); ``None`` omits the title.
+    col_wrap:
+        Maximum number of panel columns before wrapping to a new row.
+    figsize:
+        Overall figure size; auto-computed from the grid shape and number
+        of rows if omitted.
+    palette:
+        Seaborn palette name, or an explicit list of two colours
+        (e.g. ``["tab:blue", "tab:red"]``). Defaults to ``"Set1"``.
+    fig_title:
+        Optional title for the whole figure (``fig.suptitle``).
+    xlim:
+        Optional ``(xmin, xmax)`` applied to every panel. ``None`` lets
+        matplotlib autoscale.
+
+    Returns
+    -------
+    Figure
+        The assembled matplotlib figure.
+    """
+    if not metrics_a or not metrics_b:
+        raise ValueError("`metrics_a` and `metrics_b` must be non-empty")
+    if len(metrics_a) != len(metrics_b):
+        raise ValueError(
+            "`metrics_a` and `metrics_b` must have the same length "
+            f"(got {len(metrics_a)} and {len(metrics_b)})"
+        )
+    if not metrics:
+        raise ValueError("`metrics` must contain at least one metric name")
+    if len(group_titles) != 2:
+        raise ValueError("`group_titles` must contain exactly two labels")
+
+    blocks_a = _load_metrics_blocks(metrics_a)
+    blocks_b = _load_metrics_blocks(metrics_b)
+
+    if row_titles is None:
+        row_titles = [
+            Path(j).parent.name
+            if isinstance(j, (str, Path))
+            else f"Run {i + 1}"
+            for i, j in enumerate(metrics_a)
+        ]
+    if len(row_titles) != len(metrics_a):
+        raise ValueError("`row_titles` must match the length of `metrics_a`")
+
+    if metric_titles is None:
+        metric_titles = list(metrics)
+    if len(metric_titles) != len(metrics):
+        raise ValueError("`metric_titles` must match the length of `metrics`")
+
+    n_rows_cats = len(metrics_a)
+    n_metrics = len(metrics)
+    panel_h = max(0.45 * n_rows_cats + 1.4, 3.5)
+    fig, axes, n_rows, n_cols = _panel_subfigure(
+        n_metrics,
+        col_wrap=col_wrap,
+        figsize=figsize,
+        panel_w=7.0,
+        panel_h=panel_h,
+        min_w=7.0,
+        min_h=panel_h,
+    )
+
+    if isinstance(palette, str):
+        bar_colors = _color_cycle(2, palette=palette)
+    else:
+        if len(palette) < 2:
+            raise ValueError("`palette` must contain at least two colours")
+        bar_colors = list(palette)[:2]
+    y = np.arange(n_rows_cats)
+    offset = 0.2
+    bar_h = 0.38
+
+    def _mean_std(block: dict, metric: str) -> tuple[float, float]:
+        if metric not in block:
+            raise KeyError(f"metric '{metric}' not found in metrics JSON")
+        return float(block[metric]["mean"]), float(block[metric]["std"])
+
+    for idx, (metric, xlabel) in enumerate(zip(metrics, metric_titles)):
+        ax = axes[idx // n_cols][idx % n_cols]
+
+        means_a, stds_a, means_b, stds_b = [], [], [], []
+        for ba, bb in zip(blocks_a, blocks_b):
+            ma, sa = _mean_std(ba, metric)
+            mb, sb = _mean_std(bb, metric)
+            means_a.append(ma)
+            stds_a.append(sa)
+            means_b.append(mb)
+            stds_b.append(sb)
+
+        for means, stds, shift, color, label in (
+            (means_a, stds_a, -offset, bar_colors[0], group_titles[0]),
+            (means_b, stds_b, +offset, bar_colors[1], group_titles[1]),
+        ):
+            ax.barh(
+                y + shift,
+                means,
+                xerr=stds,
+                height=bar_h,
+                color=color,
+                edgecolor="white",
+                linewidth=0.5,
+                capsize=3,
+                error_kw={"elinewidth": 1.0, "capthick": 1.0},
+                label=label,
+            )
+
+        ax.set_yticks(y)
+        ax.set_yticklabels(row_titles, fontsize=9)
+        ax.invert_yaxis()
+        ax.set_xlabel(xlabel)
+        if xlim is not None:
+            ax.set_xlim(*xlim)
+        ax.axvline(0, color="grey", lw=0.6, alpha=0.5, zorder=0)
+        ax.grid(axis="x", alpha=0.3)
+        ax.set_axisbelow(True)
+        ax.legend(
+            loc="upper right",
+            fontsize=8,
+            frameon=True,
+            title=legend_title,
+        )
+
+    _hide_unused_panel_axes(axes, n_metrics, n_rows, n_cols)
+    fig.tight_layout(rect=(0, 0, 1.0, 0.94 if fig_title else 1.0))
+    if fig_title:
+        fig.suptitle(fig_title, fontsize=12, fontweight="bold")
+
+    return fig
+
+
+# ---------------------------------------------------------------------------
 # Pathway-matrix analysis plots (docs/plans/pathway_features.md "Analysis")
 # ---------------------------------------------------------------------------
 

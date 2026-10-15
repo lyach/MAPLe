@@ -1,0 +1,17 @@
+# Curves dataset config — aerobic experiments
+# Used by create_modeling_dataset.py to build the interim table.
+
+# ================ FILES ================
+curves_file: "data/processed/aerobic_tidy_curves.csv"
+strain_metadata_file: "data/external/strains_metadata.csv"
+output_name: "aero_modeling_dataset.csv"
+
+# ================ MERGE ================
+merge:
+  left: "strain_name"
+  right: "strain"
+
+# ================ GRANULARITY ================
+# per_well = keep replicates (more samples, use group-aware CV)
+# averaged = one row per strain-media-condition (replicate mean)
+grain: "per_well"

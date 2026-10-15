@@ -128,7 +128,7 @@ def compute_group_importance(
     group_index: dict[str, list[int]],
     shap_class: ShapClass | int | None = "positive",
 ) -> dict[str, float]:
-    """Aggregate mean |SHAP| by feature group (strain, media, condition, ...).
+    """Aggregate total |SHAP| by feature group (strain, media, condition, ...).
 
     Parameters
     ----------
@@ -142,14 +142,19 @@ def compute_group_importance(
 
     Returns
     -------
-    Dict mapping group name to mean absolute SHAP value.
+    Dict mapping group name to its mean per-sample summed absolute SHAP value,
+    i.e. the group's total attribution. Comparable across groups of differing
+    feature counts.
     """
     shap_values = _select_output(shap_values, shap_class=shap_class)
     vals = np.abs(shap_values.values)
 
     importance: dict[str, float] = {}
     for group, indices in group_index.items():
-        importance[group] = float(np.mean(vals[:, indices]))
+        # Sum across the group's columns before averaging over samples: averaging
+        # over columns instead would rank groups by how sparse their one-hots are
+        # rather than by how much they contribute.
+        importance[group] = float(vals[:, indices].sum(axis=1).mean())
 
     return importance
 
@@ -158,7 +163,7 @@ def plot_group_importance(
     group_importance: dict[str, float],
     output_dir: Path,
 ) -> None:
-    """Bar chart of mean |SHAP| per feature group."""
+    """Bar chart of total |SHAP| attribution per feature group."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
     groups = sorted(group_importance, key=group_importance.get, reverse=True)
@@ -166,7 +171,7 @@ def plot_group_importance(
 
     fig, ax = plt.subplots(figsize=(8, 5))
     bars = ax.barh(groups, values)
-    ax.set_xlabel("Mean |SHAP value|")
+    ax.set_xlabel("Mean summed |SHAP| per sample")
     ax.set_title("Feature Group Importance")
     ax.invert_yaxis()
 

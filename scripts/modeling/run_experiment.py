@@ -1,0 +1,480 @@
+"""Run a modeling experiment end-to-end: CV, evaluation, interpretability.
+
+Usage:
+    python scripts/modeling/run_experiment.py config/experiments/class_bacdive.yaml
+"""
+
+import argparse
+import inspect
+import json
+import sys
+from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
+import yaml
+from loguru import logger
+from sklearn.utils.class_weight import compute_sample_weight
+
+
+def _find_root(start: Path) -> Path:
+    """Ascend from ``start`` to the directory containing ``pyproject.toml``."""
+    for parent in [start, *start.parents]:
+        if (parent / "pyproject.toml").exists():
+            return parent
+    return start.parents[2]
+
+
+ROOT = _find_root(Path(__file__).resolve())
+sys.path.insert(0, str(ROOT))
+
+from src.modeling.config import resolve_experiment
+from src.modeling.cv import get_fold_group_label, make_splits
+from src.modeling.evaluate import (
+    aggregate_metrics,
+    evaluate_fold,
+    per_group_metrics,
+    tune_threshold,
+)
+from src.modeling.features import (
+    build_feature_group_index,
+    build_feature_pipeline,
+    get_feature_names,
+    merge_external_features,
+    warn_loso_onehot,
+)
+from src.modeling.interpret import run_interpretation
+from src.modeling.io import read_table
+from src.modeling.models import build_model, gpu_available
+from src.modeling.splits import (
+    assert_split_source_length,
+    held_out_label,
+    iter_saved_splits,
+    load_split_map,
+)
+
+
+def setup_logging(level: str = "INFO", log_file: Path | None = None) -> None:
+    logger.remove()
+    logger.add(
+        sys.stderr,
+        level=level,
+        format="<green>{time:HH:mm:ss}</green> | <level>{level: <7}</level> | {message}",
+        colorize=sys.stderr.isatty(),
+    )
+    if log_file is not None:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        logger.add(
+            log_file,
+            level="DEBUG",
+            format="{time:YYYY-MM-DD HH:mm:ss} | {level: <7} | {message}",
+            colorize=False,
+            mode="w",
+        )
+
+
+def _supports_sample_weight(fit_fn) -> bool:
+    """True if ``fit_fn(..., sample_weight=...)`` is safe to call (incl. ``**kwargs`` wrappers)."""
+    params = inspect.signature(fit_fn).parameters
+    if "sample_weight" in params:
+        return True
+    return any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
+
+
+def _fit_with_weights(model, X, y, class_weight) -> None:
+    """Fit with per-sample weights from ``class_weight`` (computed on this fold only).
+
+    Falls back to an unweighted fit with a warning when unsupported.
+    """
+    fit_kwargs = {}
+    if class_weight:
+        if _supports_sample_weight(model.fit):
+            fit_kwargs["sample_weight"] = compute_sample_weight(class_weight, y)
+        else:
+            logger.warning(
+                "{} does not support sample_weight; ignoring class_weight={}",
+                type(model).__name__, class_weight,
+            )
+    model.fit(X, y, **fit_kwargs)
+
+
+def _filter_for_task(df: pd.DataFrame, task: str) -> pd.DataFrame:
+    """For growth_rate regression, keep only growing wells."""
+    if task == "growth_rate":
+        if "growth_class" in df.columns:
+            n_before = len(df)
+            df = df[df["growth_class"] == 1].copy()
+            logger.info(
+                "growth_rate task: filtered to growing wells ({} -> {} rows)",
+                n_before, len(df),
+            )
+    return df
+
+
+def _apply_row_filters(df: pd.DataFrame, ds_cfg, task: str) -> pd.DataFrame:
+    """Apply the dataset config's ``filters.include`` / ``filters.exclude``.
+    """
+    filters = getattr(ds_cfg, "filters", None)
+    if filters is None:
+        return df
+
+    for column, values in (filters.include or {}).items():
+        if column not in df.columns:
+            raise ValueError(
+                f"filters.include names column {column!r}, which is not in "
+                f"{sorted(df.columns)[:10]}... (dataset has {len(df.columns)} columns)"
+            )
+        wanted = {str(v) for v in values}
+        n_before = len(df)
+        df = df[df[column].astype(str).isin(wanted)].copy()
+        logger.info("filters.include {}={}: {} -> {} rows",
+                    column, sorted(wanted), n_before, len(df))
+
+    for column, values in (filters.exclude or {}).items():
+        if column not in df.columns:
+            raise ValueError(
+                f"filters.exclude names column {column!r}, which is not in "
+                f"{sorted(df.columns)[:10]}... (dataset has {len(df.columns)} columns)"
+            )
+        unwanted = {str(v) for v in values}
+        mask = df[column].astype(str).isin(unwanted)
+        n_dropped = int(mask.sum())
+        n_neg = (
+            int((df.loc[mask, task] == 0).sum())
+            if task in df.columns else -1
+        )
+        if n_dropped == 0:
+            logger.warning(
+                "filters.exclude {}={} matched NO rows -- check the values "
+                "against the column's actual contents", column, sorted(unwanted),
+            )
+        df = df[~mask].copy()
+        logger.info(
+            "filters.exclude {}={}: dropped {} rows ({} with {}=0), {} remain",
+            column, sorted(unwanted), n_dropped, n_neg, task, len(df),
+        )
+
+    if df.empty:
+        raise ValueError("filters removed every row")
+    return df
+
+
+def run_cv_loop(
+    df: pd.DataFrame,
+    exp_cfg,
+    ds_cfg,
+    mdl_cfg,
+) -> tuple[list[dict], pd.DataFrame]:
+    """Run the full CV loop: featurize per fold -> fit -> predict -> evaluate.
+
+    Returns fold metrics and a predictions DataFrame.
+    """
+    task = exp_cfg.task
+    all_fold_metrics: list[dict] = []
+    all_predictions: list[pd.DataFrame] = []
+
+    # Optionally use precomputed splits
+    split_map = None
+    split_on = exp_cfg.cv.split_on
+    if exp_cfg.cv.splits_file is not None:
+        splits_path = Path(exp_cfg.cv.splits_file)
+        if not splits_path.is_absolute():
+            splits_path = ROOT / splits_path
+        if split_on is None:
+            raise ValueError("cv.split_on is required when cv.splits_file is set")
+        split_map = load_split_map(splits_path)
+        logger.info(
+            "using precomputed splits: {} (split_on={})", splits_path, split_on
+        )
+
+    for strategy in exp_cfg.cv.strategy:
+        warn_loso_onehot(ds_cfg, strategy)
+
+        if split_map is not None:
+            fold_source = (
+                (repeat, train_idx, test_idx,
+                 held_out_label(df, test_idx, split_on))
+                for repeat, _, train_idx, test_idx in iter_saved_splits(
+                    df, split_map, split_on, strategy
+                )
+            )
+        else:
+            fold_source = (
+                (0, train_idx, test_idx,
+                 get_fold_group_label(strategy, df, test_idx))
+                for train_idx, test_idx in make_splits(
+                    strategy,
+                    df,
+                    y=df[task].values,
+                    seed=exp_cfg.seed,
+                    group_on=exp_cfg.cv.group_on,
+                )
+            )
+
+        fold_num = 0
+        for repeat, train_idx, test_idx, fold_label in fold_source:
+            fold_num += 1
+            logger.info(
+                "--- {}: fold {} (repeat {}, held-out: {}) ---",
+                strategy, fold_num, repeat, fold_label,
+            )
+
+            df_train = df.iloc[train_idx]
+            df_test = df.iloc[test_idx]
+
+            # Fit feature pipeline on train only (leakage-safe)
+            ct, feature_cols, fgm = build_feature_pipeline(ds_cfg, df_train, root=ROOT)
+            logger.info(" features: {}...", feature_cols[:15])
+            ct.fit(df_train)
+            X_train = ct.transform(df_train)
+            X_test = ct.transform(df_test)
+            y_train = df_train[task].values
+            y_test = df_test[task].values
+
+            # Build and fit model (reweighting on train fold only)
+            model = build_model(mdl_cfg, task, seed=exp_cfg.seed)
+            _fit_with_weights(model, X_train, y_train, exp_cfg.class_weight)
+
+            # Predict
+            y_prob = None
+            threshold = 0.5
+            if task == "growth_class" and hasattr(model, "predict_proba"):
+                y_prob = model.predict_proba(X_test)[:, 1]
+                # Tune the decision threshold on train-fold probabilities
+                # to give the minority no-growth class a real
+                # operating point instead of the 0.5 default.
+                y_prob_train = model.predict_proba(X_train)[:, 1]
+                threshold = tune_threshold(y_train, y_prob_train, objective="mcc")
+                y_pred = (y_prob >= threshold).astype(int)
+            else:
+                y_pred = model.predict(X_test)
+
+            # Evaluate
+            metrics = evaluate_fold(y_test, y_pred, y_prob, task, exp_cfg.metrics or None)
+            metrics["strategy"] = strategy
+            metrics["repeat"] = repeat
+            metrics["fold"] = fold_num
+            metrics["fold_label"] = fold_label
+            metrics["threshold"] = threshold
+            metrics["n_train"] = len(train_idx)
+            metrics["n_test"] = len(test_idx)
+            all_fold_metrics.append(metrics)
+
+            logger.info("  metrics: {}", {k: f"{v:.4f}" for k, v in metrics.items() if isinstance(v, float)})
+
+            # Collect predictions for per-group analysis
+            pred_df = pd.DataFrame({
+                "y_true": y_test,
+                "y_pred": y_pred,
+                "strategy": strategy,
+                "repeat": repeat,
+                "fold": fold_num,
+                "fold_label": fold_label,
+            })
+            if y_prob is not None:
+                pred_df["y_prob"] = y_prob
+            if "strain_name" in df.columns:
+                pred_df["strain_name"] = df_test["strain_name"].values
+            if "media_name" in df.columns:
+                pred_df["media_name"] = df_test["media_name"].values
+            if "atmosphere" in df.columns:
+                pred_df["atmosphere"] = df_test["atmosphere"].values
+            all_predictions.append(pred_df)
+
+    return all_fold_metrics, pd.concat(all_predictions, ignore_index=True)
+
+
+def pooled_oof_metrics(
+    predictions_df: pd.DataFrame,
+    task: str,
+    requested: list[str] | None,
+) -> dict[str, float]:
+    """Compute headline metrics on the pooled out-of-fold predictions.
+    """
+    if predictions_df.empty:
+        return {}
+
+    y_true = predictions_df["y_true"].values
+    y_prob = (
+        predictions_df["y_prob"].values
+        if "y_prob" in predictions_df.columns else None
+    )
+
+    threshold = 0.5
+    if task == "growth_class" and y_prob is not None:
+        threshold = tune_threshold(y_true, y_prob, objective="mcc")
+        y_pred = (y_prob >= threshold).astype(int)
+    else:
+        y_pred = predictions_df["y_pred"].values
+
+    metrics = evaluate_fold(y_true, y_pred, y_prob, task, requested)
+    metrics["threshold"] = threshold
+    metrics["n"] = int(len(y_true))
+    if task == "growth_class":
+        metrics["n_nogrowth"] = int((y_true == 0).sum())
+    return metrics
+
+
+def run_interpretability(
+    df: pd.DataFrame,
+    exp_cfg,
+    ds_cfg,
+    mdl_cfg,
+    output_dir: Path,
+) -> None:
+    """Refit on all data and run SHAP analysis."""
+    task = exp_cfg.task
+
+    ct, _, fgm = build_feature_pipeline(ds_cfg, df, root=ROOT)
+    ct.fit(df)
+    X = ct.transform(df)
+    y = df[task].values
+    feature_names = get_feature_names(ct)
+
+    model = build_model(mdl_cfg, task, seed=exp_cfg.seed)
+    _fit_with_weights(model, X, y, exp_cfg.class_weight)
+
+    group_index = build_feature_group_index(feature_names, fgm)
+
+    run_interpretation(
+        model, X, feature_names, group_index, output_dir,
+        do_group_importance=exp_cfg.interpret.group_importance,
+        shap_class=exp_cfg.interpret.shap_class,
+    )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("config", type=Path, help="Path to experiment YAML config.")
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+    )
+    args = parser.parse_args()
+
+    exp_cfg, ds_cfg, mdl_cfg = resolve_experiment(args.config, root=ROOT)
+
+    # Output directory
+    output_dir = ROOT / exp_cfg.output_dir / exp_cfg.name
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fig_dir = output_dir / "figures"
+    fig_dir.mkdir(parents=True, exist_ok=True)
+
+    log_path = output_dir / "experiment.log"
+    setup_logging(args.log_level, log_file=log_path)
+
+    logger.info("experiment: {}", exp_cfg.name)
+    logger.info("task: {}", exp_cfg.task)
+    logger.info("model: {} ({})", mdl_cfg.type, mdl_cfg.params)
+    if mdl_cfg.type == "xgboost":
+        if gpu_available():
+            logger.info("GPU available, XGBoost will train on CUDA")
+        else:
+            logger.info("No GPU available, XGBoost will train on CPU")
+    logger.info("CV strategies: {}", exp_cfg.cv.strategy)
+    logger.info("output: {}", output_dir)
+
+    # Save config snapshot
+    exp_dump = exp_cfg.model_dump()
+    exp_dump["dataset"] = (
+        exp_cfg.dataset if isinstance(exp_cfg.dataset, str) else "inline"
+    )
+    config_snapshot = {
+        "experiment": exp_dump,
+        "dataset": ds_cfg.model_dump(),
+        "model": mdl_cfg.model_dump(),
+        "timestamp": datetime.now().isoformat(),
+    }
+    with open(output_dir / "config.yaml", "w") as f:
+        yaml.dump(config_snapshot, f, default_flow_style=False, sort_keys=False)
+
+    # Load data
+    data_path = Path(ds_cfg.modeling_dataset_path)
+    if not data_path.is_absolute():
+        data_path = ROOT / data_path
+    logger.info("loading modeling dataset: {}", data_path)
+    df = read_table(data_path)
+    logger.info("dataset shape: {} rows x {} cols", *df.shape)
+
+    if exp_cfg.cv.splits_file is not None:
+        splits_path = Path(exp_cfg.cv.splits_file)
+        if not splits_path.is_absolute():
+            splits_path = ROOT / splits_path
+        assert_split_source_length(len(df), splits_path, data_path)
+
+    df = _filter_for_task(df, exp_cfg.task)
+    df = _apply_row_filters(df, ds_cfg, exp_cfg.task)
+
+    # Merge external feature tables (path: specs) before splitting
+    df = merge_external_features(ds_cfg, df, root=ROOT)
+
+    # --- CV loop ---
+    logger.info("=" * 60)
+    logger.info("CROSS-VALIDATION")
+    logger.info("=" * 60)
+
+    fold_metrics, predictions_df = run_cv_loop(df, exp_cfg, ds_cfg, mdl_cfg)
+
+    # Aggregate metrics per strategy
+    for strategy in exp_cfg.cv.strategy:
+        strat_folds = [m for m in fold_metrics if m.get("strategy") == strategy]
+        agg = aggregate_metrics(strat_folds)
+        logger.info("--- {} aggregate ---", strategy)
+        for k, v in agg.items():
+            logger.info("  {}: {:.4f} +/- {:.4f}", k, v["mean"], v["std"])
+
+    # Save fold-level metrics
+    metrics_df = pd.DataFrame(fold_metrics)
+    metrics_df.to_csv(output_dir / "fold_metrics.csv", index=False)
+
+    # Save aggregate (per-fold mean +/- std per strategy) + pooled OOF headline
+    all_agg: dict[str, dict] = {}
+    for strategy in exp_cfg.cv.strategy:
+        strat_folds = [m for m in fold_metrics if m.get("strategy") == strategy]
+        all_agg[strategy] = aggregate_metrics(strat_folds)
+
+    pooled = pooled_oof_metrics(predictions_df, exp_cfg.task, exp_cfg.metrics or None)
+    if pooled:
+        all_agg["pooled"] = pooled
+        logger.info("--- pooled OOF metrics (threshold={:.3f}) ---", pooled["threshold"])
+        for k, v in pooled.items():
+            if isinstance(v, float):
+                logger.info("  {}: {:.4f}", k, v)
+
+    with open(output_dir / "metrics.json", "w") as f:
+        json.dump(all_agg, f, indent=2, default=str)
+
+    # Save predictions
+    predictions_df.to_csv(output_dir / "predictions.csv", index=False)
+
+    # Per-strain and per-media breakdowns
+    for group_col in ["strain_name", "media_name"]:
+        if group_col in predictions_df.columns:
+            pg = per_group_metrics(predictions_df, group_col, exp_cfg.task, exp_cfg.metrics or None)
+            pg.to_csv(output_dir / f"metrics_by_{group_col}.csv")
+            # Groups with at least one no-growth case are the only ones where
+            # ranking metrics (AUROC/PR-AUC) are defined.
+            if exp_cfg.task == "growth_class" and "n_neg" in pg.columns:
+                pg_withneg = pg[pg["n_neg"] > 0]
+                pg_withneg.to_csv(output_dir / f"metrics_by_{group_col}_withneg.csv")
+                logger.info(
+                    "per-{} metrics ({} groups with no-growth cases):\n{}",
+                    group_col, len(pg_withneg), pg_withneg.to_string(),
+                )
+            else:
+                logger.info("per-{} metrics:\n{}", group_col, pg.to_string())
+
+    # --- Interpretability ---
+    if exp_cfg.interpret.shap:
+        logger.info("=" * 60)
+        logger.info("INTERPRETABILITY (refit on all data)")
+        logger.info("=" * 60)
+        run_interpretability(df, exp_cfg, ds_cfg, mdl_cfg, output_dir)
+
+    logger.success("experiment '{}' complete -> {}", exp_cfg.name, output_dir)
+    logger.success("log -> {}", log_path)
+
+
+if __name__ == "__main__":
+    main()

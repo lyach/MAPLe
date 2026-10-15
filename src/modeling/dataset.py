@@ -1,4 +1,4 @@
-"""Build the modeling dataset by merging curves CSV with strain metadata."""
+"""Build the modeling dataset by merging curves tables with strain metadata."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ from pathlib import Path
 import pandas as pd
 from loguru import logger
 
-from src.modeling.config import DatasetConfig
+from src.modeling.config import CurvesDatasetConfig
+from src.modeling.io import read_table
 
 # Columns that identify a unique condition for replicate averaging
 _GROUP_COLS = ["strain_name", "media_name", "atmosphere", "temperature"]
@@ -24,15 +25,15 @@ def _normalize_key(s: pd.Series) -> pd.Series:
     return s.astype(str).str.strip().str.lower()
 
 
-def _resolve_curves_paths(cfg: DatasetConfig, root: Path) -> list[Path]:
-    """Return absolute paths for one or more curves CSV files."""
+def _resolve_curves_paths(cfg: CurvesDatasetConfig, root: Path) -> list[Path]:
+    """Return absolute paths for one or more curves CSV/Parquet files."""
     paths = cfg.curves_file if isinstance(cfg.curves_file, list) else [cfg.curves_file]
     return [root / p for p in paths]
 
 
 def _load_curves(curves_paths: list[Path]) -> pd.DataFrame:
-    """Load and concatenate one or more curves CSV files."""
-    dfs = [pd.read_csv(path) for path in curves_paths]
+    """Load and concatenate one or more curves CSV/Parquet files."""
+    dfs = [read_table(path) for path in curves_paths]
     if len(dfs) == 1:
         logger.info("loaded 1 curves file, shape: {} rows x {} cols", *dfs[0].shape)
         return dfs[0]
@@ -47,7 +48,7 @@ def _load_curves(curves_paths: list[Path]) -> pd.DataFrame:
 
 
 def build_modeling_dataset(
-    cfg: DatasetConfig,
+    cfg: CurvesDatasetConfig,
     root: Path | None = None,
 ) -> pd.DataFrame:
     """Load curves + optional strain metadata, merge, and optionally average replicates.
@@ -55,7 +56,7 @@ def build_modeling_dataset(
     Parameters
     ----------
     cfg:
-        Parsed ``DatasetConfig`` from the dataset YAML.
+        Parsed ``CurvesDatasetConfig`` from the curves-dataset YAML.
     root:
         Project root used to resolve relative paths in *cfg*.
         Defaults to the current working directory.
@@ -72,23 +73,25 @@ def build_modeling_dataset(
     logger.info("loading curves: {}", curves_paths)
     df = _load_curves(curves_paths)
     
-    # remove water controls
-    df = df.loc[df["media_name"] != "water"]
-    logger.info("removed water controls, shape: {} rows x {} cols", *df.shape)
-    
-    # remove `other` strains
-    df = df.loc[~df["strain_name"].str.contains("other")]
-    logger.info("removed `other` strains, shape: {} rows x {} cols", *df.shape)
-    
-    # remove `empty` strains
-    df = df.loc[df["strain_name"] != "empty"]
-    logger.info("removed `empty` strains, shape: {} rows x {} cols", *df.shape)
+    # remove water controls (only when a media_name column is present)
+    if "media_name" in df.columns:
+        df = df.loc[df["media_name"] != "water"]
+        logger.info("removed water controls, shape: {} rows x {} cols", *df.shape)
+
+    if "strain_name" in df.columns:
+        # remove `other` strains
+        df = df.loc[~df["strain_name"].str.contains("other")]
+        logger.info("removed `other` strains, shape: {} rows x {} cols", *df.shape)
+
+        # remove `empty` strains
+        df = df.loc[df["strain_name"] != "empty"]
+        logger.info("removed `empty` strains, shape: {} rows x {} cols", *df.shape)
 
     # merge strain metadata
     if cfg.strain_metadata_file:
         meta_path = root / cfg.strain_metadata_file
         logger.info("loading strain metadata: {}", meta_path)
-        meta = pd.read_csv(meta_path)
+        meta = read_table(meta_path)
         logger.info("strain metadata shape: {} rows x {} cols", *meta.shape)
 
         left_key = cfg.merge.left

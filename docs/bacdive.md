@@ -1,0 +1,183 @@
+# BacDive pipeline
+
+Downloads the [BacDive](https://bacdive.dsmz.de)
+database and builds a tidy table with a binary `growth_class` target that plugs
+straight into the modeling pipeline (`docs/modeling_pipeline.md`).
+
+The public BacDive v2 API requires **no credentials**.
+
+## Targets
+
+The extraction **target** decides what one row is. Set it via the `target:` key
+in [`bacdive/taxa.yaml`](taxa.yaml) or the `--target` CLI flag:
+
+| Target | One row = | Label (`growth_class`) | Real negatives? | Output CSV |
+| --- | --- | --- | --- | --- |
+| `medium_growth` *(default)* | `(strain, culture medium)` | 1 = grows, 0 = no growth | **No** — positive-only (see PU notes below) | `data/external/bacdive_growth.csv` |
+| `metabolite_utilization` | `(strain, metabolite, assay kind)` | 1 = utilizes (`+`), 0 = not (`-`) | **Yes** — balanced `+`/`-` | `data/external/bacdive_metabolite.csv` |
+
+`metabolite_utilization` is the closest translatable analog to
+"genome + nutrient -> phenotype" and, unlike `medium_growth`, has real,
+trainable/evaluable negatives.
+
+## Layout
+
+| Path | Role |
+| --- | --- |
+| `bacdive/taxa.yaml` | User-editable taxonomic scope + target |
+| `src/bacdive/` | Engine package (imported as `src.bacdive`) |
+| `scripts/get_bacdive_dataset.py` | CLI entry point |
+| `config/dataset/curves_dataset_bacdive.yaml` | Curves config (medium_growth, optional interim build) |
+| `config/dataset/modeling_dataset_bacdive.yaml` | Modeling dataset config (medium_growth) |
+| `config/experiments/class_bacdive.yaml` | Experiment config (medium_growth) |
+| `config/dataset/curves_dataset_bacdive_metabolite.yaml` | Curves config (metabolite_utilization, optional interim build) |
+| `config/dataset/modeling_dataset_bacdive_metabolite.yaml` | Modeling dataset config (metabolite_utilization) |
+| `config/experiments/class_bacdive_metabolite.yaml` | Experiment config (metabolite_utilization) |
+
+> The engine lives under `src/bacdive/` (not a top-level `bacdive/` package) so
+> it does not shadow the installed `bacdive` PyPI client, which it wraps.
+
+## Usage
+
+1. Edit the scope + target in [`bacdive/taxa.yaml`](taxa.yaml):
+
+```yaml
+target: medium_growth   # or: metabolite_utilization
+taxa:
+  - Escherichia coli
+  - Bacillus subtilis
+  - Lactobacillus
+```
+
+2. Download and build the dataset:
+
+```bash
+python scripts/get_bacdive_dataset.py --taxa bacdive/taxa.yaml
+```
+
+Common outputs (target-dependent CSV name):
+- `data/external/bacdive_growth.parquet` / `bacdive_metabolite.parquet` — main dataset
+- `data/external/bacdive_failures.csv` — taxa that returned nothing / errored
+- `data/external/bacdive_cache/<id>.json` — raw per-record cache
+- `logs/run_<timestamp>.log` — full run log
+
+2.1. Skipping the BacDive API call
+To rebuild a table from an existing cache (no API), edit
+[`bacdive/build_from_cache.yaml`](build_from_cache.yaml) and run:
+
+```bash
+python scripts/build_bacdive_from_cache.py
+```
+
+3. Feed it into the modeling pipeline:
+
+```bash
+python scripts/modeling/run_experiment.py config/experiments/class_bacdive.yaml
+```
+
+## Output schemas
+
+**`medium_growth`** — one row per `(strain, culture medium)`:
+
+| Group | Columns |
+| --- | --- |
+| identifiers | `bacdive_id`, `strain_name`, `media_name`, `media_name_full`, `media_canon`, `media_canon_status`, `mediadive_id` |
+| target | `growth_class` (1 = growth, 0 = no growth) |
+| strain features | `genus`, `family`, `order`, `phylum`, `gram_stain`, `cell_shape`, `motility`, `oxygen_tolerance`, `nutrition_type`, `spore_formation`, `gc_content`, `genome_accession`, `n16s_accession` |
+| condition (strain-level) | `temperature`, `ph` |
+| media features | `n_ingredients`, `has_yeast_extract`, `has_peptone`, `has_agar`, `has_blood_components`, `has_nacl`, `complexity` |
+| provenance | `composition_raw`, `refs` |
+
+**`metabolite_utilization`** — one row per `(strain, metabolite, assay kind)`:
+
+| Group | Columns |
+| --- | --- |
+| identifiers | `bacdive_id`, `strain_name`, `substrate_name`, `chebi_id`, `kind_of_utilization` |
+| target | `growth_class` (1 = utilizes `+`, 0 = `-`) |
+| strain features | `genus`, `family`, `order`, `phylum`, `gram_stain`, `cell_shape`, `motility`, `oxygen_tolerance`, `nutrition_type`, `spore_formation`, `gc_content`, `genome_accession`, `n16s_accession`, `temperature`, `ph` |
+| provenance | `refs` |
+
+The label is named `growth_class` in both schemas only so it plugs into the
+existing classification `task` unchanged. For `metabolite_utilization`, the
+substrate identifier is the explicit `substrate_name` (not `media_name`), so
+`lomo` (leave-one-medium-out) does not apply — use `loso` / `grouped` /
+`random`. `chebi_id` is emitted so substrate chemistry (ChEBI -> SMILES ->
+fingerprint) can be joined later as a `path:` embedding.
+
+## How it maps to the modeling pipeline
+
+The output is a "curves-like" table consumed by `src/modeling/dataset.py`. It
+provides `strain_name` and `growth_class` (plus `media_name` for
+`medium_growth`), which is all the `growth_class` task needs. `loso` CV groups
+on `strain_name`; `lomo` groups on `media_name` (medium_growth only).
+
+## Medium review
+
+Many entries have a blank `composition_raw` and no link BacDive itself
+resolves. `_backfill_composition` (in `src/bacdive/pipeline.py`) fills these
+in on every build, picking the best source, with possibilities: 
+1. the recipe manifest
+matched by the medium's own link;
+2. the same manifest matched by an exact
+`media_name` match;
+3. the manifest again for `manual_review` matches, then
+(4) a sibling row with the same `media_name` that already has a recipe.
+`src/bacdive/media.py` provides the shared helpers (`looks_like_recipe`,
+`canonical_media_name`, mediadive id parsing) these steps build on.
+
+Sources 1. and 2. come from `scripts/bacdive/fetch_media_recipes.py`,
+which scrapes CIP pages and MediaDive records for media with a link,
+plus exact `media_name` matches against MediaDive's catalogue,
+into `data/external/media_recipe_manifest.csv`. Names it can't resolve
+exactly are left for a human/LLM review pass:
+
+```bash
+# 1. fetch recipes for linked/exact-name media, write the manifest
+python scripts/bacdive/fetch_media_recipes.py
+
+# 2. build a worksheet of remaining unlinked names + fuzzy MediaDive candidates
+python scripts/bacdive/prepare_media_name_review.py
+
+# 3. fill in chosen_mediadive_id per row (human or LLM reasoning pass), then
+#    fold the confirmed matches into the manifest as source=manual_review
+python scripts/bacdive/apply_media_name_review.py \
+    data/external/media_name_review_reasoned.csv
+```
+
+The next dataset rebuild (or `add_media_canon.py`) picks up the updated
+manifest automatically; each row's `composition_source` records which step
+(if any) supplied its text.
+
+## Medium-name canonicalisation (`media_canon`)
+
+There are three medium-name columns, each with one job:
+
+| Column | Role |
+| --- | --- |
+| `media_name` | Dedup key. BacDive's name with the CIP fold applied. |
+| `media_name_full` | BacDive's original, more descriptive spelling. |
+| `media_canon` | Grouping key for a held-out-medium split. Alias-canonicalised. |
+| `media_canon_status` | `ok` / `ambiguous` (name lists several media) / `unspecified` (no name). |
+
+BacDive spells one physical medium many ways (e.g. `MacConkey agar`, `MacConkey`, `MacConkey Agar`...). A held-out-medium split grouped on `media_name` therefore trains on the variants it thinks it held out.
+
+`canonical_media_name` (in `src/bacdive/media.py`) applies deterministic rules: casefold, strip 
+acronyms, DSMZ tails, drop form words, expand acronyms, fold spelling variants, sort tokens.
+Then lets a curated `data/external/media_alias_map.csv` override the result. Regression
+tests: `python tests/test_media_canon.py`.
+
+```bash
+# 1. add/refresh media_canon on the built parquets (row counts never change)
+python scripts/bacdive/add_media_canon.py
+
+# 2. audit what the rules did and did not merge
+python scripts/bacdive/prepare_media_alias_review.py
+
+# 3. after reviewing, fold decisions into the map
+python scripts/bacdive/apply_media_alias_review.py \
+    data/external/media_alias_review_reasoned.csv
+python scripts/bacdive/add_media_canon.py   # re-apply with the new map
+```
+
+A rebuild from cache produces `media_canon` (`extract.record_to_medium_rows`). 
+`add_media_canon.py` exists only to backfill already built tables without re-reading the cache.

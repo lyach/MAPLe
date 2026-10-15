@@ -8,6 +8,7 @@ Strategies
 - ``stratified_grouped`` : StratifiedGroupKFold (stratified by target, grouped
   by ``group_on`` column)
 - ``random`` : Shuffled KFold with no grouping (rows split randomly).
+- ``stratified`` : Shuffled StratifiedKFold (class-balanced folds, no grouping).
 """
 
 from __future__ import annotations
@@ -22,12 +23,28 @@ from sklearn.model_selection import (
     KFold,
     LeaveOneGroupOut,
     StratifiedGroupKFold,
+    StratifiedKFold,
 )
 
 
 def _encode_groups(series: pd.Series) -> np.ndarray:
     """Map string group labels to integer codes."""
     return series.astype("category").cat.codes.values
+
+
+def _make_grouped_splitter(cls, n_splits: int, shuffle: bool, seed: int):
+    """Instantiate a (Stratified)GroupKFold."""
+    if not shuffle:
+        return cls(n_splits=n_splits)
+    try:
+        return cls(n_splits=n_splits, shuffle=True, random_state=seed)
+    except TypeError:
+        logger.warning(
+            "{} does not support shuffle/random_state in this sklearn version; "
+            "repeats will be identical.",
+            cls.__name__,
+        )
+        return cls(n_splits=n_splits)
 
 
 def make_splits(
@@ -37,6 +54,7 @@ def make_splits(
     n_splits: int = 5,
     seed: int = 42,
     group_on: str = "strain_name",
+    shuffle: bool = False,
 ) -> Iterator[tuple[np.ndarray, np.ndarray]]:
     """Yield (train_idx, test_idx) arrays for the chosen CV strategy.
 
@@ -44,18 +62,25 @@ def make_splits(
     ----------
     strategy:
         One of ``"loso"``, ``"lomo"``, ``"grouped"``,
-        ``"stratified_grouped"``, ``"random"``.
+        ``"stratified_grouped"``, ``"random"``, ``"stratified"``.
     df:
         Modeling DataFrame (needs ``strain_name`` and/or ``media_name``,
         or the column named by ``group_on`` for grouped strategies).
     y:
-        Target array, required for ``stratified_grouped``.
+        Target array, required for ``stratified_grouped`` and ``stratified``.
     n_splits:
-        Number of folds for ``grouped`` / ``stratified_grouped`` / ``random``.
+        Number of folds for ``grouped`` / ``stratified_grouped`` / ``random`` /
+        ``stratified``.
     seed:
-        Random seed for shuffled strategies (``random``). Ignored otherwise.
+        Random seed for shuffled strategies (``random``, ``stratified``, and
+        ``grouped`` / ``stratified_grouped`` when ``shuffle=True``). Ignored
+        otherwise.
     group_on:
         Column used as groups for ``grouped`` / ``stratified_grouped``.
+    shuffle:
+        Shuffle groups before splitting for ``grouped`` / ``stratified_grouped``.
+        Defaults to ``False`` (deterministic, matches historical behavior); set
+        ``True`` with a per-repeat ``seed`` to make CV repeats differ.
     """
     strategy = strategy.lower().strip()
 
@@ -94,7 +119,9 @@ def make_splits(
             )
         groups = _encode_groups(df[group_on])
         n_splits = min(n_splits, len(np.unique(groups)))
-        splitter = StratifiedGroupKFold(n_splits=n_splits)
+        splitter = _make_grouped_splitter(
+            StratifiedGroupKFold, n_splits, shuffle, seed
+        )
         logger.info(
             "StratifiedGroupKFold: {} folds (grouped by {})", n_splits, group_on
         )
@@ -109,10 +136,24 @@ def make_splits(
         )
         yield from splitter.split(df)
 
+    elif strategy == "stratified":
+        if y is None:
+            raise ValueError("stratified requires y (target array)")
+        n_splits = min(n_splits, len(df))
+        splitter = StratifiedKFold(
+            n_splits=n_splits, shuffle=True, random_state=seed
+        )
+        logger.info(
+            "StratifiedKFold: {} folds, shuffle=True, seed={}",
+            n_splits, seed,
+        )
+        yield from splitter.split(df, y)
+
     else:
         raise ValueError(
             f"Unknown CV strategy '{strategy}'. "
-            "Choose from: loso, lomo, grouped, stratified_grouped, random"
+            "Choose from: loso, lomo, grouped, stratified_grouped, "
+            "random, stratified"
         )
 
 

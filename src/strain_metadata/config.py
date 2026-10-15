@@ -26,22 +26,28 @@ log = logging.getLogger("config")
 ROOT = Path(__file__).resolve().parents[2]
 
 # --- inputs (data/metadata/) ---
-INPUT_CSV          = ROOT / "data" / "metadata" / "align_strains.csv"
-NAME_OVERRIDES_CSV = ROOT / "data" / "metadata" / "strain_name_overrides.csv"
+INPUT_CSV          = ROOT / "data" / "metadata" / "ncbi" / "align_strains.csv"
+NAME_OVERRIDES_CSV = ROOT / "data" / "metadata" / "ncbi" / "strain_name_overrides.csv"
 
 # Two-tier manual override system (see overrides.py):
 #   FORCED   -- pinned accessions that always win, bypassing all search
 #   FALLBACK -- last-resort hints, tried only after all search strategies fail
-FORCED_ACCESSIONS_CSV = ROOT / "data" / "metadata" / "forced_accessions.csv"
-FALLBACK_HINTS_CSV    = ROOT / "data" / "metadata" / "fallback_hints.csv"
+FORCED_ACCESSIONS_CSV = ROOT / "data" / "metadata" / "ncbi" / "forced_accessions.csv"
+FALLBACK_HINTS_CSV    = ROOT / "data" / "metadata" / "ncbi" / "fallback_hints.csv"
 
 # --- outputs (data/external/) ---
 EXTERNAL_DIR = ROOT / "data" / "external"
+PROCESSED_DIR = ROOT / "data" / "processed"
 FASTA_DIR    = EXTERNAL_DIR / "fasta"                     # one .fna per assembly
 GBK_DIR      = EXTERNAL_DIR / "gbk"                       # one .gbk per assembly
 OUTPUT_CSV   = EXTERNAL_DIR / "strains_metadata.csv"      # successful rows
 FAILURES_CSV = EXTERNAL_DIR / "failures.csv"              # diagnostic failure report
 PHYLUM_CSV   = EXTERNAL_DIR / "strain_phylum.csv"          # ncbi_taxon_id -> phylum lookup
+
+# --- BacDive parquet entry point ---
+BACDIVE_INPUT_PARQUET = PROCESSED_DIR / "bacdive" / "bd_temp.parquet"
+BACDIVE_METADATA_CSV  = EXTERNAL_DIR / "bd_strains_metadata.csv"
+BACDIVE_FAILURES_CSV  = EXTERNAL_DIR / "bd_strain_meta_failures.csv"
 
 # --- logs ---
 LOGS_DIR = ROOT / "logs"                                  # timestamped run logs
@@ -88,6 +94,24 @@ OUTPUT_FIELDNAMES = [
     "family",
     "order",
     "phylum",
+    "assembly_level",
+    "genome_size_bp",
+    "gc_content_pct",
+    "num_contigs",
+    "n50",
+    "sequence_hash",
+    "date_retrieved",
+    "resolution_method",
+    "requires_verification",
+]
+
+# NCBI-derived columns merged onto a BacDive parquet. Existing BacDive
+# taxonomy / gc_content columns are left untouched.
+PARQUET_MERGE_FIELDNAMES = [
+    "atcc_number",
+    "ncbi_refseq",
+    "ncbi_assembly_accession",
+    "ncbi_taxon_id",
     "assembly_level",
     "genome_size_bp",
     "gc_content_pct",

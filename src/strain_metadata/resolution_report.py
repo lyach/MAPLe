@@ -22,29 +22,38 @@ from typing import Optional
 
 class Strategy(str, Enum):
     """The resolution strategy that was attempted, in priority order."""
-    FORCED_ACCESSION    = "forced_accession"     # forced_accessions.csv (always wins)
-    NCBI_ATCC_ASSEMBLY  = "ncbi_atcc_assembly"   # "ATCC nnnnn" in assembly db
-    NCBI_BIOSAMPLE_LINK = "ncbi_biosample_link"  # ATCC -> BioSample -> assembly
-    NCBI_ORGANISM       = "ncbi_organism"         # "[Organism]" field (broad)
-    NCBI_FREETEXT       = "ncbi_freetext"         # plain free-text (broadest)
-    FALLBACK_HINT       = "fallback_hint"          # fallback_hints.csv (last resort)
+    FORCED_ACCESSION         = "forced_accession"          # forced_accessions.csv (always wins)
+    RECORDED_INSDC_ACCESSION = "recorded_insdc_accession"  # GCA_/GCF_ on the input row
+    NCBI_ATCC_ASSEMBLY       = "ncbi_atcc_assembly"        # "ATCC nnnnn" in assembly db
+    NCBI_COLLECTION_ASSEMBLY = "ncbi_collection_assembly"  # DSM / JCM / ... in assembly db
+    NCBI_BIOSAMPLE_LINK      = "ncbi_biosample_link"       # collection id -> BioSample -> assembly
+    NCBI_STRAIN_TAXID        = "ncbi_strain_taxid"         # strain-level NCBI taxid
+    NCBI_ORGANISM            = "ncbi_organism"              # "[Organism]" field (broad)
+    NCBI_FREETEXT            = "ncbi_freetext"              # plain free-text (broadest)
+    FALLBACK_HINT            = "fallback_hint"               # fallback_hints.csv (last resort)
 
     def label(self) -> str:
         return {
-            Strategy.FORCED_ACCESSION:    "Forced accession (override file)",
-            Strategy.NCBI_ATCC_ASSEMBLY:  "NCBI assembly search by ATCC number",
-            Strategy.NCBI_BIOSAMPLE_LINK: "NCBI BioSample -> assembly cross-reference",
-            Strategy.NCBI_ORGANISM:       "NCBI assembly search by organism name",
-            Strategy.NCBI_FREETEXT:       "NCBI assembly free-text search",
-            Strategy.FALLBACK_HINT:       "Fallback hint (override file)",
+            Strategy.FORCED_ACCESSION:         "Forced accession (override file)",
+            Strategy.RECORDED_INSDC_ACCESSION: "Recorded INSDC genome accession",
+            Strategy.NCBI_ATCC_ASSEMBLY:       "NCBI assembly search by ATCC number",
+            Strategy.NCBI_COLLECTION_ASSEMBLY: "NCBI assembly search by culture-collection ID",
+            Strategy.NCBI_BIOSAMPLE_LINK:      "NCBI BioSample -> assembly cross-reference",
+            Strategy.NCBI_STRAIN_TAXID:        "NCBI assembly search by strain-level taxid",
+            Strategy.NCBI_ORGANISM:            "NCBI assembly search by organism name",
+            Strategy.NCBI_FREETEXT:            "NCBI assembly free-text search",
+            Strategy.FALLBACK_HINT:            "Fallback hint (override file)",
         }[self]
 
 
 # Strategies that confirm strain identity (vs. organism-level guesses).
 _STRAIN_CONFIRMED_STRATEGIES = (
     Strategy.FORCED_ACCESSION,
+    Strategy.RECORDED_INSDC_ACCESSION,
     Strategy.NCBI_ATCC_ASSEMBLY,
+    Strategy.NCBI_COLLECTION_ASSEMBLY,
     Strategy.NCBI_BIOSAMPLE_LINK,
+    Strategy.NCBI_STRAIN_TAXID,
 )
 
 

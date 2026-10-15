@@ -1,0 +1,11 @@
+dataset_path: data/processed/bacdive/bd_med.parquet
+split_on_column: media_canon
+target: growth_class
+
+cv:
+  strategy: [stratified_grouped]
+  n_repeats: 1
+
+n_splits: 5
+seed: 42
+output_format: csv

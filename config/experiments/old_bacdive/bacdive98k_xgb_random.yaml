@@ -1,0 +1,23 @@
+# BacDive growth classification + XGBoost
+name: growth_class_bacdive98k_xgb_random
+dataset: config/dataset/bacdive98k_modeling_dataset.yaml
+model: config/models/xgboost.yaml
+task: growth_class
+
+cv:
+  strategy: [random]
+  n_repeats: 1
+
+class_weight: balanced
+
+metrics: [auroc, pr_auc_nogrowth, recall_nogrowth, precision_nogrowth, mcc, balanced_accuracy]
+
+interpret:
+  shap: true
+  group_importance: true
+
+seed: 42
+output_dir: reports
+
+wandb:
+  enabled: false

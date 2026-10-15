@@ -100,7 +100,7 @@ You can also run it by specifying new files as:
 ```bash
 python scripts/run_dataset_pipeline.py \
   --metadata data/metadata/experiment_metadata.csv \
-  --layout   data/metadata/experiment_layout.csv \
+  --layout   data/metadata/plates/experiment_layout.csv \
   --raw-dir  data/raw
 ```
 
@@ -252,7 +252,7 @@ log(OD)
 The threshold for `growth_class` is computed per experiment from the blank wells:
 
 ```
-threshold = 3 × std(blank od600_raw)
+threshold = 2 × std(blank od600_raw)
 ```
 
 `od600_raw` (pre-blank-subtraction) is used so the spread reflects raw instrument noise. After blank subtraction, a well is classified as **growing** (`growth_class = 1`) if `max_od > threshold`, and **not growing** (`growth_class = 0`) otherwise.

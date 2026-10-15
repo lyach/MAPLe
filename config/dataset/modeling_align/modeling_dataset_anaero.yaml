@@ -1,0 +1,28 @@
+# Modeling dataset config — anaerobic experiments
+# Used by run_experiment.py (featurization + targets).
+
+# ================ FILE ================
+modeling_dataset_path: "data/interim/anaero_modeling_dataset.csv"
+
+# ================ FEATURIZATION ================
+# Each value is an sklearn transformer call string.
+# path:<f> = precomputed embedding CSV (first col = key)
+features:
+  # strain features
+  genome_size_bp:
+    - log_transform
+    - "StandardScaler()"
+  gc_content_pct: "StandardScaler()"
+  num_contigs: "RobustScaler(with_centering=True, with_scaling=True)"
+  n50:
+    - log_transform
+    - "StandardScaler()"
+  # media features
+  media_name: "path:data/metadata/modeling/media_features.csv"
+  # condition features
+  atmosphere: 'OneHotEncoder(sparse_output=False, handle_unknown="ignore")'
+  temperature: "StandardScaler()"
+
+# ================ TARGETS ================
+targets:
+  - growth_class

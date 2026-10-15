@@ -53,12 +53,30 @@ FEATURE_GROUPS: dict[str, str] = {
     "family": "strain",
     "order": "strain",
     "phylum": "strain",
+    "n_ingredients": "media",
+    "complexity": "media",
+    "has_yeast_extract": "media",
+    "has_peptone": "media",
+    "has_agar": "media",
+    "has_blood_components": "media",
+    "has_nacl": "media",
 }
+
+
+def _coerce_numeric(X):
+    """Convert values to float; blank strings and non-numerics become NaN."""
+    df = X if isinstance(X, pd.DataFrame) else pd.DataFrame(X)
+    return df.apply(lambda col: pd.to_numeric(col, errors="coerce"))
 
 
 _PREPROCESS_REGISTRY: dict[str, FunctionTransformer] = {
     "log_transform": FunctionTransformer(
         np.log1p,
+        validate=False,
+        feature_names_out="one-to-one",
+    ),
+    "to_numeric": FunctionTransformer(
+        _coerce_numeric,
         validate=False,
         feature_names_out="one-to-one",
     ),
