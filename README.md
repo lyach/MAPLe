@@ -1,12 +1,12 @@
-# MAPLE: A **M**ultimodal **A**pproach to **P**henotype **LE**arning
+# MAPLe: A **M**ultimodal **A**pproach to **P**henotype **LE**arning
 
-MAPLE is a benchmark and modeling framework for the task
+MAPLe is a benchmark and modeling framework for the task:
 
 ```text
-(genome, medium)  →  {growth, no growth}
+(organism, environment)  -->  {growth, no growth}
 ```
 
-It provides the datasets, splits, and controls needed to separate real genome × medium signal.
+It provides the datasets, splits, and controls needed to separate real organism × environment signal.
 
 ## Navigation
 
@@ -19,16 +19,16 @@ It provides the datasets, splits, and controls needed to separate real genome ×
 
 ## Motivation
 
-Knowing which culture medium will grow a given strain is a prerequisite for designing media rationally and advance downstream biotechnology applications.
+Knowing which environment (e.g., the culture media, temperature, atmosphere) will allow an organism to grow, can accelerate the design of experiments in microbiology.
 
-Growth is not a property of the genome alone. It is a **genome × environment interaction**, and learning it from the available data (i.e. BacDive, the largest database on bacterial phenotypes) runs into two problems:
+However, growth is not a property of an organism's phenotype alone. It is a **phenotype × environment interaction**, and learning it from the available data (i.e. BacDive, the largest database on bacterial phenotypes) runs into two problems:
 
-1. **Labels are heavily imbalanced and biased.** Failed growth conditions are rarely reported, so negatives are scarce and concentrated on a few strains and media. A model can score well by memorising which strains or media tend to fail, without learning any biology.
-2. **Learning an interaction needs factorial data.** If most strains appear with only one medium, or nearly every record is positive, no model can show that it has learned a genome × medium interaction.
+1. **Labels are imbalanced and biased.** Failed growth conditions are rarely reported, so negatives are scarce and concentrated on a few organisms and media. A model can score well by memorising which organism or media tend to fail, without learning any biology.
+2. **Learning an interaction needs factorial data.** If most organisms appear with only one medium, or nearly every record is positive, no model can show that it has learned a genome × medium interaction.
 
 This project contributes with:
-- **2 datasets**: **BD-med**, and ML-ready `(genome, medium) → growth` dataset mined from BacDive; and **MAPLE-Lab**, a new, controlled factorial dataset over strains × media × temperature × atmosphere.
-- **A benchmark**: through splits that that separates memorisation from transfer
+- **2 datasets**: **BD-med**, an ML-ready `(genome, medium) --> growth` dataset mined from BacDive; and **MAPLe-Lab**, a new experimental dataset covering growth labels for 25 strains, tested across 11 media × 2 temperatures × 2 atmospheres.
+- **A benchmark**: splits that hold out organisms, or media, so a model has to generalise the organism × environment interaction instead of memorising which strains/recipes tend to fail.
 
 ## Installation
 
@@ -56,13 +56,13 @@ This project contributes with:
 
 | Component | Role | Code | Docs |
 |---|---|---|---|
-| **BacDive** | Download BacDive, build `(strain, medium) → growth` tables (BD-Med) | `src/bacdive/`, `scripts/bacdive/` | [bacdive.md](docs/bacdive.md) |
-| **Experimental dataset** | Parse plate-reader CSVs, apply QC, extract growth-curve parameters and growth labels (MAPLE-Lab) | `src/dataset/`, `scripts/experimental_dataset/` | [dataset_pipeline.md](docs/dataset_pipeline.md) |
-| **Strain metadata** | Fetch NCBI | `src/strain_metadata/`, `scripts/external_tools/` | [strain_metadata.md](docs/strain_metadata.md) |
+| **BacDive dataset** | Download BacDive, build `(strain, medium) → growth` tables (BD-Med) | `src/bacdive/`, `scripts/bacdive/` | [bacdive.md](docs/bacdive.md) |
+| **Experimental dataset** | Parse plate-reader CSVs, apply QC, extract growth-curve parameters and growth labels (MAPLe-Lab) | `src/dataset/`, `scripts/experimental_dataset/` | [dataset_pipeline.md](docs/dataset_pipeline.md) |
+| **Strain metadata** | Recover metadata from NCBI | `src/strain_metadata/`, `scripts/external_tools/` | [strain_metadata.md](docs/strain_metadata.md) |
 | **Pathway features** | Recover metabolic pathways of strains, to be used as model features | `src/pathway_features/`, `scripts/external_tools/`, `scripts/hpc/` | [modular_pathway_features.md](docs/modular_pathway_features.md) |
 | **Modeling** | Build modeling tables, precompute splits, featurise, train, cross-validate, evaluate, and interpret (SHAP) | `src/modeling/`, `scripts/modeling/` | [modeling_pipeline.md](docs/modeling_pipeline.md) |
 
-Every step is driven by YAML configs under `config/`:
+The overview:
 
 ```text
 BacDive API ─► bacdive cache ─► BD tables ─┐
@@ -72,7 +72,7 @@ plate reader ─► QC + curve params ─────────┘
 
 ## Quick start
 
-### 1. BacDive dataset (BD-med)
+### 1. Build the BacDive dataset (BD-med)
 
 ```bash
 # 1. Download BacDive records
@@ -81,15 +81,15 @@ python scripts/bacdive/get_bacdive_dataset.py --taxa bacdive/all_taxa_medium.yam
 # 2. Build the modeling table
 python scripts/bacdive/build_bacdive_from_cache.py --config bacdive/build_from_cache.yaml
 
-# 3. Get modeling table. Filter to culture media labels only (bd_temp → bd_med), canonicalise media names, filter to strains with a genome
+# 3. Get modeling table: filter to culture media labels, canonicalise media names, filter to strains with a genome
 python scripts/bacdive/filter_bacdive_to_strain_media.py
 python scripts/bacdive/add_media_canon.py
 python scripts/bacdive/filter_bacdive_with_genome.py --parquet data/processed/bacdive/bd_med.parquet
 ```
 
 
-### 2. Factorial dataset (MAPLE-Lab)
-
+### 2. Factorial dataset (MAPLe-Lab)
+*Note: Not currently available. To be released.*
 ```bash
 # Raw CSVs → Tidy curves
 python scripts/experimental_dataset/run_dataset_pipeline.py aerobic
@@ -101,12 +101,11 @@ python scripts/modeling/create_modeling_dataset.py config/dataset/curves/curves_
 ### 3. Splits and experiments
 
 ```bash
-# Precompute a reusable group → fold map (here: held-out medium, grouped on media_canon)
+# Get reusable split group (here: held-out medium for BD-Temp)
 python scripts/modeling/create_splits.py config/splits/bd_media.yaml
 
 # Train and evaluate
 python scripts/modeling/run_experiment.py config/experiments/bacdive/bd_med_w_genome_xgb_smedia.yaml
-python scripts/modeling/run_experiment.py config/experiments/align/class_aero_anaero.yaml
 ```
 
 Each run writes to `reports/<experiment_name>/`: logs, metrics, and SHAP analysis.
@@ -116,8 +115,7 @@ Each run writes to `reports/<experiment_name>/`: logs, metrics, and SHAP analysi
 
 ```bash
 python scripts/utils/paper/create_distribution_table.py --format all   # dataset profiles
-python scripts/utils/paper/create_interaction_table.py                 # single-factor flip rates
-python scripts/utils/paper/compile_results_csv.py                      # reports/*/ → reports/all_results.csv
+python scripts/utils/paper/compile_results_csv.py                      # aggregate all metrics under reports/*/
 ```
 
 ## Project structure
@@ -127,12 +125,12 @@ bacdive/                     ← BacDive configs
 
 config/
   dataset/
-    curves/                  ← Curves configs for create_modeling_dataset.py (MAPLE-Lab)
-    modeling_align/          ← MAPLE-Lab modeling dataset configs
+    curves/                  ← Curves configs for create_modeling_dataset.py (MAPLe-Lab)
+    modeling_align/          ← MAPLe-Lab modeling dataset configs
     pathways/                ← Pathway feature configs
   experiments/
     bacdive/                 ← BD-med / BD-temp experiments (bd_<corpus>_xgb_<split>[_ablation].yaml)
-    align/                   ← MAPLE-Lab experiments
+    align/                   ← MAPLe-Lab experiments
   models/                    ← Model hyperparameters
   splits/                    ← Precomputed split configs (genus, family, medium)
 
@@ -154,7 +152,7 @@ src/
 
 scripts/
   bacdive/                   ← BacDive download, build, filtering, medium review
-  experimental_dataset/      ← MAPLE-Lab dataset pipeline
+  experimental_dataset/      ← MAPLe-Lab dataset pipeline
   external_tools/            ← Strain metadata, genome download, pathway features
   modeling/                  ← create_modeling_dataset, create_splits, run_experiment
   utils/                     ← Diagnostic tables
