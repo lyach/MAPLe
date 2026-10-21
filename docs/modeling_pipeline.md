@@ -137,7 +137,7 @@ The table an experiment runs on, and the features it builds from that table, are
 | `task`                       | str              | `"growth_class"`                              | Prediction target                                 |
 | `cv.strategy`                | str or list[str] | `[loso, lomo]`                                | CV strategy                                       |
 | `cv.n_repeats`               | int              | `1`                                           | Number of CV repeats                              |
-| `cv.splits_file`             | str (optional)   | `"data/modeling/splits_bacdive_growth_150k/genus_bacdive_growth_150k.csv"` | Consume precomputed splits (see [5a](#5a-precomputed-reusable-splits-create_splitspy)) |
+| `cv.splits_file`             | str (optional)   | `"data/modeling/splits_bd_med_w_genome/genus_bd_med_w_genome.csv"` | Consume precomputed splits (see [5a](#5a-precomputed-reusable-splits-create_splitspy)) |
 | `cv.split_on`                | str (optional)   | `"genus"`                                     | Group column the saved split map is keyed on (required with `cv.splits_file`) |
 | `class_weight`               | str or dict      | `"balanced"`                                  | Per-sample class reweighting (see [3e](#3e-class-imbalance-handling-reweighting)) |
 | `metrics`                    | list[str]        | `[auroc, f1, mcc]`                            | Metrics to compute                                |
@@ -174,7 +174,7 @@ seed: 42
 output_dir: reports
 
 # ================ DATASET ================
-modeling_dataset_path: data/external/bacdive_growth_150k.parquet
+modeling_dataset_path: data/processed/bacdive/bd_med_w_genome.parquet
 
 # ================ FEATURIZATION ================
 features:
@@ -319,10 +319,10 @@ Only group-consistent strategies can be stored this way: `grouped` and `stratifi
 | `seed`            | int              | Random seed (default 42)                                           |
 | `output_format`   | `"csv"` or `"parquet"` | Map file format (default `csv`; the map is small)            |
 
-Example (`config/splits/bacdive_genus.yaml`):
+Example (`config/splits/bd_genus.yaml`):
 
 ```yaml
-dataset_path: data/external/bacdive_growth_150k.parquet
+dataset_path: data/processed/bacdive/bd_temp.parquet
 split_on_column: genus
 target: growth_class
 
@@ -338,16 +338,17 @@ output_format: csv
 #### Run the script
 
 ```bash
-python scripts/modeling/create_splits.py config/splits/bacdive_genus.yaml
+python scripts/modeling/create_splits.py config/splits/bd_genus.yaml \
+    --dataset-path data/processed/bacdive/bd_med_w_genome.parquet
 ```
 
-Outputs are written to `data/modeling/splits_<dataset_stem>/`:
+`--dataset-path` overrides the config's `dataset_path`, so one split config serves every table. Outputs are written to `data/modeling/splits_<dataset_stem>/`:
 
 ```
-data/modeling/splits_bacdive_growth_150k/
-  genus_bacdive_growth_150k.csv         ← group->fold map [strategy, repeat, fold, genus]
-  genus_bacdive_growth_150k.log         ← full process log + per-fold distribution stats
-  genus_bacdive_growth_150k_stats.json  ← machine-readable distribution stats
+data/modeling/splits_bd_med_w_genome/
+  genus_bd_med_w_genome.csv         ← group->fold map [strategy, repeat, fold, genus]
+  genus_bd_med_w_genome.log         ← full process log + per-fold distribution stats
+  genus_bd_med_w_genome_stats.json  ← machine-readable distribution stats
 ```
 
 The log and stats JSON report, per `(strategy, repeat, fold)`: train/test row counts, train/test group counts, and the target distribution on train vs test (class counts + fractions for classification; mean/std/min/max for regression). A leakage assertion guarantees train/test group sets are disjoint.
@@ -359,7 +360,7 @@ Reference the map and its group column from the experiment config's `cv` block:
 ```yaml
 cv:
   strategy: [stratified_grouped]
-  splits_file: data/modeling/splits_bacdive_growth_150k/genus_bacdive_growth_150k.csv
+  splits_file: data/modeling/splits_bd_med_w_genome/genus_bd_med_w_genome.csv
   split_on: genus
 ```
 

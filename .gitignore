@@ -9,7 +9,6 @@ local/
 reports/
 results/
 notebooks/
-!notebooks/05_bacdive_data_exploration.ipynb
 scripts/slurm/
 databases/
 tools/
@@ -23,7 +22,6 @@ data/*
 # environment
 .venv/
 .env/
-uv.lock
 
 # logs
 logs/

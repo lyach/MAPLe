@@ -5,7 +5,9 @@ value) under ``data/modeling/splits_<dataset_stem>/``, alongside a log and a
 machine-readable stats JSON describing the train/test distribution per fold.
 
 Usage:
-    python scripts/modeling/create_splits.py config/splits/bd.yaml
+    python scripts/modeling/create_splits.py config/splits/bd_media.yaml
+    python scripts/modeling/create_splits.py config/splits/bd_media.yaml \\
+        --dataset-path data/processed/bacdive/bd_med_w_genome.parquet
 """
 
 import argparse
@@ -72,6 +74,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("config", type=Path, help="Path to split YAML config.")
     parser.add_argument(
+        "--dataset-path",
+        type=Path,
+        default=None,
+        help="Override the config's dataset_path (output goes to "
+             "data/modeling/splits_<dataset_stem>/).",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -80,7 +89,7 @@ def main() -> None:
 
     cfg = load_split_config(args.config)
 
-    dataset_path = Path(cfg.dataset_path)
+    dataset_path = args.dataset_path or Path(cfg.dataset_path)
     if not dataset_path.is_absolute():
         dataset_path = ROOT / dataset_path
     stem = dataset_path.stem

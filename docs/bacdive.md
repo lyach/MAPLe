@@ -66,7 +66,7 @@ To rebuild a table from an existing cache (no API), edit
 [`bacdive/build_from_cache.yaml`](build_from_cache.yaml) and run:
 
 ```bash
-python scripts/build_bacdive_from_cache.py
+python scripts/bacdive/build_bacdive_from_cache.py
 ```
 
 3. Feed it into the modeling pipeline:

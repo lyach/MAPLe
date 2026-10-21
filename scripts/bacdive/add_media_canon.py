@@ -9,8 +9,11 @@ built BacDive parquets.
 It does not need the 100k-record cache re-read, row counts are never changed, 
 and can work newly written ``data/external/media_alias_map.csv``.
 
+The build step already writes ``media_canon``; this script is only needed to
+refresh it after editing the alias map.
+
 USAGE:
-    python scripts/bacdive/add_media_canon.py                    # all four tables
+    python scripts/bacdive/add_media_canon.py                    # all four tables (missing ones skipped)
     python scripts/bacdive/add_media_canon.py --dry-run          # report only
     python scripts/bacdive/add_media_canon.py --parquet data/processed/bacdive/bd_med.parquet
 """
@@ -99,13 +102,22 @@ def report(path: Path, before: pd.DataFrame, after: pd.DataFrame) -> None:
 def main() -> int:
     args = parse_args()
     overrides = load_media_alias_map(args.alias_map)
-    targets = args.parquet or DEFAULT_PARQUETS
-
-    missing = [p for p in targets if not p.exists()]
-    if missing:
-        for p in missing:
-            print(f"error: no such table: {p}", file=sys.stderr)
-        return 1
+    if args.parquet:
+        targets = args.parquet
+        missing = [p for p in targets if not p.exists()]
+        if missing:
+            for p in missing:
+                print(f"error: no such table: {p}", file=sys.stderr)
+            return 1
+    else:
+        # defaults are whichever of the four tables have been built so far
+        targets = [p for p in DEFAULT_PARQUETS if p.exists()]
+        for p in DEFAULT_PARQUETS:
+            if not p.exists():
+                print(f"skipping (not built yet): {p}", file=sys.stderr)
+        if not targets:
+            print(f"error: no tables found under {BACDIVE_DIR}", file=sys.stderr)
+            return 1
 
     for path in targets:
         before = pd.read_parquet(path)
