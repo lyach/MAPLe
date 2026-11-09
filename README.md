@@ -1,4 +1,4 @@
-# MAPLe: A **M**ultimodal **A**pproach to **P**henotype **LE**arning
+# MAPLe: A **M**ultimodal **A**pproach to **P**henotype **Le**arning
 
 MAPLe is a benchmark and modeling framework for the task:
 
